@@ -515,7 +515,7 @@
                         </p>
                     </div>
                     <span class="media-status-badge media-project-header-status {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ project.get_status_display }}</span>
-                    <a href="{% url 'external_media_project_detail' project.public_id %}" class="media-project-open" aria-label="Abrir projeto {{ project.name }}">
+                    <a href="{% if project.status == 'AWAITING_REVIEW' %}{% url 'external_media_project_preview' project.public_id %}{% else %}{% url 'external_media_project_detail' project.public_id %}{% endif %}" class="media-project-open" aria-label="Abrir projeto {{ project.name }}">
                         <span>Abrir</span><i class="fas fa-arrow-right"></i>
                     </a>
                     <details class="media-project-more">

@@ -1068,6 +1068,39 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
             name='Projeto de agosto', template_version=self.version, created_by=self.member,
         )
 
+    def test_dashboard_open_uses_editor_only_for_projects_awaiting_review(self):
+        review = self.make_project()
+        review.status = ExternalMediaProject.Status.AWAITING_REVIEW
+        review.save(update_fields=['status'])
+        draft = ExternalMediaProject.objects.create(
+            name='Rascunho', template_version=self.version, created_by=self.member,
+            status=ExternalMediaProject.Status.DRAFT,
+        )
+        response = self.client.get(reverse('external_media_dashboard'))
+        preview = reverse('external_media_project_preview', args=[review.public_id])
+        detail = reverse('external_media_project_detail', args=[draft.public_id])
+        self.assertContains(response, f'href="{preview}" class="media-project-open"')
+        self.assertContains(response, f'href="{detail}" class="media-project-open"')
+
+    def test_project_explains_why_generate_is_blocked_even_with_uploaded_video(self):
+        project = self.make_project()
+        ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mp4',
+            file=SimpleUploadedFile('take.mp4', b'video'),
+        )
+        self.version.lut_file.name = 'missing-template-grade.cube'
+        self.version.save(update_fields=['lut_file'])
+        url = reverse('external_media_project_detail', args=[project.public_id])
+        response = self.client.get(url)
+        self.assertContains(response, 'take.mp4')
+        self.assertContains(response, 'O arquivo LUT do template não está disponível.')
+        self.assertContains(response, 'aria-describedby="project-validation-errors"')
+        self.version.lut_file = ''
+        self.version.save(update_fields=['lut_file'])
+        response = self.client.get(url)
+        self.assertNotContains(response, 'project-validation-errors')
+        self.assertContains(response, 'Gerar vídeo')
+
     def make_default_scene(self, key, order):
         block = MediaTemplateBlock.objects.create(
             version=self.version, key=key, name=key, order=order,
@@ -6234,6 +6267,17 @@ class DialogueProcessingUnitTests(SimpleTestCase):
 
 
 class FFmpegRunnerTests(SimpleTestCase):
+    def test_disk_full_message_reports_the_actual_error_before_codec_statistics(self):
+        failure = subprocess.CalledProcessError(1, ['ffmpeg'], stderr=(
+            'av_interleaved_write_frame(): No space left on device\n'
+            + '\n'.join(f'[libx264] statistics {index}' for index in range(20))
+            + '\nConversion failed!\n'
+        ))
+        with patch('website.external_media.ffmpeg_runner.subprocess.run', side_effect=failure):
+            with self.assertRaisesMessage(ExternalMediaError, 'armazenamento temporário') as raised:
+                FFmpegRunner().run(['ffmpeg', '-i', 'input.mp4', 'output.mp4'])
+        self.assertIn('Aumente o espaço disponível', str(raised.exception))
+
     def test_failed_command_includes_a_compact_redacted_diagnostic(self):
         runner = FFmpegRunner()
         failure = subprocess.CalledProcessError(

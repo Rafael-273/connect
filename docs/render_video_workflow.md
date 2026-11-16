@@ -84,9 +84,14 @@ probe, seek e trim. O tamanho do original deixa de fazer parte da reserva do
 Proxies e segmentos normalizados são criados um por vez, enviados imediatamente
 para uma área temporária do S3 e removidos assim que a próxima etapa termina.
 Renderizações intermediárias de áudio, cortes e overlays seguem a mesma regra.
-O workspace local mantém somente a saída ativa e artefatos pequenos. URLs
-assinadas não são persistidas e os parâmetros de assinatura são removidos de
-diagnósticos do FFmpeg.
+Na composição multicâmera, o master de entrada e cada passagem anterior também
+são enviados temporariamente ao S3 antes de iniciar a próxima passagem.
+Cada saída ainda é gravada no disco local antes do envio: o worker precisa ter
+espaço livre suficiente para ao menos um arquivo renderizado completo. A
+estimativa de espaço é conservadora e o tamanho real depende da codificação.
+O espaço disponível também depende dos demais artefatos e processos no worker.
+URLs assinadas não são persistidas e os parâmetros de assinatura são removidos
+de diagnósticos do FFmpeg.
 
 O fallback que materializa um objeto S3 é explícito e limitado por
 `EXTERNAL_MEDIA_REMOTE_MATERIALIZE_MAX_MB`. Atualmente ele é usado por ativos

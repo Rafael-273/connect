@@ -154,6 +154,15 @@
     .editor-timeline__zoom-value{min-width:2.2rem;color:#8f9daf;font-size:.62rem;font-weight:800;text-align:center}
     .editor-timeline__bar [data-timeline-zoom],.editor-timeline__bar .editor-timeline__zoom-value,.editor-timeline__bar .editor-timeline__tool-divider{display:none}
     .timeline-zoom-control{position:absolute;right:clamp(1rem,3vw,3rem);display:flex;align-items:center;gap:.55rem;padding-left:1rem;border-left:1px solid #293546}.timeline-zoom-control button{display:grid;place-items:center;width:1.9rem;height:1.9rem;border-radius:.35rem;color:#b8c5d6}.timeline-zoom-control button:hover{background:#202b3a;color:#fff}.timeline-zoom-control button:disabled{opacity:.35;cursor:not-allowed}.timeline-zoom-control input{width:8rem;height:.35rem;accent-color:#e23b35;cursor:pointer}
+    .editor-timeline-actions{display:none}
+    @media(min-width:1200px){
+        .editor-timeline-actions{position:absolute;left:clamp(1rem,3vw,3rem);top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:.3rem}
+        .editor-timeline-actions .editor-tool,.editor-timeline-actions #delete-segment{display:grid;place-items:center;width:2.15rem;height:2.15rem;padding:0;border:1px solid transparent;border-radius:.5rem;background:transparent;color:#aebfd2;font-size:.8rem;transition:background .15s,color .15s,border-color .15s}
+        .editor-timeline-actions .editor-tool:hover,.editor-timeline-actions #delete-segment:hover:not(:disabled){background:#202f40;border-color:#40546a;color:#fff}
+        .editor-timeline-actions .editor-tool.is-active{background:#45212b;border-color:#aa3844;color:#fff}
+        .editor-timeline-actions #delete-segment:disabled{opacity:.35}
+        .editor-timeline-actions :is(button,.editor-tool):focus-visible{outline:2px solid #8ec5ff;outline-offset:2px}
+    }
     /* Keep scrolling available without letting the browser chrome compete with the editor. */
     .preview-shell *{scrollbar-width:thin;scrollbar-color:#3d4b5f transparent}.preview-shell ::-webkit-scrollbar{width:7px;height:7px}.preview-shell ::-webkit-scrollbar-track{background:transparent}.preview-shell ::-webkit-scrollbar-thumb{border:2px solid transparent;border-radius:999px;background:#3d4b5f;background-clip:padding-box}.preview-shell ::-webkit-scrollbar-thumb:hover{background:#596b83;background-clip:padding-box}.preview-shell ::-webkit-scrollbar-corner{background:transparent}
     .editor-timeline__scroller{grid-column:2;grid-row:2;width:100%;min-width:0;margin:0}
@@ -166,7 +175,6 @@
     @media(min-width:900px){.preview-shell.is-inspector-open .preview-layout{display:grid;grid-template-columns:minmax(20rem,1fr) minmax(0,min(68rem,58vw));gap:clamp(1rem,2vw,2rem);align-items:center}.preview-shell.is-inspector-open .preview-player-card{grid-column:2;grid-row:1;width:100%;margin:0 auto}.preview-adjustments{grid-column:1;grid-row:1;align-self:stretch;position:static;display:none;width:100%;height:auto;max-height:none;border-radius:.55rem;transform:none;box-shadow:none;background:#0d1118}.preview-adjustments.is-open{display:flex}.preview-adjustments>.p-4{align-items:flex-start;flex-wrap:wrap}.preview-adjustments>.p-4>div:last-child{flex-wrap:wrap;justify-content:flex-end}}
     /* Desktop inspector: a docked editing surface, rather than a floating dialog. */
     @media(min-width:900px){
-        .preview-shell.is-inspector-open{padding-left:0!important}
         .preview-adjustments{border:0;border-right:1px solid #293546;border-radius:0;background:linear-gradient(180deg,#111923 0%,#0c1119 100%)}
         .preview-adjustments.is-open{animation:inspector-enter .26s cubic-bezier(.2,.8,.2,1) both}
         .preview-adjustments__head{min-height:5.25rem;padding:1rem 1.15rem;background:rgba(19,28,40,.92);border-bottom:1px solid #2a3748}
@@ -210,8 +218,8 @@
 #text-element-modal textarea:focus,#text-element-modal input:focus{border-color:#ed403c;outline:2px solid rgba(237,64,60,.2);outline-offset:1px}
 /* Após reabrir a edição há um aviso entre o header e o editor; não dependa de irmãos imediatos. */
 header:has(~ .media-shell .preview-shell){background:#0d1016;border-color:#2b313d!important;color:#eef2f7}
-header:has(~ .media-shell .preview-shell) .media-header-identity strong{color:#f8fafc;line-height:1.1;margin:0}
-header:has(~ .media-shell .preview-shell) .media-header-identity small{display:block;margin-top:0!important;color:#8f9aac;line-height:1.15}
+header:has(~ .media-shell .preview-shell) .media-header-identity strong{color:#f8fafc;line-height:1.4;padding:.08rem 0;margin:0}
+header:has(~ .media-shell .preview-shell) .media-header-identity small{display:block;margin-top:0!important;color:#8f9aac;line-height:1.35}
 header:has(~ .media-shell .preview-shell) .media-btn.media-muted{background:#151a23;border-color:#303846;color:#e4e9f1}
 header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{background:#202735}
 /* O monitor do editor representa o quadro final: mantenha-o retangular. */
@@ -243,7 +251,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         .preview-shell>.editor-timeline__transport{flex:none;min-height:3.1rem;margin-top:.45rem!important;padding-top:.35rem;padding-bottom:.35rem}
         /* Tracks scroll inside a stable surface. Do not let a short set of
            tracks stretch to fill the workspace when an inspector is opened. */
-        .preview-shell>.editor-timeline{box-sizing:border-box;flex:0 1 clamp(12rem,38dvh,26rem);height:clamp(12rem,38dvh,26rem);min-height:12rem;max-height:26rem;margin-top:0!important;overflow:hidden}
+        .preview-shell>.editor-timeline{box-sizing:border-box;left:0;flex:0 0 clamp(12rem,38dvh,26rem);width:calc(100% + 2 * clamp(1rem,3vw,3rem));height:clamp(12rem,38dvh,26rem);min-height:12rem;max-height:26rem;margin:0 calc(-1 * clamp(1rem,3vw,3rem));padding-left:.5rem;padding-right:.5rem;overflow:hidden}
         .editor-timeline{grid-template-rows:minmax(0,1fr)}
         .editor-timeline__bar,.editor-timeline__scroller{grid-row:1}
         .editor-timeline__scroller{height:100%;min-height:0;overflow:auto;overscroll-behavior:contain}
@@ -252,8 +260,107 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     .adjustment-tabs{position:sticky;top:0;z-index:3;display:flex;gap:.2rem;overflow-x:auto;padding:.7rem 1rem;background:#111923;border-bottom:1px solid #273547;scrollbar-width:none}.adjustment-tabs::-webkit-scrollbar{display:none}.adjustment-tab{flex:0 0 auto;border:1px solid transparent;border-radius:.38rem;background:transparent;color:#95a4b8;padding:.48rem .7rem;font-size:.72rem;font-weight:800;transition:background .16s,border-color .16s,color .16s}.adjustment-tab:hover{background:#1b2736;color:#eef2f7}.adjustment-tab.is-active{border-color:#8d302f;background:rgba(201,9,5,.16);color:#fff;box-shadow:inset 0 -2px #f04438}.preview-decision[data-adjustment-category][hidden]{display:none!important}
     .transcript-card{padding:0!important;overflow:hidden}.transcript-card__toolbar{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:1rem;border-bottom:1px solid #293546}.transcript-card__toolbar strong{color:#f5f7fb}.transcript-card__toolbar small{color:#9aa8ba}.transcript-download{flex:0 0 auto;display:inline-flex;align-items:center;gap:.4rem;border:1px solid #3d4c61;border-radius:.45rem;padding:.48rem .62rem;color:#dce7f4;font-size:.72rem;font-weight:800}.transcript-download:hover{border-color:#7588a2;background:#202c3b;color:#fff}.transcript-list{max-height:25rem;overflow:auto;padding:.45rem}.transcript-cue{display:grid;grid-template-columns:3.65rem minmax(0,1fr);gap:.65rem;width:100%;border:1px solid transparent;border-radius:.55rem;padding:.65rem;text-align:left;color:#dce5ef;transition:.15s}.transcript-cue:hover{background:#1c2736}.transcript-cue.is-current{border-color:#a93635;background:rgba(201,9,5,.16);box-shadow:inset 3px 0 #ed4b45}.transcript-cue__time{color:#8fa0b5;font-size:.68rem;font-variant-numeric:tabular-nums;font-weight:800}.transcript-cue__text{font-size:.8rem;line-height:1.4}.transcript-help{padding:.55rem 1rem .8rem;color:#8fa0b5;font-size:.7rem}.transcript-empty{padding:1.2rem;color:#9aa8ba;text-align:center;font-size:.8rem}
 
-    @media(min-width:761px){.editor-timeline__bar{min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#46536a transparent}}
-    .editor-track__label{position:sticky;left:0;z-index:12;background:#0b0e14;padding:.35rem 0}
+    /* Inspector and transcript use the same surfaces and accents as the timeline. */
+    .preview-adjustments{background:#0d141e;border-color:#2c3b4c}
+    .preview-adjustments__head{background:#131e2b;border-bottom:1px solid #2b3a4a}
+    .preview-adjustments__head strong{color:#f3f7fc;letter-spacing:-.02em}
+    .preview-adjustments__head small{color:#a0b0c3;line-height:1.45}
+    .preview-adjustments__close{border:1px solid #35465a;border-radius:.55rem;background:#192636;color:#b9cadc}
+    .preview-adjustments__close:hover{background:#29394d;color:#fff}
+    .preview-adjustments .preview-list{background:#0e1621}
+    .adjustment-tabs{gap:.4rem;padding:.7rem 1rem;background:#111b28;border-color:#293849}
+    .adjustment-tab{border-radius:.55rem;padding:.5rem .8rem;color:#a9bacd}
+    .adjustment-tab.is-active{border-color:#a73540;background:#43212b;box-shadow:inset 0 -2px #ef555d;color:#fff}
+    .preview-adjustments .preview-decision.transcript-card{margin:.8rem;border:1px solid #304154;border-radius:.85rem;background:#141f2c;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+    .transcript-card__toolbar{padding:1.05rem 1rem;background:#172434;border-color:#304154}
+    .transcript-card__toolbar strong{display:block;font-size:.9rem;letter-spacing:-.01em}
+    .transcript-card__toolbar small{color:#a5b5c8;font-size:.7rem;line-height:1.45}
+    .transcript-download{border-color:#40566f;border-radius:.5rem;background:#203145;color:#e5effb;white-space:nowrap}
+    .transcript-download:hover{background:#2b415a;border-color:#748daa}
+    .transcript-list{display:grid;gap:.3rem;padding:.75rem;max-height:25rem}
+    .transcript-cue{grid-template-columns:3.35rem minmax(0,1fr);align-items:start;gap:.7rem;padding:.7rem;border-color:#2c3c4e;border-radius:.6rem;background:#192635;color:#d9e5f2;line-height:1.4}
+    .transcript-cue:hover{background:#233448;border-color:#4b6079}
+    .transcript-cue.is-current{border-color:#d14d5d;background:#3a202d;box-shadow:inset 3px 0 #f06270}
+    .transcript-cue__time{width:max-content;padding:.2rem .35rem;border-radius:.3rem;background:#26384b;color:#b4c9dd;font-size:.68rem;line-height:1.2}
+    .transcript-cue.is-current .transcript-cue__time{background:#69303e;color:#ffe2e7}
+    .transcript-cue__text{min-width:0;color:inherit;font-size:.8rem;line-height:1.5;overflow-wrap:anywhere}
+    .transcript-cue:focus-visible,.transcript-download:focus-visible,.adjustment-tab:focus-visible{outline:2px solid #8ec5ff;outline-offset:2px}
+    .transcript-help{margin:0 .75rem .8rem;padding:.7rem .8rem;border:1px solid #2b3d50;border-radius:.55rem;background:#111c28;color:#a0b2c5;font-size:.7rem;line-height:1.5}
+    @media(max-width:420px){.transcript-card__toolbar{align-items:flex-start;flex-wrap:wrap}.transcript-cue{grid-template-columns:3rem minmax(0,1fr);gap:.45rem}}
+    .preview-adjustments .preview-decision:not(.transcript-card){margin:.8rem;padding:1.1rem!important;border:1px solid #304154;border-radius:.85rem;background:#141f2c;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+    .preview-adjustments .preview-decision:not(.transcript-card) strong{color:#f3f7fc}
+    .preview-adjustments .preview-decision:not(.transcript-card) label{color:#b0c0d1;line-height:1.45}
+    .preview-adjustments .preview-pill{background:#243548;color:#c3d3e4;border:1px solid #354a60}
+    .preview-adjustments .preview-decision input:not([type="range"]):not([type="checkbox"]),.preview-adjustments .preview-decision select,.preview-adjustments .preview-decision textarea{border:1px solid #40546a;border-radius:.5rem;background:#111c29;color:#edf4fc}
+    .preview-adjustments .preview-decision :is(input,select,textarea,button):focus-visible{outline:2px solid #8ec5ff;outline-offset:2px}
+    .preview-adjustments .preview-decision input[type="range"]{accent-color:#ed555b;cursor:pointer}
+    .preview-adjustments .preview-decision .media-btn:not(.media-primary){border-color:#40566f!important;border-radius:.55rem!important;background:#203145!important;color:#e5effb!important}
+    .preview-adjustments .preview-decision .media-btn:not(.media-primary):hover{background:#2b415a!important;border-color:#748daa!important}
+    @media(min-width:900px){
+        .preview-shell .preview-layout,.preview-shell.is-inspector-open .preview-layout{display:grid;grid-template-columns:minmax(0,0fr) minmax(0,1fr) 4.4rem;gap:0;align-items:center;align-self:stretch;margin-left:0;margin-right:calc(-1 * clamp(1rem,3vw,3rem));transition:grid-template-columns .32s cubic-bezier(.22,.8,.25,1),gap .32s cubic-bezier(.22,.8,.25,1),margin-left .32s cubic-bezier(.22,.8,.25,1)}
+        .preview-shell.is-inspector-open .preview-layout{grid-template-columns:minmax(0,1fr) minmax(0,1.38fr) 4.4rem;gap:0 clamp(.7rem,1.4vw,1.4rem);margin-left:calc(-1 * clamp(1rem,3vw,3rem))}
+        .preview-shell .preview-player-card{grid-column:2;grid-row:1;min-width:0}
+        .preview-shell .preview-adjustments{display:flex;grid-column:1;grid-row:1;min-width:0;overflow:hidden;visibility:hidden;opacity:0;pointer-events:none;transition:opacity .25s ease,visibility 0s linear .32s}
+        .preview-shell .preview-adjustments.is-open{visibility:visible;opacity:1;pointer-events:auto;animation:none;transition:opacity .25s ease,visibility 0s}
+        .editor-preview-tools{grid-column:3;grid-row:1;align-self:stretch;justify-self:end;width:4.4rem;box-sizing:border-box;display:flex!important;flex-direction:column;align-items:center;gap:.3rem;padding:.7rem .25rem;overflow-y:auto;border-left:1px solid #263547;background:#0b111a;scrollbar-width:thin;scrollbar-color:#43566c transparent}
+        .editor-preview-tools button{display:flex;flex:none;flex-direction:column;align-items:center;justify-content:center;gap:.28rem;width:3.7rem;min-height:3.8rem;padding:.4rem .2rem;border:1px solid transparent;border-radius:.6rem;background:transparent;color:#b5c4d5;font-size:.62rem;font-weight:700;line-height:1.15;text-align:center;transition:background .16s,border-color .16s,color .16s}
+        .editor-preview-tools button i{font-size:1rem;color:#d8e4f1}
+        .editor-preview-tools button:hover{border-color:#354a61;background:#1a293a;color:#fff}
+        .editor-preview-tools button:focus-visible{outline:2px solid #8ec5ff;outline-offset:-2px}
+        .editor-preview-tools button[hidden]{display:none}
+        .editor-timeline__bar :is(#add-timeline-element,#add-timeline-camera,#add-timeline-text,#add-timeline-music){display:none}
+        #multicam-panel{position:fixed;z-index:75;top:50%;left:50%;width:min(36rem,calc(100vw - 2rem));max-height:min(80vh,42rem);margin:0;overflow:auto;transform:translate(-50%,-50%);box-shadow:0 24px 70px rgba(0,0,0,.55)}
+    }
+    .editor-preview-tools{display:none}
+    @media(prefers-reduced-motion:reduce){.preview-shell,.preview-shell .preview-layout,.preview-shell .preview-adjustments{transition:none!important}}
+
+    @media(min-width:761px){
+        .editor-timeline{grid-template-columns:3.15rem minmax(0,1fr)}
+        .editor-timeline__bar{min-height:0;height:100%;box-sizing:border-box;align-items:stretch;overflow-y:auto;overflow-x:hidden;padding:.2rem .3rem .35rem .15rem;scrollbar-width:thin;scrollbar-color:#53657c transparent;scroll-snap-type:y proximity;scroll-padding:.2rem}
+        .editor-timeline__bar>div{justify-items:center;gap:.35rem!important}
+        .editor-timeline__bar .editor-tool,.editor-timeline__bar #delete-segment{flex:none;scroll-snap-align:start;border-radius:.45rem}
+        .editor-timeline__bar::-webkit-scrollbar{width:4px}
+        .editor-timeline__bar::-webkit-scrollbar-thumb{border:0;border-radius:4px;background:#53657c}
+    }
+    .editor-timeline__scroller{padding:0}
+    .editor-timeline__canvas{min-height:0}
+    .editor-ruler{padding:.45rem 0;margin:0}
+    .editor-track{min-height:3.15rem;margin:0;padding:0;background:#111923;border-top:1px solid #273344}
+    .editor-track__label{position:sticky;left:0;z-index:12;align-self:stretch;width:calc(100% + .65rem);min-height:3.15rem;margin:0;padding:.35rem .65rem;box-sizing:border-box;background:#111923;border-right:1px solid #354155}
+    .editor-track__lane{height:2.65rem;border-radius:0}
+    .editor-track--caption{min-height:2.35rem}
+    .editor-track--caption .editor-track__label{min-height:2.35rem}
+    .editor-track--caption .editor-track__lane{height:1.9rem}
+    .editor-track--caption .editor-track__clip{top:.12rem;bottom:.12rem;padding:0 .55rem;font-size:.68rem;line-height:1.2}
+    /* Timeline surfaces share a quiet, continuous grid; clips carry the color. */
+    .editor-timeline__scroller{border-color:#2a3545;border-radius:.75rem;background:#0c1119;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+    .editor-ruler{min-height:2rem;align-items:center;background:#101722;border-bottom:1px solid #293647;color:#8292a8;font-variant-numeric:tabular-nums;letter-spacing:.03em}
+    .editor-ruler__scale{padding-right:.65rem}
+    .editor-track{background:#111a26;border-color:#273342}
+    .editor-track__label{gap:.55rem;background:#111a26;border-right:1px solid #344252;color:#b9c7d9;font-size:.66rem;letter-spacing:.035em}
+    .editor-track__label:before{opacity:.95}
+    .caption-visibility{color:#8fa4b9;border-radius:.35rem}
+    .caption-visibility:hover{background:#263445;color:#fff}
+    .editor-track__lane,.editor-track--caption .editor-track__lane{background-color:#121925;background-image:repeating-linear-gradient(90deg,transparent 0,transparent calc(10% - 1px),rgba(153,174,201,.07) calc(10% - 1px),rgba(153,174,201,.07) 10%)}
+    .editor-track__clip{border-radius:.35rem;transition:filter .15s ease,border-color .15s ease}
+    .editor-track--caption .editor-track__label:before{color:#a9bdcf}
+    .editor-track--caption .editor-track__clip,.editor-track--caption .editor-track__caption--en{top:.12rem;bottom:.12rem;border:0;border-radius:.3rem;background:#243342;color:#e0eaf3;font-size:.67rem;font-weight:700}
+    .editor-track--caption .editor-track__clip:hover,.editor-track--caption .editor-track__caption--en:hover{filter:none;border:0!important;background:#314558}
+    .editor-track__clip.editor-video-clip{border-color:#6b819a;background-color:#2a394c}
+    .editor-track__clip.editor-waveform{background:#172e3c!important;border-color:#365e70}
+    .editor-track{border-top-color:rgba(128,151,175,.1)}
+    .editor-track__label{border-right-color:rgba(128,151,175,.14)}
+    .editor-track__clip,.editor-track__clip.editor-video-clip,.editor-track__clip.editor-waveform{border-color:transparent}
+    .editor-track--caption .editor-track__clip,.editor-track--caption .editor-track__caption--en{border:1px solid rgba(158,181,200,.22)}
+    .editor-track__clip.is-selected{outline:2px solid #fbbf24;outline-offset:-2px}
+    .editor-filmstrip__label,.editor-waveform__label{inset:auto auto .25rem .4rem;display:block;width:max-content;max-width:calc(100% - .8rem);padding:.16rem .38rem;border-radius:.25rem;background:rgba(9,15,24,.72);color:#e5eef9;font-size:.61rem;line-height:1.1;text-align:left;pointer-events:none}
+    .editor-timeline__bar .editor-tool{border-color:#34465b;background:#162232;color:#b8c9db;transition:background .15s,border-color .15s,color .15s}
+    .editor-timeline__bar .editor-tool:hover{background:#24354a;border-color:#66809e;color:#fff}
+    .editor-timeline__bar .editor-tool.is-active{background:#b82025;border-color:#ef5557;color:#fff;box-shadow:inset 0 1px rgba(255,255,255,.18)}
+    .editor-timeline__bar :is(button,.editor-tool):focus-visible{outline:2px solid #8ec5ff;outline-offset:2px}
+    @media(min-width:761px){
+        .preview-shell>.editor-timeline:not(:has(#editor-tracks .editor-track:nth-child(4))){flex-basis:16rem;height:16rem}
+    }
     .editor-snap-guide{position:absolute;top:0;bottom:0;width:1px;background:#56e0db;z-index:11;pointer-events:none}
     .editor-drag-feedback{position:sticky;left:6.5rem;bottom:0;display:block;width:max-content;max-width:90%;padding:.25rem .5rem;background:#182c36;color:#a8fff4;border-radius:.3rem;font:12px monospace;z-index:13;pointer-events:none}
     .editor-snap-guide[hidden],.editor-drag-feedback[hidden]{display:none}
@@ -284,6 +391,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 {{ music_tracks|json_script:"music-tracks" }}
 <div class="preview-shell">
     <div class="preview-layout">
+        <nav class="editor-preview-tools" aria-label="Adicionar à edição">
+            <button type="button" data-preview-tool="add-timeline-element"><i class="fas fa-photo-film" aria-hidden="true"></i><span>Elementos</span></button>
+            <button type="button" data-preview-tool="add-timeline-text"><i class="fas fa-font" aria-hidden="true"></i><span>Texto</span></button>
+            <button type="button" data-preview-tool="add-timeline-music"><i class="fas fa-music" aria-hidden="true"></i><span>Música</span></button>
+            <button type="button" data-preview-tool="add-timeline-camera" hidden><i class="fas fa-camera" aria-hidden="true"></i><span>Câmera</span></button>
+        </nav>
         <section class="media-card preview-player-card overflow-hidden">
             <svg class="absolute w-0 h-0" aria-hidden="true"><filter id="preview-temperature-filter"><feColorMatrix id="preview-temperature-matrix" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0"></feColorMatrix></filter></svg><div class="preview-stage" style="--preview-width:{{ project.render_job.preset.width|default:project.template_version.preset.width|default:1920 }};--preview-height:{{ project.render_job.preset.height|default:project.template_version.preset.height|default:1080 }}"><video id="preview-video" playsinline preload="metadata"></video><div class="preview-broll-layer" id="preview-broll-layer"></div><div class="preview-overlay-layer" id="preview-overlay-layer"></div><div class="preview-caption" id="preview-caption-source"></div><div class="preview-caption" id="preview-caption-translated"></div><div class="preview-transform-box" id="preview-transform-box" aria-label="Controle de posição e tamanho"><span class="preview-transform-box__hint">Arraste para mover · cantos para redimensionar</span><button type="button" class="preview-transform-box__move" aria-label="Mover item"></button><i class="preview-transform-box__handle preview-transform-box__handle--nw" data-transform-handle></i><i class="preview-transform-box__handle preview-transform-box__handle--ne" data-transform-handle></i><i class="preview-transform-box__handle preview-transform-box__handle--sw" data-transform-handle></i><i class="preview-transform-box__handle preview-transform-box__handle--se" data-transform-handle></i></div></div>
             <div id="preview-load-error" class="hidden px-4 py-3 text-sm text-red-200" role="status"><span id="preview-load-error-message"></span> <button type="button" id="preview-load-retry" class="underline font-bold">Tentar novamente</button></div>
@@ -298,8 +411,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             <div class="preview-list p-3 space-y-2" id="review-list"></div>
     </aside>
     </div>
-    <div class="editor-timeline__transport preview-controls"><button type="button" class="preview-transport-step" id="preview-previous" aria-label="Voltar um quadro"><i class="fas fa-backward-step"></i></button><button class="preview-play" id="preview-play" aria-label="Reproduzir"><i class="fas fa-play"></i></button><button type="button" class="preview-transport-step" id="preview-next" aria-label="Avançar um quadro"><i class="fas fa-forward-step"></i></button><span class="text-sm tabular-nums" id="preview-time">00:00 / 00:00</span><input class="preview-range" id="preview-range" type="range" min="0" max="1" value="0" aria-hidden="true" tabindex="-1"><div class="timeline-zoom-control" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-decrease" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-magnifying-glass-minus"></i></button><input id="timeline-zoom-range" type="range" min="1" max="16" step=".1" value="1" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-increase" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-magnifying-glass-plus"></i></button></div></div>
-    <div class="editor-timeline" aria-label="Linha do tempo da edição"><div class="editor-timeline__bar"><strong class="text-xs uppercase tracking-wider text-gray-500">Timeline</strong><div class="flex items-center gap-2"><button type="button" class="editor-tool is-active" data-tool="select" title="Ferramenta de seleção (V)" aria-label="Ferramenta de seleção"><i class="fas fa-arrow-pointer"></i><span class="sr-only">Seleção</span></button><button type="button" class="editor-tool" data-tool="blade" title="Ferramenta lâmina (B)" aria-label="Ferramenta lâmina"><i class="fas fa-scissors"></i><span class="sr-only">Lâmina</span></button><button type="button" class="editor-tool" id="add-timeline-element" title="Adicionar elemento visual" aria-label="Adicionar elemento visual"><i class="fas fa-photo-film"></i><span class="sr-only">Adicionar elemento</span></button><button type="button" class="editor-tool" id="add-timeline-camera" title="Adicionar take de câmera extra no cursor" aria-label="Adicionar câmera extra" hidden><i class="fas fa-camera"></i></button><button type="button" class="editor-tool" id="add-timeline-text" title="Adicionar texto" aria-label="Adicionar texto"><i class="fas fa-font"></i><span class="sr-only">Adicionar texto</span></button><button type="button" class="editor-tool" id="add-timeline-music" title="Adicionar música à timeline" aria-label="Adicionar música à timeline"><i class="fas fa-music"></i><span class="sr-only">Adicionar música</span></button><span class="editor-timeline__tool-divider" aria-hidden="true"></span><button type="button" class="editor-tool" data-timeline-zoom="out" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-minus"></i></button><output class="editor-timeline__zoom-value" id="timeline-zoom-value" aria-live="polite">100%</output><button type="button" class="editor-tool" data-timeline-zoom="in" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-plus"></i><span class="sr-only">Aumentar zoom</span></button><button type="button" class="editor-tool is-active" id="timeline-snap" aria-pressed="true" title="Encaixe magnético (S); Alt suspende durante o arraste" aria-label="Encaixe magnético"><i class="fas fa-magnet"></i></button><button type="button" class="editor-tool" id="timeline-precision" title="Ajustar início e fim por quadro (T)" aria-label="Ajustar tempos por quadro"><i class="fas fa-stopwatch"></i></button><button type="button" class="editor-tool" id="timeline-shortcuts" title="Atalhos (?)" aria-label="Ver atalhos"><i class="fas fa-keyboard"></i></button><button type="button" class="editor-tool" id="split-caption" disabled title="Dividir legenda no cursor (Ctrl/⌘+K)" aria-label="Dividir legenda"><i class="fas fa-scissors"></i></button><button type="button" class="editor-tool" id="copy-caption" disabled title="Copiar legenda (Ctrl/⌘+C)" aria-label="Copiar legenda"><i class="fas fa-copy"></i></button><button type="button" class="editor-tool" id="paste-caption" disabled title="Colar nova legenda no cursor (Ctrl/⌘+V)" aria-label="Colar legenda"><i class="fas fa-paste"></i></button><button type="button" id="delete-segment" disabled class="text-xs font-bold rounded bg-red-600 px-2 py-1 text-white disabled:opacity-40" title="Remover trecho selecionado (Del)" aria-label="Remover trecho selecionado"><i class="fas fa-trash"></i><span class="sr-only">Remover</span></button></div></div><div class="editor-timeline__scroller" id="editor-scroller" title="Use a roda do mouse para ampliar ou reduzir a timeline"><div class="editor-timeline__canvas" id="editor-canvas"><div class="editor-ruler"><span></span><div class="editor-ruler__scale"><span>00:00</span><span id="timeline-middle">00:00</span><span id="timeline-end">00:00</span></div></div><div id="editor-tracks"></div></div></div></div>
+    <div class="editor-timeline__transport preview-controls"><div class="editor-timeline-actions" role="toolbar" aria-label="Ferramentas da timeline"></div><button type="button" class="preview-transport-step" id="preview-previous" aria-label="Voltar um quadro"><i class="fas fa-backward-step"></i></button><button class="preview-play" id="preview-play" aria-label="Reproduzir"><i class="fas fa-play"></i></button><button type="button" class="preview-transport-step" id="preview-next" aria-label="Avançar um quadro"><i class="fas fa-forward-step"></i></button><span class="text-sm tabular-nums" id="preview-time">00:00 / 00:00</span><input class="preview-range" id="preview-range" type="range" min="0" max="1" value="0" aria-hidden="true" tabindex="-1"><div class="timeline-zoom-control" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-decrease" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-magnifying-glass-minus"></i></button><input id="timeline-zoom-range" type="range" min="1" max="16" step=".1" value="1" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-increase" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-magnifying-glass-plus"></i></button></div></div>
+    <div class="editor-timeline" aria-label="Linha do tempo da edição"><div class="editor-timeline__bar"><strong class="text-xs uppercase tracking-wider text-gray-500">Timeline</strong><div class="flex items-center gap-2"><button type="button" class="editor-tool is-active" data-tool="select" title="Ferramenta de seleção (V)" aria-label="Ferramenta de seleção"><i class="fas fa-arrow-pointer"></i><span class="sr-only">Seleção</span></button><button type="button" class="editor-tool" data-tool="blade" title="Lâmina: clique em um vídeo, legenda ou elemento para dividir (B)" aria-label="Ferramenta lâmina"><i class="fas fa-scissors"></i><span class="sr-only">Lâmina</span></button><button type="button" class="editor-tool" id="add-timeline-element" title="Adicionar elemento visual" aria-label="Adicionar elemento visual"><i class="fas fa-photo-film"></i><span class="sr-only">Adicionar elemento</span></button><button type="button" class="editor-tool" id="add-timeline-camera" title="Adicionar take de câmera extra no cursor" aria-label="Adicionar câmera extra" hidden><i class="fas fa-camera"></i></button><button type="button" class="editor-tool" id="add-timeline-text" title="Adicionar texto" aria-label="Adicionar texto"><i class="fas fa-font"></i><span class="sr-only">Adicionar texto</span></button><button type="button" class="editor-tool" id="add-timeline-music" title="Adicionar música à timeline" aria-label="Adicionar música à timeline"><i class="fas fa-music"></i><span class="sr-only">Adicionar música</span></button><span class="editor-timeline__tool-divider" aria-hidden="true"></span><button type="button" class="editor-tool" data-timeline-zoom="out" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-minus"></i></button><output class="editor-timeline__zoom-value" id="timeline-zoom-value" aria-live="polite">100%</output><button type="button" class="editor-tool" data-timeline-zoom="in" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-plus"></i><span class="sr-only">Aumentar zoom</span></button><button type="button" class="editor-tool is-active" id="timeline-snap" aria-pressed="true" title="Encaixe magnético (S); Alt suspende durante o arraste" aria-label="Encaixe magnético"><i class="fas fa-magnet"></i></button><button type="button" class="editor-tool" id="timeline-precision" title="Ajustar início e fim por quadro (T)" aria-label="Ajustar tempos por quadro"><i class="fas fa-stopwatch"></i></button><button type="button" class="editor-tool" id="timeline-shortcuts" title="Atalhos (?)" aria-label="Ver atalhos"><i class="fas fa-keyboard"></i></button><button type="button" class="editor-tool" id="copy-caption" disabled title="Copiar legenda (Ctrl/⌘+C)" aria-label="Copiar legenda"><i class="fas fa-copy"></i></button><button type="button" class="editor-tool" id="paste-caption" disabled title="Colar nova legenda no cursor (Ctrl/⌘+V)" aria-label="Colar legenda"><i class="fas fa-paste"></i></button><button type="button" id="delete-segment" disabled class="text-xs font-bold rounded bg-red-600 px-2 py-1 text-white disabled:opacity-40" title="Remover trecho selecionado (Del)" aria-label="Remover trecho selecionado"><i class="fas fa-trash"></i><span class="sr-only">Remover</span></button></div></div><div class="editor-timeline__scroller" id="editor-scroller" title="Use a roda do mouse para ampliar ou reduzir a timeline"><div class="editor-timeline__canvas" id="editor-canvas"><div class="editor-ruler"><span></span><div class="editor-ruler__scale"><span>00:00</span><span id="timeline-middle">00:00</span><span id="timeline-end">00:00</span></div></div><div id="editor-tracks"></div></div></div></div>
 </div>
 
 <div class="preview-modal" id="back-to-blocks-modal" role="dialog" aria-modal="true" aria-labelledby="back-to-blocks-title">
@@ -1560,7 +1673,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         };
         const captions=timeline.captions||[], captionItems=items=>items.map(item=>({id:item.id,start:item.start_ms,end:item.end_ms,label:item.text||'Legenda'})), usedCaptions=new Set();
         const wireCaptionSelection=items=>{[...lastRenderedTrack.querySelectorAll('.editor-track__clip')].forEach((clip,index)=>{const cue=items[index];if(!cue)return;clip.classList.toggle('is-selected',selectedCaptionIds.has(String(cue.id)));if(!clip._captionSelectionBound){clip._captionSelectionBound=true;clip.addEventListener('click',event=>{if(!event.shiftKey)return;event.preventDefault();event.stopImmediatePropagation();const current=timeline.captions.find(value=>String(value.id)===String(clip._timeline.item.id));if(current)toggleCaptionSelection(current)},true)}})};
-        const addCaptionTrack=(label,language,kind)=>{const items=captions.filter(item=>String(item.language||'').toLowerCase()===language);if(!items.length)return;items.forEach(item=>usedCaptions.add(item));makeTrack(label,captionItems(items),kind,false,true,'caption');wireCaptionSelection(items);const row=lastRenderedTrack,trackId=items[0].track_id,hidden=(timeline.hidden_caption_track_ids||[]).some(id=>String(id)===String(trackId)),title=row.firstElementChild;row.classList.toggle('is-caption-hidden',hidden);const button=title.querySelector('.caption-visibility')||document.createElement('button');button.type='button';button.className='caption-visibility';button.title=`${hidden?'Ativar':'Desativar'} ${label}`;button.setAttribute('aria-label',button.title);button.setAttribute('aria-pressed',String(!hidden));button.innerHTML=`<i class="fas fa-eye${hidden?'-slash':''}" aria-hidden="true"></i>`;button.onclick=async event=>{event.stopPropagation();button.disabled=true;try{editorPersistence.flushScheduled();applyTimeline(await api('{% url "external_media_project_preview_caption_visibility" project.public_id %}',{track_id:trackId,visible:hidden}))}catch(error){alert(error.message);button.disabled=false}};title.append(button)};
+        const addCaptionTrack=(label,language,kind)=>{const items=captions.filter(item=>String(item.language||'').toLowerCase()===language);if(!items.length)return;items.forEach(item=>usedCaptions.add(item));makeTrack(label,captionItems(items),kind,false,true,'caption');wireCaptionSelection(items);const row=lastRenderedTrack,trackId=items[0].track_id,hidden=(timeline.hidden_caption_track_ids||[]).some(id=>String(id)===String(trackId)),title=row.firstElementChild;row.classList.toggle('is-caption-hidden',hidden);const button=title.querySelector('.caption-visibility')||document.createElement('button');button.type='button';button.className='caption-visibility';button.title=`${hidden?'Ativar':'Desativar'} ${label}`;button.setAttribute('aria-label',button.title);button.setAttribute('aria-pressed',String(!hidden));button.innerHTML=`<i class="fas fa-eye${hidden?'-slash':''}" aria-hidden="true"></i>`;button.onclick=async event=>{event.stopPropagation();button.disabled=true;try{editorPersistence.flushScheduled();applyTimeline(await api('{% url "external_media_project_preview_caption_visibility" project.public_id %}',{track_id:trackId,visible:hidden}))}catch(error){alert(error.message)}finally{button.disabled=false}};title.append(button)};
         // Put simultaneous visual elements on independent lanes so both clips
         // remain visible and selectable instead of occupying the same space.
         // The compositor paints the latest item last (therefore on top), so
@@ -1576,7 +1689,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         };
         // The order mirrors the compositor: top-most graphics first, audio last.
         if(timeline.overlays?.length)makeTrack('Textos',timeline.overlays.map(item=>({start:item.start_ms,end:item.end_ms,label:item.purpose||item.type,id:item.id})),'editor-track__overlay',false,false,'overlay',true);
-        addCaptionTrack('Legenda PT','pt','editor-track__caption editor-track__caption--pt');
+        addCaptionTrack('Legenda','pt','editor-track__caption editor-track__caption--pt');
         addCaptionTrack('Legenda EN','en','editor-track__caption editor-track__caption--en');
         const otherLanguages=[...new Set(captions.filter(item=>!usedCaptions.has(item)).map(item=>String(item.language||'').toLowerCase()))];
         otherLanguages.forEach(language=>addCaptionTrack(`Legenda ${language.toUpperCase()}`,language,'editor-track__caption'));
@@ -1988,7 +2101,6 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function updateEditControls(){
         document.querySelectorAll('[data-tool]').forEach(button=>button.classList.toggle('is-active',button.dataset.tool===editTool));
         const remove=document.getElementById('delete-segment'),item=selectedTimelineItemForDeletion();
-        document.getElementById('split-caption').disabled=!selectedCaption();
         document.getElementById('copy-caption').disabled=!selectedCaption();
         document.getElementById('paste-caption').disabled=!captionClipboard;
         remove.disabled=!selectedSegment&&!item;
@@ -2165,7 +2277,6 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     document.getElementById('cancel-subtitle-edit').onclick=closeSubtitleEditor;document.getElementById('cancel-subtitle-edit-footer').onclick=closeSubtitleEditor;saveSubtitleEdit.onclick=saveOpenSubtitleEditor;
     document.querySelectorAll('[data-tool]').forEach(button=>button.onclick=()=>{editTool=button.dataset.tool;updateEditControls();renderTimelineSelection()});
     document.getElementById('delete-segment').onclick=deleteSelectedSegment;
-    document.getElementById('split-caption').onclick=()=>{const cue=selectedCaption();if(cue)splitCaption(cue.id,globalMs)};
     document.getElementById('copy-caption').onclick=copyCaption;
     document.getElementById('paste-caption').onclick=pasteCaption;
     document.addEventListener('keydown',event=>{
@@ -2325,6 +2436,11 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const addCameraButton=document.getElementById('add-timeline-camera');
     addCameraButton.hidden=!(timeline.cameras||[]).some(camera=>!camera.is_primary);
     addCameraButton.onclick=()=>multicamEditor.addAtPlayhead();
+    document.querySelectorAll('[data-preview-tool]').forEach(button=>{const target=document.getElementById(button.dataset.previewTool);button.onclick=()=>target?.click();if(button.dataset.previewTool==='add-timeline-camera'){const sync=()=>{button.hidden=target.hidden};sync();new MutationObserver(sync).observe(target,{attributes:true,attributeFilter:['hidden']})}});
+    const timelineActions=document.querySelector('.editor-timeline-actions'),wideTimelineActions=window.matchMedia('(min-width:1200px)');
+    const relocatedTimelineActions=['timeline-snap','timeline-precision','delete-segment','timeline-shortcuts'].map(id=>{const button=document.getElementById(id),anchor=document.createComment(id);button.before(anchor);return {button,anchor}});
+    const placeTimelineActions=()=>relocatedTimelineActions.forEach(({button,anchor})=>{if(wideTimelineActions.matches)timelineActions.append(button);else anchor.after(button)});
+    wideTimelineActions.addEventListener('change',placeTimelineActions);placeTimelineActions();
     multicamEditor=ConnectMulticam.create({panel:document.getElementById('multicam-panel'),stage:document.querySelector('.preview-stage'),mainVideo:video,getTimeline:()=>timeline,getTime:()=>globalMs,seek,editor:true,newOnly:true,save:async payload=>applyTimeline(await api('{% url "external_media_project_preview_camera" project.public_id %}',payload))});
     configureMusic();renderEditorTimeline();renderReviewProxyStatus();renameVisualMedia();updateEditControls();seek(globalMs);scheduleRevisionProxyPoll();
     requestAnimationFrame(()=>{renderList();enhanceReframeClipboard();renderEditorTimeline()});

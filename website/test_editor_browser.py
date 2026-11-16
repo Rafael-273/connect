@@ -35,6 +35,9 @@ class EditorBrowserTests(EditorFixture, StaticLiveServerTestCase):
     def test_real_media_scrubbing_playback_and_waveforms(self):
         self.browser_check('editor_media.browser.cjs')
 
+    def test_caption_visibility_can_be_restored_after_save_and_reload(self):
+        self.browser_check('editor_caption_visibility.browser.cjs')
+
     def test_magnetic_alignment_precision_and_history(self):
         self.browser_check('editor_precision.browser.cjs')
 

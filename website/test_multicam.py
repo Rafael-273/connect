@@ -12,13 +12,14 @@ from uuid import uuid4
 import numpy as np
 from django.conf import settings
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 from website.external_media.multicam import AudioSynchronizer, MulticamService, MulticamRenderService
 from website.external_media.canonical import SourceManifestBuilder
 from website.external_media.preview import TimelineRevisionService
 from website.external_media.ffmpeg_runner import FFmpegRunner
+from website.external_media.media_input import RemoteMediaSource
 from website.models.external_media import ProjectBlockMedia
 from website.test_editor_persistence import EditorFixture
 
@@ -370,6 +371,67 @@ class CameraPersistenceTests(EditorFixture, TestCase):
 class MulticamFFmpegTests(SimpleTestCase):
     def run_media(self, *args):
         return subprocess.run([settings.FFMPEG_BINARY, '-v', 'error', '-y', *map(str, args)], check=True, capture_output=True).stdout
+
+    @override_settings(USE_S3=True)
+    def test_s3_multicam_stages_each_intermediate_and_cleans_up_on_failure(self):
+        segment = {'camera_source_id': 'side', 'source_in_ms': 0, 'source_out_ms': 1000,
+                   'start_ms': 0, 'end_ms': 1000, 'rate': 1}
+        revision = SimpleNamespace(timeline={'camera_segments': [segment] * 9},
+                                   source_manifest={'sources': [{'id': 'side'}]}, edit_decision_set={})
+        project = SimpleNamespace(public_id='test')
+        original = RemoteMediaSource('https://example.invalid/master', size_bytes=4)
+        for fail in (False, True):
+            with self.subTest(fail=fail), TemporaryDirectory() as directory:
+                output = Path(directory) / 'output.mp4'
+                storage, runner = Mock(), Mock()
+                storage.ffmpeg_input.return_value = 'https://example.invalid/camera'
+                staged = RemoteMediaSource('https://example.invalid/pass', size_bytes=4)
+
+                def stage(path, namespace):
+                    self.assertEqual(path.read_bytes(), b'pass')
+                    path.unlink()
+                    return staged, 'temporary-pass'
+
+                storage.stage_temporary.side_effect = stage
+                commands = []
+
+                def render(command):
+                    commands.append(command)
+                    if len(commands) == 2 and fail:
+                        raise RuntimeError('render failed')
+                    Path(command[-1]).write_bytes(b'pass')
+
+                runner.run.side_effect = render
+                with patch.object(SourceManifestBuilder, 'resolve_field', return_value=Mock()), \
+                     patch('website.external_media.workspace.DiskCapacityGuard.require_capacity'):
+                    if fail:
+                        with self.assertRaisesMessage(RuntimeError, 'render failed'):
+                            MulticamRenderService(runner, storage).apply(project, revision, original, output, 160, 120)
+                    else:
+                        self.assertEqual(MulticamRenderService(runner, storage).apply(
+                            project, revision, original, output, 160, 120), output)
+                        self.assertTrue(output.exists())
+                self.assertEqual([command[3] for command in commands], [original, staged])
+                self.assertFalse((Path(directory) / 'multicam-pass-0.mp4').exists())
+                storage.delete_temporary.assert_called_once_with('temporary-pass')
+
+    def test_multicam_checks_capacity_before_starting_a_pass(self):
+        from website.external_media.workspace import InsufficientWorkspaceCapacity
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / 'master.mp4'
+            source.write_bytes(b'video')
+            segment = {'camera_source_id': 'side', 'source_in_ms': 0, 'source_out_ms': 1000,
+                       'start_ms': 0, 'end_ms': 1000, 'rate': 1}
+            revision = SimpleNamespace(timeline={'camera_segments': [segment]},
+                                       source_manifest={'sources': [{'id': 'side'}]}, edit_decision_set={})
+            runner = Mock()
+            with patch('website.external_media.workspace.DiskCapacityGuard.require_capacity',
+                       side_effect=InsufficientWorkspaceCapacity('Sem espaço')) as guard, \
+                 patch.object(SourceManifestBuilder, 'resolve_field', return_value=Mock()):
+                with self.assertRaises(InsufficientWorkspaceCapacity):
+                    MulticamRenderService(runner, Mock()).apply(None, revision, source, Path(directory) / 'out.mp4', 160, 120)
+            guard.assert_called_once()
+            runner.run.assert_not_called()
 
     def test_different_fps_picture_changes_audio_identical_and_shared_renderer(self):
         with TemporaryDirectory() as folder:

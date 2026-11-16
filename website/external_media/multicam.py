@@ -436,7 +436,30 @@ class MulticamRenderService:
                 filters.append(f"[{label}][cam{index}]overlay=eof_action=repeat:repeatlast=1:enable='gte(t,{start:.6f})*lt(t,{end:.6f})'[out{index}]")
                 label = f'out{index}'
             command += ['-filter_complex_threads', '1', '-filter_complex', ';'.join(filters), '-map', f'[{label}]', '-map', '0:a?', '-c:a', 'copy', '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_RENDER_PRESET or 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', '30', '-movflags', '+faststart', str(target)]
-            self.runner.run(command)
+            # Intermediate passes are full-length files. In S3 mode, stage
+            # the preceding pass before writing the next one, just as the
+            # pipeline stages the master before entering this compositor.
+            temporary_name = None
+            try:
+                processing_input = current
+                if settings.USE_S3 and batch_start > 0:
+                    processing_input, temporary_name = self.storage.stage_temporary(
+                        current, f'project-{project.public_id}-multicam-pass',
+                    )
+                    command[3] = FFmpegRunner.input_arg(processing_input)
+                input_size = getattr(processing_input, 'size_bytes', 0)
+                if isinstance(processing_input, Path) and processing_input.is_file():
+                    input_size = processing_input.stat().st_size
+                if input_size:
+                    from .workspace import DiskCapacityGuard
+                    DiskCapacityGuard.require_capacity(
+                        int(input_size * settings.EXTERNAL_MEDIA_WORKSPACE_SAFETY_FACTOR),
+                        root=target.parent,
+                    )
+                self.runner.run(command)
+            finally:
+                if temporary_name:
+                    self.storage.delete_temporary(temporary_name)
             if current != video and Path(current).name.startswith('multicam-pass-'):
                 Path(current).unlink(missing_ok=True)
             current = target

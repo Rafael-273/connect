@@ -62,6 +62,11 @@ class FFmpegRunner:
         except subprocess.CalledProcessError as exc:
             stderr = self.redact_sensitive_urls(exc.stderr or '')
             logger.error('FFmpeg falhou: %s', stderr[-4000:])
+            if re.search(r'no space left on device|disk quota exceeded', stderr, re.IGNORECASE):
+                raise ExternalMediaError(
+                    'O armazenamento temporário do processamento ficou sem espaço. '
+                    'Aumente o espaço disponível no worker antes de tentar novamente.'
+                ) from None
             # CalledProcessError also embeds the command; keeping it as __cause__
             # would leak the presigned query in an outer exception traceback.
             detail = self._failure_detail(stderr)

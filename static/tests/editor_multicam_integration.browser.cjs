@@ -7,7 +7,7 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE);
  await context.addCookies([{name:'sessionid',value:process.env.FILADELFIA_QA_SESSION,domain:address.hostname,path:'/'}]);
  const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto(url);const panel=page.locator('#multicam-panel');
- await page.locator('#add-timeline-camera').click();await panel.waitFor({state:'visible'});
+ await page.locator('[data-preview-tool="add-timeline-camera"]').click();await panel.waitFor({state:'visible'});
  const added=page.waitForResponse(response=>response.url().endsWith('/preview/cameras/')&&response.request().method()==='POST');
  await panel.locator('form').first().locator('input').nth(0).fill('00:01.250');
  await panel.locator('form').first().locator('input').nth(1).fill('00:05.500');

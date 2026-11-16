@@ -585,7 +585,13 @@
 </details>
 {% endif %}
 
-<form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary w-full" {% if validation_errors %}disabled style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
+{% if validation_errors %}
+<div id="project-validation-errors" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800" role="alert">
+    <strong class="block font-bold">Confira o que falta para gerar o vídeo:</strong>
+    <ul class="mt-2 list-disc pl-5 space-y-1">{% for error in validation_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+<form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary w-full" {% if validation_errors %}disabled aria-describedby="project-validation-errors" style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
 <script src="{% static 'external_media_s3_upload.js' %}"></script>
 <script src="{% static 'external_media_take_suggestions.js' %}"></script>
 <script>

@@ -3284,10 +3284,18 @@ class ExternalMediaProjectPipeline:
         if revision and (revision.timeline or {}).get('camera_segments'):
             from .multicam import MulticamRenderService
             metadata = RenderService(self.assembly.runner).probe_video(final_path)
-            final_path = MulticamRenderService(self.assembly.runner, self.storage).apply(
-                project, revision, final_path, workdir / 'project_master_multicam.mp4',
-                version.preset.width or metadata.width, version.preset.height or metadata.height,
-            )
+            retained_temporary_names = getattr(final_path, 'retained_temporary_names', ())
+            try:
+                with self.storage.staged_processing_input(
+                    final_path, f'project-{project.public_id}-multicam',
+                ) as processing_input:
+                    final_path = MulticamRenderService(self.assembly.runner, self.storage).apply(
+                        project, revision, processing_input, workdir / 'project_master_multicam.mp4',
+                        version.preset.width or metadata.width, version.preset.height or metadata.height,
+                    )
+            finally:
+                for temporary_name in retained_temporary_names:
+                    self.storage.delete_temporary(temporary_name)
         brolls = list((revision.timeline if revision else {}).get('brolls') or [])
         if brolls:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 88, 'Aplicando B-rolls')

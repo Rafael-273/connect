@@ -49,7 +49,7 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-c
  await page.keyboard.press('s');assert.equal(await page.locator('#timeline-snap').getAttribute('aria-pressed'),'false');await page.keyboard.press('s');
  await page.keyboard.press('Home');await page.keyboard.press('ArrowRight');assert.match(await page.locator('#preview-time').textContent(),/^00:00:00:01/);
  await page.keyboard.press('?');await page.waitForSelector('#shortcuts-dialog[open]');await page.keyboard.press('s');assert.equal(await page.locator('#timeline-snap').getAttribute('aria-pressed'),'true');await page.keyboard.press('Escape');
- await page.locator('#delete-segment').scrollIntoViewIfNeeded();const tool=await page.locator('#delete-segment').boundingBox(),toolbar=await page.locator('.editor-timeline__bar').boundingBox();assert.ok(tool.y>=toolbar.y&&tool.y+tool.height<=toolbar.y+toolbar.height+1);
+ await page.locator('#delete-segment').scrollIntoViewIfNeeded();const tool=await page.locator('#delete-segment').boundingBox(),toolbar=await page.locator('.editor-timeline-actions').boundingBox();assert.ok(tool.y>=toolbar.y&&tool.y+tool.height<=toolbar.y+toolbar.height+1);
  assert.deepEqual(errors,[]);console.log('PASS Alt bypass, cancelled gesture without save, S toggle, frame transport, modal shortcut guard');
  }finally{await browser.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});

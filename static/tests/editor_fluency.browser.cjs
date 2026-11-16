@@ -9,8 +9,16 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-c
  const context=await browser.newContext({viewport:{width:1600,height:1000}});await context.addCookies([{name:'sessionid',value:seed.cookie,domain:address.hostname,path:'/'}]);
  const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto(url);await page.waitForSelector('[data-clip-key]');await page.waitForTimeout(250);
+ const sidebarVisible=async()=>{const bounds=await page.locator('.editor-preview-tools').boundingBox(),layout=await page.locator('.preview-layout').boundingBox();assert.ok(bounds.x>=layout.x&&bounds.x+bounds.width<=layout.x+layout.width+1,'preview tools must remain inside the visible workspace');for(const button of await page.locator('.editor-preview-tools button:visible').all()){const box=await button.boundingBox();assert.ok(box.x>=bounds.x&&box.x+box.width<=bounds.x+bounds.width+1,'sidebar buttons must not be clipped')}};
+ await sidebarVisible();
+ const timelineSurface=await page.locator('.preview-shell > .editor-timeline').boundingBox();
+ assert.ok(Math.abs(timelineSurface.x)<1&&Math.abs(timelineSurface.width-1600)<1,'timeline must span the viewport without being shifted');
+ const timelineBefore=await page.locator('#editor-scroller').boundingBox();
  await page.evaluate(()=>{window.savedNodes=[...document.querySelectorAll('[data-clip-key]')];window.savedHead=document.querySelector('.editor-playhead');window.trackMutations=0;new MutationObserver(records=>{for(const record of records)for(const node of [...record.addedNodes,...record.removedNodes])if(node.nodeType===1&&node.matches('[data-clip-key],.editor-track'))window.trackMutations++}).observe(document.getElementById('editor-tracks'),{childList:true,subtree:true})});
  await page.locator('.editor-track--caption .editor-track__clip').first().click();await page.waitForTimeout(150);
+ await page.waitForTimeout(250);await sidebarVisible();
+ const timelineAfter=await page.locator('#editor-scroller').boundingBox();
+ for(const key of ['x','y','width','height'])assert.ok(Math.abs(timelineBefore[key]-timelineAfter[key])<1,`opening inspector changed timeline ${key}: ${timelineBefore[key]} -> ${timelineAfter[key]}`);
  await page.locator('#timeline-zoom-range').evaluate(input=>{for(const value of [2,4,8,16]){input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}))}});await page.waitForTimeout(150);
  assert.equal(await page.evaluate(()=>savedNodes.every(node=>node.isConnected)&&savedHead===document.querySelector('.editor-playhead')),true);
  assert.equal(await page.evaluate(()=>trackMutations),0);
