@@ -3087,6 +3087,13 @@ class ExternalMediaProjectPipeline:
         return proxies
 
     def _prepare_final_master(self, project, workdir):
+        revision = project.approved_timeline_revision or project.current_timeline_revision
+        if revision and (revision.timeline or {}).get('camera_segments'):
+            from .multicam import MulticamRenderService
+            MulticamRenderService.validate_timing(
+                revision.timeline['camera_segments'],
+                (revision.timeline.get('sequence') or {}).get('duration_ms'),
+            )
         plugins = self.templates.enabled_plugins(project)
         sources, lut_path, music_path = self._materialize(project, plugins, workdir)
         assembled = workdir / 'project_master_original.mp4'
@@ -3264,6 +3271,19 @@ class ExternalMediaProjectPipeline:
                 final_path = edited
         else:
             combined_plan = SpeechEditPlan.normalized((), original_duration_ms)
+        expected_duration_ms = (
+            sum(item['end_ms'] - item['start_ms'] for item in source_intervals)
+            if source_intervals is not None
+            else max(1, original_duration_ms - combined_plan.saved_ms)
+        )
+        timing_report = self.quality.validate_media(final_path, expected_duration_ms=expected_duration_ms, deep_audio=False)
+        logger.info('final_master_duration_checkpoint project=%s stage=assembly expected_ms=%s actual_ms=%s',
+                    project.public_id, expected_duration_ms, timing_report.metrics.get('duration_ms'))
+        timing_report.require_ok()
+        revision = project.approved_timeline_revision or project.current_timeline_revision
+        if revision and (revision.timeline or {}).get('camera_segments'):
+            from .multicam import MulticamRenderService
+            MulticamRenderService.validate_timing(revision.timeline['camera_segments'], expected_duration_ms)
         job = project.render_job
         version = project.template_version
         if (
@@ -3275,11 +3295,10 @@ class ExternalMediaProjectPipeline:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 87, 'Ajustando o áudio')
             with timed_step('finalize_audio_final_master'):
                 final_path = self._finalize_audio(project, job, workdir, final_path, music_path, combined_plan)
-        expected_duration_ms = (
-            sum(item['end_ms'] - item['start_ms'] for item in source_intervals)
-            if source_intervals is not None
-            else max(1, original_duration_ms - combined_plan.saved_ms)
-        )
+            timing_report = self.quality.validate_media(final_path, expected_duration_ms=expected_duration_ms, deep_audio=False)
+            logger.info('final_master_duration_checkpoint project=%s stage=audio expected_ms=%s actual_ms=%s',
+                        project.public_id, expected_duration_ms, timing_report.metrics.get('duration_ms'))
+            timing_report.require_ok()
         revision = project.approved_timeline_revision or project.current_timeline_revision
         if revision and (revision.timeline or {}).get('camera_segments'):
             from .multicam import MulticamRenderService
@@ -3292,10 +3311,15 @@ class ExternalMediaProjectPipeline:
                     final_path = MulticamRenderService(self.assembly.runner, self.storage).apply(
                         project, revision, processing_input, workdir / 'project_master_multicam.mp4',
                         version.preset.width or metadata.width, version.preset.height or metadata.height,
+                        duration_ms=expected_duration_ms,
                     )
             finally:
                 for temporary_name in retained_temporary_names:
                     self.storage.delete_temporary(temporary_name)
+            timing_report = self.quality.validate_media(final_path, expected_duration_ms=expected_duration_ms, deep_audio=False)
+            logger.info('final_master_duration_checkpoint project=%s stage=multicam expected_ms=%s actual_ms=%s',
+                        project.public_id, expected_duration_ms, timing_report.metrics.get('duration_ms'))
+            timing_report.require_ok()
         brolls = list((revision.timeline if revision else {}).get('brolls') or [])
         if brolls:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 88, 'Aplicando B-rolls')

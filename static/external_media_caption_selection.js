@@ -37,7 +37,7 @@
             onEnd();
         };
         canvas.addEventListener('pointerdown',event=>{
-            if(gesture||event.button!==0||!isEnabled()||!event.target.closest('#editor-tracks')
+            if(event.pointerType==='touch'||gesture||event.button!==0||!isEnabled()||!event.target.closest('#editor-tracks')
                 ||event.target.closest('button,input,a,.editor-track__label,.editor-playhead'))return;
             event.preventDefault();
             const node=document.createElement('div');node.className='editor-caption-marquee';node.hidden=true;node.setAttribute('aria-hidden','true');canvas.append(node);

@@ -61,9 +61,10 @@ class MediaQualityService:
             report.metrics['duration_drift_ms'] = drift_ms
             if drift_ms > tolerance:
                 report.errors.append(
-                    f'A duração final divergiu {drift_ms / 1000:.2f}s do planejamento.'
+                    f'A duração final divergiu {drift_ms / 1000:.2f}s do planejamento '
+                    f'(esperado: {int(expected_duration_ms) / 1000:.2f}s; obtido: {duration_ms / 1000:.2f}s).'
                 )
-        if deep_audio and has_audio:
+        if deep_audio and has_audio and report.ok:
             metrics = AudioAnalysisService(self.runner).analyze(path)
             report.metrics['audio'] = metrics
             if metrics.get('integrated_lufs') is None:

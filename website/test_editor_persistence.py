@@ -56,6 +56,56 @@ class EditorFixture(ExternalMediaFixtureMixin):
 
 
 class EditorPersistenceTests(EditorFixture, TestCase):
+    def test_removing_template_music_is_revisioned_and_used_by_render(self):
+        from website.external_media.services import MusicService
+        version = self.project.template_version
+        version.music_file = SimpleUploadedFile('default.wav', b'test-music')
+        version.save(update_fields=['music_file'])
+        self.addCleanup(version.music_file.delete, save=False)
+        initial = self.project.current_timeline_revision
+        self.assertTrue(MusicService.selected_tracks(version, initial.timeline, {}))
+        removed = TimelineRevisionService.update_music_tracks(self.project, self.member, [])
+        self.assertNotEqual(removed.pk, initial.pk)
+        self.assertEqual(removed.timeline['music_tracks'], [])
+        self.assertEqual(MusicService.selected_tracks(version, removed.timeline, {}), [])
+        self.project.refresh_from_db()
+        restored = TimelineRevisionService.navigate_history(self.project, self.member, 'undo')
+        self.assertTrue(MusicService.selected_tracks(version, restored.timeline, {}))
+        self.project.refresh_from_db()
+        redone = TimelineRevisionService.navigate_history(self.project, self.member, 'redo')
+        self.assertEqual(MusicService.selected_tracks(version, redone.timeline, {}), [])
+        approved = TimelineRevisionService.approve(self.project, self.member)
+        self.assertEqual(MusicService.selected_tracks(version, approved.timeline, {}), [])
+
+    def test_removing_one_music_clip_keeps_the_other_for_render(self):
+        from website.external_media.services import MusicService
+        from website.models.external_media import BackgroundMusicTrack
+        tracks = [BackgroundMusicTrack.objects.create(name=f'Trilha {index}', audio_file=SimpleUploadedFile(f'track-{index}.wav', b'music')) for index in range(2)]
+        for track in tracks:
+            self.addCleanup(track.audio_file.delete, save=False)
+        revision = TimelineRevisionService.update_music_tracks(self.project, self.member, [
+            {'clip_id': 'first', 'track_id': tracks[0].pk, 'start_ms': 0, 'end_ms': 5000},
+            {'clip_id': 'second', 'track_id': tracks[1].pk, 'start_ms': 5000, 'end_ms': 10000},
+        ])
+        self.project.refresh_from_db()
+        removed = TimelineRevisionService.update_music_tracks(self.project, self.member, [revision.timeline['music_tracks'][1]])
+        resolved = MusicService.selected_tracks(self.project.template_version, removed.timeline, {})
+        self.assertEqual([(item['id'], item['start_ms'], item['end_ms']) for item in resolved], [(tracks[1].pk, 5000, 10000)])
+
+    def test_removing_legacy_override_and_undo_restore_the_original_track(self):
+        from website.external_media.services import MusicService
+        from website.models.external_media import BackgroundMusicTrack
+        track = BackgroundMusicTrack.objects.create(name='Trilha antiga', audio_file=SimpleUploadedFile('legacy.wav', b'music'))
+        self.addCleanup(track.audio_file.delete, save=False)
+        self.project.configuration = {**self.project.configuration, 'music_override_track_id': track.pk}
+        self.project.save(update_fields=['configuration'])
+        removed = TimelineRevisionService.update_music_tracks(self.project, self.member, [])
+        self.project.refresh_from_db()
+        self.assertEqual(MusicService.selected_tracks(self.project.template_version, removed.timeline, self.project.configuration), [])
+        restored = TimelineRevisionService.navigate_history(self.project, self.member, 'undo')
+        self.project.refresh_from_db()
+        self.assertEqual(MusicService.selected_tracks(self.project.template_version, restored.timeline, self.project.configuration)[0]['id'], track.pk)
+
     def test_cached_editor_media_survives_reopening_without_enqueuing_another_job(self):
         from unittest.mock import patch
         from django.core.files.base import ContentFile

@@ -14,9 +14,10 @@ from website.external_media.preview import TimelineRevisionService
 
 @skipUnless(os.environ.get('FILADELFIA_PLAYWRIGHT_MODULE'), 'Set FILADELFIA_PLAYWRIGHT_MODULE to run Chrome checks')
 class EditorBrowserTests(EditorFixture, StaticLiveServerTestCase):
-    def browser_check(self, filename):
+    def browser_check(self, filename, extra_env=None):
         env = {
             **os.environ,
+            **(extra_env or {}),
             'FILADELFIA_QA_URL': self.live_server_url + reverse(
                 'external_media_project_preview', args=[self.project.public_id],
             ),
@@ -29,6 +30,30 @@ class EditorBrowserTests(EditorFixture, StaticLiveServerTestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         print(result.stdout.strip())
 
+    def test_mobile_touch_editing_and_responsive_workspace(self):
+        self.browser_check('editor_mobile.browser.cjs')
+
+    def test_mobile_real_media_preview(self):
+        self.browser_check('editor_media.browser.cjs', {'FILADELFIA_QA_MOBILE': '1'})
+
+    def test_caption_style_matches_output_canvas(self):
+        self.browser_check('editor_caption_style.browser.cjs')
+
+    def prepare_template_music(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        version = self.project.template_version
+        version.music_file = SimpleUploadedFile('default.wav', b'test-music')
+        version.save(update_fields=['music_file'])
+        self.addCleanup(version.music_file.delete, save=False)
+
+    def test_remove_template_music(self):
+        self.prepare_template_music()
+        self.browser_check('editor_music_remove.browser.cjs')
+
+    def test_remove_template_music_on_mobile(self):
+        self.prepare_template_music()
+        self.browser_check('editor_music_remove.browser.cjs', {'FILADELFIA_QA_MOBILE': '1'})
+
     def test_retained_nodes_focus_and_large_timeline(self):
         self.browser_check('editor_fluency.browser.cjs')
 
@@ -37,6 +62,9 @@ class EditorBrowserTests(EditorFixture, StaticLiveServerTestCase):
 
     def test_caption_visibility_can_be_restored_after_save_and_reload(self):
         self.browser_check('editor_caption_visibility.browser.cjs')
+
+    def test_mobile_caption_icon_toggles_visibility_after_reload(self):
+        self.browser_check('editor_caption_visibility.browser.cjs', {'FILADELFIA_QA_MOBILE': '1'})
 
     def test_magnetic_alignment_precision_and_history(self):
         self.browser_check('editor_precision.browser.cjs')

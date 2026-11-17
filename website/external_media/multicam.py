@@ -362,11 +362,23 @@ class MulticamRenderService:
     def __init__(self, runner, storage):
         self.runner, self.storage = runner, storage
 
-    def apply(self, project, revision, video, output, width, height):
+    @staticmethod
+    def validate_timing(segments, duration_ms=None):
+        if duration_ms is not None:
+            duration_ms = int(duration_ms)
+            if duration_ms <= 0 or any(int(item['start_ms']) < 0 or int(item['end_ms']) <= int(item['start_ms']) or int(item['end_ms']) > duration_ms + 34 for item in segments):
+                raise ExternalMediaError('Os intervalos de câmera não correspondem à duração planejada. Revise a timeline antes de exportar.')
+        if any(not math.isfinite(float(item.get('rate', 1))) or float(item.get('rate', 1)) <= 0
+               or int(item['source_in_ms']) < 0 or int(item['source_out_ms']) <= int(item['source_in_ms']) for item in segments):
+            raise ExternalMediaError('Recorte ou velocidade de câmera inválidos. Revise a timeline antes de exportar.')
+
+    def apply(self, project, revision, video, output, width, height, duration_ms=None):
         from .canonical import SourceManifestBuilder
         segments = (revision.timeline or {}).get('camera_segments') or []
         if not segments:
             return video
+        duration_ms = duration_ms if duration_ms is not None else ((revision.timeline or {}).get('sequence') or {}).get('duration_ms')
+        self.validate_timing(segments, duration_ms)
         sources = {s['id']: s for s in revision.source_manifest['sources']}
         operations = (getattr(revision, 'edit_decision_set', None) or {}).get('operations') or []
 
@@ -419,7 +431,6 @@ class MulticamRenderService:
             batch = segments[batch_start:batch_start + 8]
             target = Path(output) if batch_start + 8 >= len(segments) else Path(output).with_name(f'multicam-pass-{batch_start}.mp4')
             command = [settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(current)]
-            duration_ms = ((revision.timeline or {}).get('sequence') or {}).get('duration_ms')
             duration_filter = f',trim=duration={int(duration_ms) / 1000:.6f}' if duration_ms else ''
             filters, label = [f'[0:v]fps=30{duration_filter},setpts=PTS-STARTPTS[base]'], 'base'
             for index, item in enumerate(batch, 1):
@@ -430,12 +441,16 @@ class MulticamRenderService:
                 command += ['-ss', f"{item['source_in_ms'] / 1000:.6f}", '-t', f"{(item['source_out_ms'] - item['source_in_ms']) / 1000:.6f}", '-i', FFmpegRunner.input_arg(self.storage.ffmpeg_input(field))]
                 start, end = item['start_ms'] / 1000, item['end_ms'] / 1000
                 visual = camera_visual_filters(item)
-                filters.append(f'[{index}:v]setpts=(PTS-STARTPTS)/{item["rate"]:.9f}+{start:.6f}/TB{visual},scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1,fps=30[cam{index}]')
+                filters.append(f'[{index}:v]setpts=(PTS-STARTPTS)/{item["rate"]:.9f},trim=duration={end-start:.6f},setpts=PTS-STARTPTS+{start:.6f}/TB{visual},scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1,fps=30[cam{index}]')
                 # Hold the last 24/25 fps frame through its display interval;
                 # the half-open enable expression still ends on the exact cut.
                 filters.append(f"[{label}][cam{index}]overlay=eof_action=repeat:repeatlast=1:enable='gte(t,{start:.6f})*lt(t,{end:.6f})'[out{index}]")
                 label = f'out{index}'
             command += ['-filter_complex_threads', '1', '-filter_complex', ';'.join(filters), '-map', f'[{label}]', '-map', '0:a?', '-c:a', 'copy', '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_RENDER_PRESET or 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', '30', '-movflags', '+faststart', str(target)]
+            # Framesync may keep producing frames after the master ends while
+            # another input is alive. Bound every pass, not only the last one.
+            if duration_ms:
+                command[-1:-1] = ['-t', f'{duration_ms / 1000:.6f}']
             # Intermediate passes are full-length files. In S3 mode, stage
             # the preceding pass before writing the next one, just as the
             # pipeline stages the master before entering this compositor.

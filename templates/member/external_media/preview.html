@@ -1,6 +1,8 @@
 {% extends 'member/external_media/base.html' %}
 {% load static %}
 
+{% block media_header_icon %}<a href="{% url 'external_media_project_detail' project.public_id %}" aria-label="Voltar ao projeto"><span class="w-11 h-11 rounded-xl text-white flex items-center justify-center" style="background:#C90905"><i class="fas fa-arrow-left"></i></span></a>{% endblock %}
+
 {% block media_header_title %}
 <div class="flex items-center gap-3 min-w-0">
     <a href="{% url 'external_media_project_detail' project.public_id %}" class="block min-w-0">
@@ -23,7 +25,7 @@
         <a class="editor-header-menu__item" href="{% url 'external_media_project_subtitle_reviews' project.public_id %}" role="menuitem"><i class="fas fa-paper-plane"></i>Revisar legendas</a>
     </div>
 </div>
-<button type="button" class="media-btn media-primary" id="approve-preview"><i class="fas fa-check"></i><span class="hidden sm:inline">Aprovar edição</span><span class="sm:hidden">Aprovar</span></button>
+<button type="button" class="media-btn media-primary" id="approve-preview"><i class="fas fa-check"></i><span class="editor-approve-desktop hidden sm:inline">Aprovar edição</span><span class="editor-approve-desktop sm:hidden">Aprovar</span><span class="editor-approve-mobile">Exportar</span></button>
 {% endblock %}
 
 {% block head %}
@@ -381,12 +383,14 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     @media(max-width:700px){.multicam-body{padding:.75rem}.multicam-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.multicam-field:first-child{grid-column:1/-1}.multicam-actions{display:grid;grid-template-columns:1fr}.multicam-button{width:100%}.multicam-button--danger{margin-left:0}.multicam-fields--advanced .multicam-field{grid-column:auto}}
 
 </style>
+<link rel="stylesheet" href="{% static 'external_media_editor_mobile.css' %}">
 {% endblock %}
 
 {% block media_bottom_nav %}{% endblock %}
 
 {% block media_content %}
 <script src="{% static 'external_media_multicam.js' %}"></script>
+<script src="{% static 'external_media_editor_mobile.js' %}"></script>
 {{ timeline|json_script:"preview-timeline" }}
 {{ music_tracks|json_script:"music-tracks" }}
 <div class="preview-shell">
@@ -411,8 +415,25 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             <div class="preview-list p-3 space-y-2" id="review-list"></div>
     </aside>
     </div>
-    <div class="editor-timeline__transport preview-controls"><div class="editor-timeline-actions" role="toolbar" aria-label="Ferramentas da timeline"></div><button type="button" class="preview-transport-step" id="preview-previous" aria-label="Voltar um quadro"><i class="fas fa-backward-step"></i></button><button class="preview-play" id="preview-play" aria-label="Reproduzir"><i class="fas fa-play"></i></button><button type="button" class="preview-transport-step" id="preview-next" aria-label="Avançar um quadro"><i class="fas fa-forward-step"></i></button><span class="text-sm tabular-nums" id="preview-time">00:00 / 00:00</span><input class="preview-range" id="preview-range" type="range" min="0" max="1" value="0" aria-hidden="true" tabindex="-1"><div class="timeline-zoom-control" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-decrease" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-magnifying-glass-minus"></i></button><input id="timeline-zoom-range" type="range" min="1" max="16" step=".1" value="1" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-increase" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-magnifying-glass-plus"></i></button></div></div>
-    <div class="editor-timeline" aria-label="Linha do tempo da edição"><div class="editor-timeline__bar"><strong class="text-xs uppercase tracking-wider text-gray-500">Timeline</strong><div class="flex items-center gap-2"><button type="button" class="editor-tool is-active" data-tool="select" title="Ferramenta de seleção (V)" aria-label="Ferramenta de seleção"><i class="fas fa-arrow-pointer"></i><span class="sr-only">Seleção</span></button><button type="button" class="editor-tool" data-tool="blade" title="Lâmina: clique em um vídeo, legenda ou elemento para dividir (B)" aria-label="Ferramenta lâmina"><i class="fas fa-scissors"></i><span class="sr-only">Lâmina</span></button><button type="button" class="editor-tool" id="add-timeline-element" title="Adicionar elemento visual" aria-label="Adicionar elemento visual"><i class="fas fa-photo-film"></i><span class="sr-only">Adicionar elemento</span></button><button type="button" class="editor-tool" id="add-timeline-camera" title="Adicionar take de câmera extra no cursor" aria-label="Adicionar câmera extra" hidden><i class="fas fa-camera"></i></button><button type="button" class="editor-tool" id="add-timeline-text" title="Adicionar texto" aria-label="Adicionar texto"><i class="fas fa-font"></i><span class="sr-only">Adicionar texto</span></button><button type="button" class="editor-tool" id="add-timeline-music" title="Adicionar música à timeline" aria-label="Adicionar música à timeline"><i class="fas fa-music"></i><span class="sr-only">Adicionar música</span></button><span class="editor-timeline__tool-divider" aria-hidden="true"></span><button type="button" class="editor-tool" data-timeline-zoom="out" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-minus"></i></button><output class="editor-timeline__zoom-value" id="timeline-zoom-value" aria-live="polite">100%</output><button type="button" class="editor-tool" data-timeline-zoom="in" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-plus"></i><span class="sr-only">Aumentar zoom</span></button><button type="button" class="editor-tool is-active" id="timeline-snap" aria-pressed="true" title="Encaixe magnético (S); Alt suspende durante o arraste" aria-label="Encaixe magnético"><i class="fas fa-magnet"></i></button><button type="button" class="editor-tool" id="timeline-precision" title="Ajustar início e fim por quadro (T)" aria-label="Ajustar tempos por quadro"><i class="fas fa-stopwatch"></i></button><button type="button" class="editor-tool" id="timeline-shortcuts" title="Atalhos (?)" aria-label="Ver atalhos"><i class="fas fa-keyboard"></i></button><button type="button" class="editor-tool" id="copy-caption" disabled title="Copiar legenda (Ctrl/⌘+C)" aria-label="Copiar legenda"><i class="fas fa-copy"></i></button><button type="button" class="editor-tool" id="paste-caption" disabled title="Colar nova legenda no cursor (Ctrl/⌘+V)" aria-label="Colar legenda"><i class="fas fa-paste"></i></button><button type="button" id="delete-segment" disabled class="text-xs font-bold rounded bg-red-600 px-2 py-1 text-white disabled:opacity-40" title="Remover trecho selecionado (Del)" aria-label="Remover trecho selecionado"><i class="fas fa-trash"></i><span class="sr-only">Remover</span></button></div></div><div class="editor-timeline__scroller" id="editor-scroller" title="Use a roda do mouse para ampliar ou reduzir a timeline"><div class="editor-timeline__canvas" id="editor-canvas"><div class="editor-ruler"><span></span><div class="editor-ruler__scale"><span>00:00</span><span id="timeline-middle">00:00</span><span id="timeline-end">00:00</span></div></div><div id="editor-tracks"></div></div></div></div>
+    <div class="editor-timeline__transport preview-controls"><div class="editor-timeline-actions" role="toolbar" aria-label="Ferramentas da timeline"></div><button type="button" class="preview-transport-step" id="preview-previous" aria-label="Voltar um quadro"><i class="fas fa-backward-step"></i></button><button class="preview-play" id="preview-play" aria-label="Reproduzir"><i class="fas fa-play"></i></button><button type="button" class="preview-transport-step" id="preview-next" aria-label="Avançar um quadro"><i class="fas fa-forward-step"></i></button><span class="text-sm tabular-nums" id="preview-time"><span id="preview-current-time">00:00</span><span class="preview-time-separator"> / </span><span id="preview-total-time">00:00</span></span><input class="preview-range" id="preview-range" type="range" min="0" max="1" value="0" aria-hidden="true" tabindex="-1"><div class="timeline-zoom-control" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-decrease" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-magnifying-glass-minus"></i></button><input id="timeline-zoom-range" type="range" min="1" max="16" step=".1" value="1" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-increase" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-magnifying-glass-plus"></i></button></div></div>
+    <p class="editor-mobile-help" id="mobile-gesture-help">Arraste para navegar · toque para selecionar · pinça para zoom</p>
+    <div class="editor-timeline" aria-label="Linha do tempo da edição"><div class="editor-timeline__bar" id="mobile-timeline-tools"><strong class="text-xs uppercase tracking-wider text-gray-500">Timeline</strong><div class="flex items-center gap-2"><button type="button" class="editor-tool is-active" data-tool="select" title="Ferramenta de seleção (V)" aria-label="Ferramenta de seleção"><i class="fas fa-arrow-pointer"></i><span class="sr-only">Seleção</span></button><button type="button" class="editor-tool" data-tool="blade" title="Lâmina: clique em um vídeo, legenda ou elemento para dividir (B)" aria-label="Ferramenta lâmina"><i class="fas fa-scissors"></i><span class="sr-only">Lâmina</span></button><button type="button" class="editor-tool" id="add-timeline-element" title="Adicionar elemento visual" aria-label="Adicionar elemento visual"><i class="fas fa-photo-film"></i><span class="sr-only">Adicionar elemento</span></button><button type="button" class="editor-tool" id="add-timeline-camera" title="Adicionar take de câmera extra no cursor" aria-label="Adicionar câmera extra" hidden><i class="fas fa-camera"></i></button><button type="button" class="editor-tool" id="add-timeline-text" title="Adicionar texto" aria-label="Adicionar texto"><i class="fas fa-font"></i><span class="sr-only">Adicionar texto</span></button><button type="button" class="editor-tool" id="add-timeline-music" title="Adicionar música à timeline" aria-label="Adicionar música à timeline"><i class="fas fa-music"></i><span class="sr-only">Adicionar música</span></button><span class="editor-timeline__tool-divider" aria-hidden="true"></span><button type="button" class="editor-tool" data-timeline-zoom="out" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-minus"></i></button><output class="editor-timeline__zoom-value" id="timeline-zoom-value" aria-live="polite">100%</output><button type="button" class="editor-tool" data-timeline-zoom="in" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-plus"></i><span class="sr-only">Aumentar zoom</span></button><button type="button" class="editor-tool is-active" id="timeline-snap" aria-pressed="true" title="Encaixe magnético (S); Alt suspende durante o arraste" aria-label="Encaixe magnético"><i class="fas fa-magnet"></i></button><button type="button" class="editor-tool" id="timeline-precision" title="Ajustar início e fim por quadro (T)" aria-label="Ajustar tempos por quadro"><i class="fas fa-stopwatch"></i></button><button type="button" class="editor-tool" id="timeline-shortcuts" title="Atalhos (?)" aria-label="Ver atalhos"><i class="fas fa-keyboard"></i></button><button type="button" class="editor-tool" id="copy-caption" disabled title="Copiar legenda (Ctrl/⌘+C)" aria-label="Copiar legenda"><i class="fas fa-copy"></i></button><button type="button" class="editor-tool" id="paste-caption" disabled title="Colar nova legenda no cursor (Ctrl/⌘+V)" aria-label="Colar legenda"><i class="fas fa-paste"></i></button><button type="button" id="delete-segment" disabled class="text-xs font-bold rounded bg-red-600 px-2 py-1 text-white disabled:opacity-40" title="Remover trecho selecionado (Del)" aria-label="Remover trecho selecionado"><i class="fas fa-trash"></i><span class="sr-only">Remover</span></button></div></div><div class="editor-timeline__scroller" id="editor-scroller" title="Use a roda do mouse para ampliar ou reduzir a timeline"><div class="editor-timeline__canvas" id="editor-canvas"><div class="editor-ruler"><span></span><div class="editor-ruler__scale"><span>00:00</span><span id="timeline-middle">00:00</span><span id="timeline-end">00:00</span></div></div><div id="editor-tracks"></div></div></div></div>
+    <nav class="editor-mobile-actions" aria-label="Ferramentas da edição" aria-describedby="mobile-gesture-help">
+        <button type="button" id="mobile-move" aria-pressed="false"><i class="fas fa-hand" aria-hidden="true"></i><span>Navegar</span></button>
+        <button type="button" id="mobile-properties" disabled><i class="fas fa-sliders" aria-hidden="true"></i><span>Ajustes</span></button>
+        <button type="button" id="mobile-edit-caption" hidden><i class="fas fa-pen" aria-hidden="true"></i><span>Editar texto</span></button>
+        <button type="button" id="mobile-split"><i class="fas fa-scissors" aria-hidden="true"></i><span>Cortar</span></button>
+        <button type="button" id="mobile-add" aria-haspopup="dialog"><i class="fas fa-plus" aria-hidden="true"></i><span>Adicionar</span></button>
+        <button type="button" id="mobile-tools" aria-haspopup="dialog" aria-expanded="false" aria-controls="mobile-tools-modal"><i class="fas fa-ellipsis" aria-hidden="true"></i><span>Mais</span></button>
+    </nav>
+</div>
+
+<div class="preview-modal editor-mobile-sheet" id="mobile-tools-modal" role="dialog" aria-modal="true" aria-labelledby="mobile-tools-title">
+    <div class="preview-modal__card">
+        <div class="editor-mobile-sheet__head"><strong id="mobile-tools-title">Mais ferramentas</strong><button type="button" id="mobile-tools-close" aria-label="Fechar ferramentas"><i class="fas fa-xmark" aria-hidden="true"></i></button></div>
+        <div class="editor-mobile-sheet__grid" data-mobile-section="add"></div>
+        <div class="editor-mobile-sheet__grid" data-mobile-section="more"><button type="button" id="mobile-expand" aria-pressed="false"><i class="fas fa-expand" aria-hidden="true"></i><span>Ampliar preview</span></button></div>
+    </div>
 </div>
 
 <div class="preview-modal" id="back-to-blocks-modal" role="dialog" aria-modal="true" aria-labelledby="back-to-blocks-title">
@@ -506,10 +527,13 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     let timeline = JSON.parse(document.getElementById('preview-timeline').textContent);
     const musicTracks = JSON.parse(document.getElementById('music-tracks').textContent);
     let video = document.getElementById('preview-video'); const range = document.getElementById('preview-range'), temperatureMatrix=document.getElementById('preview-temperature-matrix');
-    const sourceCaption = document.getElementById('preview-caption-source'), translatedCaption = document.getElementById('preview-caption-translated'), time = document.getElementById('preview-time');
+    const sourceCaption = document.getElementById('preview-caption-source'), translatedCaption = document.getElementById('preview-caption-translated');
     let previewStyleRevision=0;
     const overlayLayer = document.getElementById('preview-overlay-layer'), brollLayer = document.getElementById('preview-broll-layer'), transformBox = document.getElementById('preview-transform-box');
+    const currentTimeLabel=document.getElementById('preview-current-time'),totalTimeLabel=document.getElementById('preview-total-time');
     const list = document.getElementById('review-list'), play = document.getElementById('preview-play');
+    const mobileEditorQuery=window.matchMedia('(max-width:760px)');
+    const isMobileEditor=()=>mobileEditorQuery.matches;
     const reviewPanel = document.getElementById('review-panel');
     const moreActionsButton=document.getElementById('editor-more-actions'),moreActionsMenu=document.getElementById('editor-more-menu');
     function setMoreActions(open){
@@ -524,20 +548,27 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function setReviewPanel(open){
         const shell=document.querySelector('.preview-shell');
         const stateChanged=reviewPanel.classList.contains('is-open')!==open||shell.classList.contains('is-inspector-open')!==open;
-        reviewPanel.classList.toggle('is-open',open);reviewPanel.setAttribute('aria-hidden',String(!open));shell.classList.toggle('is-inspector-open',open);
+        reviewPanel.inert=!open;reviewPanel.classList.toggle('is-open',open);reviewPanel.setAttribute('aria-hidden',String(!open));shell.classList.toggle('is-inspector-open',open);
         // Selecting another take while the inspector is already visible must
         // not recalculate the workspace. That feedback loop made the timeline
         // consume more height on every click.
         if(stateChanged)requestAnimationFrame(()=>{fitPreviewStage();syncInspectorHeight()});
     }
-    document.getElementById('close-review-panel').addEventListener('click',()=>setReviewPanel(false));
+    reviewPanel.inert=true;
+    document.getElementById('close-review-panel').addEventListener('click',()=>{setReviewPanel(false);if(isMobileEditor())document.getElementById('mobile-properties').focus({preventScroll:true})});
     const previewShell=document.querySelector('.preview-shell'), previewStage=document.querySelector('.preview-stage'), previewPlayerCard=document.querySelector('.preview-player-card');
     function fitPreviewStage(){
         const outputWidth=Math.max(1,Number(getComputedStyle(previewStage).getPropertyValue('--preview-width'))||1920);
         const outputHeight=Math.max(1,Number(getComputedStyle(previewStage).getPropertyValue('--preview-height'))||1080);
         const ratio=outputWidth/outputHeight,portrait=outputHeight>outputWidth;
         previewPlayerCard.classList.toggle('is-portrait-preview',portrait);
-        if(!window.matchMedia('(min-width:761px)').matches){previewStage.style.removeProperty('width');previewPlayerCard.style.removeProperty('width');return}
+        if(isMobileEditor()){
+            const layout=document.querySelector('.preview-layout');
+            const styles=getComputedStyle(layout);
+            const height=Math.max(1,layout.clientHeight-parseFloat(styles.paddingTop)-parseFloat(styles.paddingBottom)-(document.getElementById('preview-load-error')?.offsetHeight||0)-2);
+            previewPlayerCard.style.width=`${Math.floor(Math.min(layout.clientWidth-16,height*ratio))}px`;
+            previewStage.style.width='100%';return;
+        }
         const inspectorOpen=previewShell.classList.contains('is-inspector-open');
         // Reserve a stable portion of the viewport for transport and the
         // scrollable timeline. Constraining both dimensions prevents the
@@ -789,13 +820,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const previous=node._captionStyle;
         if(previous&&previous.style===style&&previous.margin===marginBottom&&previous.text===node.textContent&&previous.revision===previewStyleRevision&&previous.sequence===timeline.sequence)return;
         node._captionStyle={style,margin:marginBottom,text:node.textContent,revision:previewStyleRevision,sequence:timeline.sequence};
-        const stage=previewStage,width=stage.clientWidth,height=stage.clientHeight,sequenceWidth=Math.max(1,Number(timeline.sequence.width||1920)),sequenceHeight=Math.max(1,Number(timeline.sequence.height||1080)),alignment=Math.max(1,Math.min(9,Number(style?.alignment||2))),vertical=alignment>=7?'top':alignment>=4?'middle':'bottom',horizontal=(alignment-1)%3===0?'left':(alignment-1)%3===2?'right':'center',margin=Math.max(0,Number(marginBottom??style?.margin_bottom??60))/sequenceHeight*height,side=40/sequenceWidth*width,maxLines=Math.max(1,Number(style?.max_lines||2)),baseFontSize=Math.max(.1,Number(style?.font_size||48)/sequenceWidth*width),paddingX=style?.background_enabled?Math.max(0,Number(style?.background_padding_x||0))/sequenceWidth*width:0;
+        const stage=previewStage,width=stage.clientWidth,height=stage.clientHeight,sequenceWidth=Math.max(1,Number(getComputedStyle(stage).getPropertyValue('--preview-width'))||Number(timeline.sequence.width)||1920),sequenceHeight=Math.max(1,Number(getComputedStyle(stage).getPropertyValue('--preview-height'))||Number(timeline.sequence.height)||1080),alignment=Math.max(1,Math.min(9,Number(style?.alignment||2))),vertical=alignment>=7?'top':alignment>=4?'middle':'bottom',horizontal=(alignment-1)%3===0?'left':(alignment-1)%3===2?'right':'center',margin=Math.max(0,Number(marginBottom??style?.margin_bottom??60))/sequenceHeight*height,side=40/sequenceWidth*width,maxLines=Math.max(1,Number(style?.max_lines||2)),baseFontSize=Math.max(.1,Number(style?.font_size||48)/sequenceWidth*width),paddingX=style?.background_enabled?Math.max(0,Number(style?.background_padding_x||0))/sequenceWidth*width:0;
         const backgroundEnabled=Boolean(style?.background_enabled),backgroundHeight=Math.max(40,Math.min(100,Number(style?.background_height_percent??100)));
-        node.style.left=horizontal==='left'?`${side}px`:horizontal==='right'?'auto':'50%';node.style.right=horizontal==='right'?`${side}px`:'auto';node.style.top=vertical==='top'?`${margin}px`:vertical==='middle'?'50%':'auto';node.style.bottom=vertical==='bottom'?`${margin}px`:'auto';node.style.transform=`translate(${horizontal==='center'?'-50%':'0'},${vertical==='middle'?'-50%':'0'})`;node.style.textAlign=horizontal;node.style.fontFamily=style?.font||'Arial';node.style.fontWeight=style?.font_weight||800;node.style.fontSize=`${baseFontSize}px`;node.style.lineHeight='1';node.style.whiteSpace=maxLines===1?'nowrap':'pre-line';node.style.wordBreak='normal';node.style.overflowWrap='normal';node.style.maxWidth=`calc(100% - ${side*2}px)`;node.style.color=style?.color||'#ffffff';node.style.opacity=Math.max(0,Math.min(1,Number(style?.primary_opacity??100)/100));node.style.padding=backgroundEnabled?`${Math.max(0,Number(style?.background_padding_y||0))/sequenceHeight*height}px ${paddingX}px`:'0';node.style.background=backgroundEnabled?'transparent':'transparent';node.style.backgroundImage=backgroundEnabled?`linear-gradient(${rgba(style.background_color,style.background_opacity)},${rgba(style.background_color,style.background_opacity)})`:'none';node.style.backgroundRepeat='no-repeat';node.style.backgroundPosition='center';node.style.backgroundSize=backgroundEnabled?`100% ${backgroundHeight}%`:'auto';node.style.borderRadius=`${Number(style?.background_radius||0)/sequenceWidth*width}px`;
-        if(maxLines===1&&node.textContent){
-            const canvas=applyCaptionStyle.measureCanvas||(applyCaptionStyle.measureCanvas=document.createElement('canvas')),context=canvas.getContext('2d'),available=Math.max(1,width-(side*2)-(paddingX*2));
-            if(context){context.font=`${node.style.fontWeight} ${baseFontSize}px ${node.style.fontFamily}`;const measured=context.measureText(node.textContent).width;if(measured>available)node.style.fontSize=`${Math.max(.1,baseFontSize*(available/measured))}px`}
-        }
+        node.style.left=horizontal==='left'?`${side}px`:horizontal==='right'?'auto':'50%';node.style.right=horizontal==='right'?`${side}px`:'auto';node.style.top=vertical==='top'?`${margin}px`:vertical==='middle'?'50%':'auto';node.style.bottom=vertical==='bottom'?`${margin}px`:'auto';node.style.transform=`translate(${horizontal==='center'?'-50%':'0'},${vertical==='middle'?'-50%':'0'})`;node.style.textAlign=horizontal;node.style.fontFamily=style?.font||'Arial';node.style.fontWeight=Number(style?.font_weight??700)>=600?700:400;node.style.fontSize=`${baseFontSize}px`;node.style.lineHeight='1';node.style.whiteSpace='pre';node.style.wordBreak='normal';node.style.overflowWrap='normal';node.style.width='max-content';node.style.maxWidth='none';node.style.color=style?.color||'#ffffff';node.style.opacity=Math.max(0,Math.min(1,Number(style?.primary_opacity??100)/100));node.style.padding=backgroundEnabled?`${Math.max(0,Number(style?.background_padding_y||0))/sequenceHeight*height}px ${paddingX}px`:'0';node.style.background=backgroundEnabled?'transparent':'transparent';node.style.backgroundImage=backgroundEnabled?`linear-gradient(${rgba(style.background_color,style.background_opacity)},${rgba(style.background_color,style.background_opacity)})`:'none';node.style.backgroundRepeat='no-repeat';node.style.backgroundPosition='center';node.style.backgroundSize=backgroundEnabled?`100% ${backgroundHeight}%`:'auto';node.style.borderRadius=`${Number(style?.background_radius||0)/sequenceWidth*width}px`;
         const outline=Math.max(0,Number(style?.outline_width||0))/sequenceWidth*width,outlineColor=style?.outline_color||'#000',shadow=Math.max(0,Number(style?.shadow||0)+Number(style?.shadow_size||0)),angle=Number(style?.shadow_angle??45)*Math.PI/180,shadowX=Math.cos(angle)*shadow/sequenceWidth*width,shadowY=Math.sin(angle)*shadow/sequenceHeight*height,shadowBlur=Math.max(0,Number(style?.shadow_blur||0))/sequenceWidth*width,outlineShadow=outline?`${-outline}px 0 ${outlineColor},${outline}px 0 ${outlineColor},0 ${-outline}px ${outlineColor},0 ${outline}px ${outlineColor}`:'';node.style.webkitTextStroke='';node.style.textShadow=[outlineShadow,shadow?`${shadowX}px ${shadowY}px ${shadowBlur}px ${rgba('#000',style?.shadow_opacity??80)}`:''].filter(Boolean).join(',');node.style.textRendering='optimizeLegibility';
     }
     function updateDialogueVolume(){
@@ -864,7 +891,10 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     }
     function renderPosition(){
         multicamEditor?.sync();
-        range.max=timeline.sequence.duration_ms||1; range.value=globalMs;const clock=`${ConnectEditorPrecision.timecode(globalMs,timeline.sequence.fps)} / ${ConnectEditorPrecision.timecode(timeline.sequence.duration_ms,timeline.sequence.fps)}`;if(time.textContent!==clock)time.textContent=clock;
+        range.max=timeline.sequence.duration_ms||1; range.value=globalMs;
+        const currentClock=ConnectEditorPrecision.timecode(globalMs,timeline.sequence.fps),totalClock=ConnectEditorPrecision.timecode(timeline.sequence.duration_ms,timeline.sequence.fps);
+        if(currentTimeLabel.textContent!==currentClock)currentTimeLabel.textContent=currentClock;
+        if(totalTimeLabel.textContent!==totalClock)totalTimeLabel.textContent=totalClock;
         const styles=timeline.caption_styles||EMPTY_STYLE,sourceStyle=styles.source||EMPTY_STYLE,translatedStyle=styles.translated||sourceStyle,sourceLanguage=styles.source_language||'pt',activeCues=indexedPreview().captions.at(globalMs).filter(item=>!(timeline.hidden_caption_track_ids||[]).some(id=>String(id)===String(item.track_id))),sourceCue=activeCues.find(item=>item.is_source||item.language===sourceLanguage),translatedCue=activeCues.find(item=>!(item.is_source||item.language===sourceLanguage)),isBilingual=Boolean(sourceCue&&translatedCue),captionMargins=resolvedCaptionMargins(sourceStyle,translatedStyle);
         if(reviewRenders('CAPTIONS')){sourceCaption.hidden=true;translatedCaption.hidden=true}else{const sourceText=sourceCue?(isBilingual?singleLineCaptionText(sourceCue.text):wrapCaptionText(sourceCue.text,sourceStyle)):'',translatedText=translatedCue?(isBilingual?singleLineCaptionText(translatedCue.text):wrapCaptionText(translatedCue.text,translatedStyle)):'';if(sourceCaption.textContent!==sourceText)sourceCaption.textContent=sourceText;if(translatedCaption.textContent!==translatedText)translatedCaption.textContent=translatedText;sourceCaption.hidden=!sourceCue;translatedCaption.hidden=!translatedCue;applyCaptionStyle(sourceCaption,sourceStyle,captionMargins.source);applyCaptionStyle(translatedCaption,translatedStyle,captionMargins.translated)}
         const masterPosition=activeClip?.master_in_ms!==undefined
@@ -1101,6 +1131,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const finish=pointerEvent=>{move.flush();
             transformBox.removeEventListener('pointermove',move);transformBox.removeEventListener('pointerup',finish);transformBox.removeEventListener('pointercancel',finish);
             if(transformBox.hasPointerCapture?.(pointerEvent.pointerId))transformBox.releasePointerCapture(pointerEvent.pointerId);transformBox.classList.remove('is-dragging');
+            if(pointerEvent.type==='pointercancel'){applyDirectTransform(target,previous);editorPersistence.endGesture();return}
             if(JSON.stringify(previous)!==JSON.stringify(target.values))persistDirectTransform(target,target.values,previous,target.scope);editorPersistence.endGesture();
         };
         transformBox.addEventListener('pointermove',move);transformBox.addEventListener('pointerup',finish);transformBox.addEventListener('pointercancel',finish);
@@ -1257,6 +1288,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         try{applyTimeline(await api('{% url "external_media_project_preview_music" project.public_id %}',{tracks}),true,false)}catch(error){alert(error.message);renderEditorTimeline()}
     }
     function splitSelectedAtPlayhead(){
+        if(['overlay','broll'].includes(inspectorSelection?.kind))return splitTimelineItem(inspectorSelection.kind,inspectorSelection.id,globalMs);
         if(inspectorSelection?.kind==='caption')return splitCaption(inspectorSelection.id,globalMs);
         if(inspectorSelection?.kind==='music'){
             const track=(timeline.music?.tracks||[]).find((item,index)=>`music-${item.clip_id||item.id||index}`===String(inspectorSelection.id));
@@ -1275,7 +1307,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const points=ConnectEditorPrecision.targets(values,timeline.sequence.fps),geometry=timelineLaneGeometry(lane),guideLeft=geometry.left-editorCanvas.getBoundingClientRect().left;
         const guide=document.createElement('i'),feedback=document.createElement('output');guide.className='editor-snap-guide';feedback.className='editor-drag-feedback';guide.hidden=true;feedback.hidden=true;editorCanvas.append(guide,feedback);
         return {align(start,end,mode,event,minimum=minimumCutMs()){
-            const result=ConnectEditorPrecision.align({start,end,mode,points,tolerance:8/geometry.width*duration,fps:timeline.sequence.fps,duration,minimum,enabled:magneticSnapping&&!event.altKey});
+            const result=ConnectEditorPrecision.align({start,end,mode,points,tolerance:(event.pointerType==='touch'?14:8)/geometry.width*duration,fps:timeline.sequence.fps,duration,minimum,enabled:magneticSnapping&&!event.altKey});
             guide.hidden=result.guide===null;
             if(result.guide!==null)guide.style.left=`${guideLeft+result.guide/duration*geometry.width}px`;
             feedback.hidden=false;feedback.textContent=`${ConnectEditorPrecision.timecode(result.start,timeline.sequence.fps)} → ${ConnectEditorPrecision.timecode(result.end,timeline.sequence.fps)}${result.guide===null?'':' · Encaixe'}`;
@@ -1334,6 +1366,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const moved=videoSegments().find(segment=>String(segment.assetId)===range.source_id&&segment.masterStartMs===range.start_ms&&segment.masterEndMs===range.end_ms);
         if(moved)seek(moved.start,false);
     }
+    function timelineTouchEdge(event,width){return event.pointerType==='touch'?Math.min(22,width*.28):Math.min(12,Math.max(5,width*.22))}
     function makeSourceTakeDraggable(clip){
         clip.classList.add('is-timeline-draggable');
         clip.addEventListener('pointerdown',event=>{
@@ -1375,11 +1408,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             item=clip._timeline.item;duration=clip._timeline.duration;lane=clip.parentElement;
             if(event.button!==0||editTool==='blade')return;
             event.preventDefault();event.stopPropagation();
-            const originalStart=Number(item.start),originalEnd=Number(item.end),length=Math.max(1000,originalEnd-originalStart),box=clip.getBoundingClientRect(),edge=Math.min(12,Math.max(5,box.width*.22)),mode=event.clientX-box.left<=edge?'start':box.right-event.clientX<=edge?'end':'move',laneRect=timelineLaneGeometry(lane),pointerStart=timelinePoint(event,lane,duration,laneRect);
+            const originalStart=Number(item.start),originalEnd=Number(item.end),length=Math.max(1000,originalEnd-originalStart),box=clip.getBoundingClientRect(),edge=timelineTouchEdge(event,box.width),mode=event.clientX-box.left<=edge?'start':box.right-event.clientX<=edge?'end':'move',laneRect=timelineLaneGeometry(lane),pointerStart=timelinePoint(event,lane,duration,laneRect);
             const originalSourceIn=Math.max(0,Number(item.sourceInMs||0)),magnetic=beginMagneticGesture(clip,lane,duration);
             let nextStart=originalStart,nextEnd=originalEnd,nextSourceIn=originalSourceIn,moved=false;
             editorPersistence.beginGesture();clip.setPointerCapture?.(event.pointerId);clip.classList.add('is-timeline-dragging');
-            const move=frameLatest(pointerEvent=>{const delta=timelinePoint(pointerEvent,lane,duration,laneRect)-pointerStart;if(mode==='start'){nextStart=Math.max(0,Math.min(originalEnd-1000,snapToFrame(originalStart+delta)));nextSourceIn=Math.max(0,originalSourceIn+(nextStart-originalStart))}else if(mode==='end')nextEnd=Math.max(originalStart+1000,Math.min(duration,snapToFrame(originalEnd+delta)));else{nextStart=Math.max(0,Math.min(duration-length,snapToFrame(originalStart+delta)));nextEnd=nextStart+length}const aligned=magnetic.align(nextStart,nextEnd,mode,pointerEvent,1000);nextStart=aligned.start;nextEnd=aligned.end;if(mode==='start')nextSourceIn=Math.max(0,originalSourceIn+nextStart-originalStart);moved=moved||Math.abs(nextStart-originalStart)>=minimumCutMs()||Math.abs(nextEnd-originalEnd)>=minimumCutMs();clip.style.left=`${nextStart/duration*100}%`;clip.style.width=`${Math.max(.02,(nextEnd-nextStart)/duration*100)}%`});
+            const touchStart={x:event.clientX,y:event.clientY};
+            const move=frameLatest(pointerEvent=>{if(pointerEvent.pointerType==='touch'&&!moved&&Math.hypot(pointerEvent.clientX-touchStart.x,pointerEvent.clientY-touchStart.y)<7)return;const delta=timelinePoint(pointerEvent,lane,duration,laneRect)-pointerStart;if(mode==='start'){nextStart=Math.max(0,Math.min(originalEnd-1000,snapToFrame(originalStart+delta)));nextSourceIn=Math.max(0,originalSourceIn+(nextStart-originalStart))}else if(mode==='end')nextEnd=Math.max(originalStart+1000,Math.min(duration,snapToFrame(originalEnd+delta)));else{nextStart=Math.max(0,Math.min(duration-length,snapToFrame(originalStart+delta)));nextEnd=nextStart+length}const aligned=magnetic.align(nextStart,nextEnd,mode,pointerEvent,1000);nextStart=aligned.start;nextEnd=aligned.end;if(mode==='start')nextSourceIn=Math.max(0,originalSourceIn+nextStart-originalStart);moved=moved||Math.abs(nextStart-originalStart)>=minimumCutMs()||Math.abs(nextEnd-originalEnd)>=minimumCutMs();clip.style.left=`${nextStart/duration*100}%`;clip.style.width=`${Math.max(.02,(nextEnd-nextStart)/duration*100)}%`});
             const finish=async pointerEvent=>{move.flush();clip.removeEventListener('pointermove',move);clip.removeEventListener('pointerup',finish);clip.removeEventListener('pointercancel',finish);if(clip.hasPointerCapture?.(pointerEvent.pointerId))clip.releasePointerCapture(pointerEvent.pointerId);clip.classList.remove('is-timeline-dragging');magnetic.finish();editorPersistence.endGesture();if(pointerEvent.type==='pointercancel'){renderEditorTimeline();return}if(!moved)return;clip.dataset.timelineDrag='1';editorPersistence.flushScheduled();const tracks=currentMusicTracks();if(!tracks[item.trackIndex])return;tracks[item.trackIndex]={...tracks[item.trackIndex],start_ms:Math.round(nextStart),end_ms:Math.round(nextEnd),source_in_ms:Math.round(nextSourceIn)};applyLocalMusicTracks(tracks);try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{tracks});applyTimeline(data,true,false);renderEditorTimeline()}catch(error){alert(error.message);renderEditorTimeline()}};
             clip.addEventListener('pointermove',move);clip.addEventListener('pointerup',finish);clip.addEventListener('pointercancel',finish);
         });
@@ -1398,7 +1432,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             if(editTool==='blade')return;
             event.preventDefault();event.stopPropagation();
             const originalStart=Number(item.start),originalEnd=Number(item.end),length=Math.max(1,originalEnd-originalStart);
-            const clipBox=clip.getBoundingClientRect(),edge=Math.min(12,Math.max(5,clipBox.width*.22));
+            const clipBox=clip.getBoundingClientRect(),edge=timelineTouchEdge(event,clipBox.width);
             const resizeMode=event.clientX-clipBox.left<=edge?'start':clipBox.right-event.clientX<=edge?'end':'move';
             const groupOriginal=kind==='caption'&&resizeMode==='move'
                 ? (timeline.captions||[]).filter(cue=>selectedCaptionIds.has(String(cue.id))).map(cue=>({id:cue.id,start:Number(cue.start_ms),end:Number(cue.end_ms)}))
@@ -1412,7 +1446,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             let nextStart=originalStart,nextEnd=originalEnd,nextLayer=Number(item.layer||0),moved=false;
             editorPersistence.beginGesture();clip.setPointerCapture?.(event.pointerId);
             clip.classList.add('is-timeline-dragging');
+            const touchStart={x:event.clientX,y:event.clientY};
             const move=frameLatest(pointerEvent=>{
+                if(pointerEvent.pointerType==='touch'&&!moved&&Math.hypot(pointerEvent.clientX-touchStart.x,pointerEvent.clientY-touchStart.y)<7)return;
                 const delta=timelinePoint(pointerEvent,lane,duration,laneRect)-pointerStart;
                 if(resizeMode==='start')nextStart=Math.max(0,Math.min(originalEnd-minimumCutMs(),snapToFrame(originalStart+delta)));
                 else if(resizeMode==='end')nextEnd=Math.max(originalStart+minimumCutMs(),Math.min(duration,snapToFrame(originalEnd+delta)));
@@ -1609,6 +1645,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             if(!row){row=document.createElement('div');row.dataset.trackKey=key;const title=document.createElement('span');title.className='editor-track__label';row.append(title,document.createElement('div'))}
             row.className=`editor-track editor-track--${selectKind||'base'}`;
             const title=row.firstElementChild,lane=row.lastElementChild;
+            title.title=label;
             if(title.textContent!==label)title.textContent=label;
             lane.className=`editor-track__lane ${(isVideo||isCaption||canBlade)&&editTool==='blade'?'is-blade':''}`;
             const nextClips=items.map((item,index)=>{
@@ -1786,7 +1823,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     // virtual 'project-master' timeline; the backend resolves which real take
     // produced each one into related_source_id so clicking a take can filter them.
     function decisionSourceId(item){return item.related_source_id||item.source_id}
-    function selectInspector(kind,id,label,segment=null,options={}){if(!['video','audio'].includes(kind))selectedSegment=null;if(kind==='caption')selectedCaptionIds=new Set([String(id)]);else selectedCaptionIds.clear();inspectorSelection={kind,id:id??null,label:label||'',masterStartMs:segment?.masterStartMs,masterEndMs:segment?.masterEndMs,cameraSegmentId:segment?.cameraSegmentId||null,noiseDecisionId:options.noiseDecisionId||null};if(kind==='video'&&segment&&(globalMs<segment.start||globalMs>=segment.end))seek(segment.start,!video.paused);setReviewPanel(true);renderList();renderDirectTransformControl();updateEditControls()}
+    function selectInspector(kind,id,label,segment=null,options={}){if(!['video','audio'].includes(kind))selectedSegment=null;if(kind==='caption')selectedCaptionIds=new Set([String(id)]);else selectedCaptionIds.clear();inspectorSelection={kind,id:id??null,label:label||'',masterStartMs:segment?.masterStartMs,masterEndMs:segment?.masterEndMs,cameraSegmentId:segment?.cameraSegmentId||null,noiseDecisionId:options.noiseDecisionId||null};if(kind==='video'&&segment&&(globalMs<segment.start||globalMs>=segment.end))seek(segment.start,!video.paused);if(!isMobileEditor())setReviewPanel(true);renderList();renderDirectTransformControl();updateEditControls()}
     function toggleCaptionSelection(cue){
         const id=String(cue.id);
         if(selectedCaptionIds.has(id))selectedCaptionIds.delete(id);else selectedCaptionIds.add(id);
@@ -1987,6 +2024,13 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 while(node){const next=node.nextElementSibling;general.append(node);if(node===last)break;node=next}
                 card.querySelector('[data-music-volume]').parentElement.after(general);
             }
+            const selectedMusicTarget=(config.tracks||[]).find((track,index)=>`music-${track.clip_id||track.id||index}`===String(inspectorSelection.id));
+            if(selectedMusicTarget){
+                const remove=document.createElement('button');remove.type='button';remove.className='media-btn media-muted !py-2 w-full mt-2';
+                remove.innerHTML='<i class="fas fa-trash" aria-hidden="true"></i> Remover esta música';
+                remove.onclick=()=>deleteMusicClip(selectedMusicTarget.clip_id||(selectedMusicTarget.id==null?'template-default':`legacy-${selectedMusicTarget.id}`));
+                card.append(remove);
+            }
             list.append(card)
         }
         if(inspectorSelection?.kind==='caption')renderCaptionTranscript();
@@ -2088,7 +2132,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function selectedTimelineItemForDeletion(){
         if(inspectorSelection?.kind==='music'&&inspectorSelection.transitionIndex==null){
             const track=(timeline.music?.tracks||[]).find((item,index)=>`music-${item.clip_id||item.id||index}`===String(inspectorSelection.id));
-            if(track)return {kind:'music',id:track.clip_id||`legacy-${track.id}`};
+            if(track)return {kind:'music',id:track.clip_id||(track.id==null?'template-default':`legacy-${track.id}`)};
         }
         if(inspectorSelection?.kind==='caption')return {kind:'caption',id:inspectorSelection.id};
         if(inspectorSelection?.kind==='broll')return {kind:'broll',id:inspectorSelection.id};
@@ -2099,10 +2143,14 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         return null;
     }
     function updateEditControls(){
+        const properties=document.getElementById('mobile-properties');if(properties)properties.disabled=!inspectorSelection;
+        document.getElementById('mobile-edit-caption').hidden=inspectorSelection?.kind!=='caption';
         document.querySelectorAll('[data-tool]').forEach(button=>button.classList.toggle('is-active',button.dataset.tool===editTool));
         const remove=document.getElementById('delete-segment'),item=selectedTimelineItemForDeletion();
         document.getElementById('copy-caption').disabled=!selectedCaption();
         document.getElementById('paste-caption').disabled=!captionClipboard;
+        document.getElementById('copy-caption').classList.toggle('is-mobile-inapplicable',!selectedCaption());
+        document.getElementById('paste-caption').classList.toggle('is-mobile-inapplicable',!captionClipboard);
         remove.disabled=!selectedSegment&&!item;
         remove.title=selectedSegment
             ? `Remover trecho selecionado (${fmt(selectedSegment.start)} — ${fmt(selectedSegment.end)})`
@@ -2110,7 +2158,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     }
     async function deleteMusicClip(id){
         const original=currentMusicTracks(),tracks=original.filter(track=>String(track.clip_id)!==String(id));
-        if(tracks.length===original.length)return;
+        if(tracks.length===original.length&&id!=='template-default')return;
         for(const track of tracks){
             if(String(track.audio_transition?.from_clip_id)===String(id)){
                 track.audio_transition=null;track.transition='NONE';
@@ -2259,6 +2307,70 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         changeTimelineZoom(next/timelineZoom);
     });
     updateTimelineZoomControls();
+    let mobileMoving=false;
+    const mobileMove=document.getElementById('mobile-move');
+    mobileMove.onclick=()=>{
+        editTool='select';updateEditControls();
+        mobileMoving=!mobileMoving;mobileMove.setAttribute('aria-pressed',String(mobileMoving));
+        mobileMove.querySelector('span').textContent=mobileMoving?'Mover':'Navegar';
+        document.getElementById('mobile-gesture-help').textContent=mobileMoving?'Arraste o centro para mover · bordas para duração · pinça para zoom':'Arraste para navegar · toque para selecionar · pinça para zoom';
+    };
+    document.getElementById('mobile-properties').onclick=()=>{setReviewPanel(true);renderList();document.getElementById('close-review-panel').focus({preventScroll:true})};
+    document.getElementById('mobile-edit-caption').onclick=()=>{const cue=selectedCaption();if(cue)openSubtitleEditor(cue)};
+    document.getElementById('mobile-split').onclick=()=>{if(!editorBarrierActive)splitSelectedAtPlayhead()};
+    const mobileToolsModal=document.getElementById('mobile-tools-modal');
+    let mobileToolsTrigger=null;
+    function closeMobileTools(restoreFocus=true){
+        mobileToolsModal.classList.remove('is-open');document.getElementById('mobile-tools').setAttribute('aria-expanded','false');
+        if(restoreFocus&&isMobileEditor())mobileToolsTrigger?.focus({preventScroll:true});
+    }
+    function openMobileTools(section,trigger){
+        mobileToolsTrigger=trigger;
+        mobileToolsModal.querySelectorAll('[data-mobile-section]').forEach(node=>node.hidden=node.dataset.mobileSection!==section);
+        document.getElementById('mobile-tools-title').textContent=section==='add'?'Adicionar à edição':'Mais ferramentas';
+        mobileToolsModal.classList.add('is-open');document.getElementById('mobile-tools').setAttribute('aria-expanded',String(section==='more'));
+        document.getElementById('mobile-tools-close').focus({preventScroll:true});
+    }
+    document.getElementById('mobile-add').onclick=event=>openMobileTools('add',event.currentTarget);
+    document.getElementById('mobile-tools').onclick=event=>openMobileTools('more',event.currentTarget);
+    document.getElementById('mobile-tools-close').onclick=()=>closeMobileTools();
+    mobileToolsModal.addEventListener('click',event=>{if(event.target===mobileToolsModal)closeMobileTools()});
+    document.addEventListener('keydown',event=>{if(event.key==='Escape'&&mobileToolsModal.classList.contains('is-open')){event.preventDefault();closeMobileTools()}});
+    mobileToolsModal.addEventListener('keydown',event=>{
+        if(event.key!=='Tab')return;
+        const buttons=[...mobileToolsModal.querySelectorAll('button:not(:disabled)')].filter(node=>node.getClientRects().length);
+        const first=buttons[0],last=buttons.at(-1);
+        if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}
+        else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}
+    });
+    document.getElementById('mobile-expand').onclick=event=>{
+        const expanded=previewShell.classList.toggle('is-preview-expanded');event.currentTarget.setAttribute('aria-pressed',String(expanded));event.currentTarget.querySelector('span').textContent=expanded?'Voltar à timeline':'Ampliar preview';closeMobileTools();requestAnimationFrame(fitPreviewStage);
+    };
+    ConnectEditorMobile.bind({scroller:editorScroller,isMobile:isMobileEditor,isEditing:()=>mobileMoving||editTool==='blade',getZoom:()=>timelineZoom,
+        setZoom:value=>{
+            timelineZoom=value;updateTimelineZoomControls();
+            editorCanvas.style.setProperty('width',`${Math.round(timelineViewportWidth()*value)}px`,'important');
+            renderTimelinePlayhead();requestWaveformPaint();
+        },
+        onTap:(target,event)=>{
+            const clip=target.closest('[data-clip-key]');
+            if(clip){delete clip.dataset.timelineDrag;clip.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:event.clientX,clientY:event.clientY}))}
+        },
+    });
+    function syncMobileViewport(){
+        document.body.style.setProperty('--editor-header-height',`${document.querySelector('header').getBoundingClientRect().height}px`);
+        document.body.style.setProperty('--editor-viewport-top',`${window.visualViewport?.offsetTop||0}px`);
+        document.body.style.setProperty('--editor-viewport-height',`${window.visualViewport?.height||window.innerHeight}px`);
+        fitPreviewStage();
+    }
+    new ResizeObserver(syncMobileViewport).observe(document.querySelector('header'));
+    new ResizeObserver(()=>{if(isMobileEditor())fitPreviewStage()}).observe(document.querySelector('.preview-layout'));
+    window.visualViewport?.addEventListener('resize',syncMobileViewport);
+    window.visualViewport?.addEventListener('scroll',syncMobileViewport);
+    mobileEditorQuery.addEventListener('change',()=>{previewShell.classList.remove('is-preview-expanded');document.getElementById('mobile-expand').setAttribute('aria-pressed','false');document.getElementById('mobile-expand').querySelector('span').textContent='Ampliar preview';closeMobileTools(false);syncMobileViewport()});
+    const viewportMeta=document.querySelector('meta[name="viewport"]');
+    if(viewportMeta&&!viewportMeta.content.includes('viewport-fit'))viewportMeta.content+=', viewport-fit=cover';
+    syncMobileViewport();
     document.addEventListener('keydown',event=>{
         const typing=editorTyping();
         if(typing||!(event.metaKey||event.ctrlKey))return;
@@ -2441,6 +2553,40 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const relocatedTimelineActions=['timeline-snap','timeline-precision','delete-segment','timeline-shortcuts'].map(id=>{const button=document.getElementById(id),anchor=document.createComment(id);button.before(anchor);return {button,anchor}});
     const placeTimelineActions=()=>relocatedTimelineActions.forEach(({button,anchor})=>{if(wideTimelineActions.matches)timelineActions.append(button);else anchor.after(button)});
     wideTimelineActions.addEventListener('change',placeTimelineActions);placeTimelineActions();
+    const mobileControls=[
+        ['delete-segment','Excluir','bar'],
+        ['add-timeline-element','Imagem / vídeo','add'],['add-timeline-text','Texto','add'],
+        ['add-timeline-music','Música','add'],['add-timeline-camera','Câmera','add'],
+        ['timeline-precision','Tempos','more'],['timeline-snap','Encaixe','more'],
+        ['copy-caption','Copiar legenda','more'],['paste-caption','Colar legenda','more'],
+    ].map(([id,label,section])=>{
+        const button=document.getElementById(id),anchor=document.createComment(`mobile-${id}`);
+        button.before(anchor);const caption=document.createElement('span');caption.className='editor-mobile-label';caption.textContent=label;button.append(caption);
+        if(section==='add'||id==='timeline-precision')button.addEventListener('click',()=>{if(isMobileEditor())closeMobileTools()},true);
+        return {button,anchor,section};
+    });
+    const placeMobileControls=()=>{
+        mobileControls.forEach(({button,anchor,section})=>{
+            if(!isMobileEditor()){anchor.after(button);return}
+            if(section==='bar')document.getElementById('mobile-add').before(button);
+            else mobileToolsModal.querySelector(`[data-mobile-section="${section}"]`).append(button);
+        });
+        if(!isMobileEditor())placeTimelineActions();
+    };
+    mobileEditorQuery.addEventListener('change',()=>{placeTimelineActions();placeMobileControls()});
+    // The desktop toolbar can also move controls at 1200px. Run after that move.
+    wideTimelineActions.addEventListener('change',placeMobileControls);
+    placeMobileControls();
+    const mobileHistoryContainer=document.querySelector('.timeline-zoom-control');
+    const mobileHistory=[...document.querySelectorAll('[data-history]')].map(button=>{
+        const anchor=document.createComment(`history-${button.dataset.history}`);button.before(anchor);return {button,anchor};
+    });
+    function placeMobileHistory(){
+        mobileHistoryContainer.setAttribute('aria-label',isMobileEditor()?'Histórico de alterações':'Zoom da timeline');
+        mobileHistory.forEach(({button,anchor})=>{if(isMobileEditor())mobileHistoryContainer.append(button);else anchor.after(button)});
+    }
+    mobileEditorQuery.addEventListener('change',placeMobileHistory);
+    placeMobileHistory();
     multicamEditor=ConnectMulticam.create({panel:document.getElementById('multicam-panel'),stage:document.querySelector('.preview-stage'),mainVideo:video,getTimeline:()=>timeline,getTime:()=>globalMs,seek,editor:true,newOnly:true,save:async payload=>applyTimeline(await api('{% url "external_media_project_preview_camera" project.public_id %}',payload))});
     configureMusic();renderEditorTimeline();renderReviewProxyStatus();renameVisualMedia();updateEditControls();seek(globalMs);scheduleRevisionProxyPoll();
     requestAnimationFrame(()=>{renderList();enhanceReframeClipboard();renderEditorTimeline()});

@@ -26,7 +26,7 @@ from ..models.external_media import (
 )
 from .canonical import EditDecisionSetBuilder, ProjectProcessingState, SourceManifestBuilder
 from .exceptions import ExternalMediaError
-from .services import StorageService, VideoAssemblyService
+from .services import MusicService, StorageService, VideoAssemblyService
 from .quality_control import MediaQualityService
 from .overlays import OverlayTimelineService
 from .broll import BrollTimelineService
@@ -1703,6 +1703,10 @@ class TimelineRevisionService:
                 cls._distribute_music_tracks(normalized, sequence_duration)
         normalized.sort(key=lambda item: item.get('start_ms', 0))
         previous = (current.timeline or {}).get('music_tracks')
+        explicit_previous = isinstance(previous, list)
+        had_implicit_music = not explicit_previous and bool(MusicService.selected_tracks(
+            locked.template_version, current.timeline, locked.configuration or {},
+        ))
         if previous is None:
             legacy_id = (current.timeline or {}).get('music_override_track_id')
             previous = ([{'track_id': int(legacy_id), 'transition': 'CONSTANT_POWER', 'transition_duration_ms': 2000}]
@@ -1710,10 +1714,14 @@ class TimelineRevisionService:
         # Once the project is edited again, do not let a pre-revision override
         # shadow an undo back to the template music.
         legacy_configuration = dict(locked.configuration or {})
-        if legacy_configuration.pop('music_override_track_id', None) is not None:
+        # The parent may predate revisioned music and rely on this setting.
+        # Keep it when undo needs it to reconstruct that implicit playlist;
+        # an explicit music_tracks list still takes precedence in the new revision.
+        preserve_legacy_override = had_implicit_music and not (current.timeline or {}).get('music_override_track_id')
+        if not preserve_legacy_override and legacy_configuration.pop('music_override_track_id', None) is not None:
             locked.configuration = legacy_configuration
             locked.save(update_fields=['configuration', 'update_at'])
-        if previous == normalized:
+        if previous == normalized and not (had_implicit_music and not normalized):
             return current
         revision = cls._create(
             locked, current.source_manifest, current.edit_decision_set,

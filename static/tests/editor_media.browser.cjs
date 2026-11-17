@@ -6,7 +6,7 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-c
  const address=new URL(url); const seed={url:address.pathname,cookie:session};
  const browser=await chromium.launch({headless:true,executablePath:process.env.FILADELFIA_CHROME_PATH||undefined,args:['--autoplay-policy=no-user-gesture-required']});
  try{
- const context=await browser.newContext({viewport:{width:1600,height:1000}});await context.addCookies([{name:'sessionid',value:seed.cookie,domain:address.hostname,path:'/'}]);
+ const context=await browser.newContext(process.env.FILADELFIA_QA_MOBILE?{viewport:{width:390,height:844},isMobile:true,hasTouch:true}:{viewport:{width:1600,height:1000}});await context.addCookies([{name:'sessionid',value:seed.cookie,domain:address.hostname,path:'/'}]);
  const recorder=await context.newPage();await recorder.goto(url);
  let bytes;
  {
@@ -24,6 +24,9 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-c
  let releaseVideo;const videoGate=new Promise(resolve=>releaseVideo=resolve);
  let releaseSecond;const secondGate=new Promise(resolve=>releaseSecond=resolve);
  await page.route('**/qa-p1-media.webm*',async route=>{
+  // The cached-waveform API returns JSON, independently of the media bytes.
+  // Serving WebM here left every canvas at its default 300px allocation.
+  if(new URL(route.request().url()).searchParams.has('waveform'))return route.fulfill({json:{schema:'connect.waveform.v1',durationMs:6200,peaks:Array.from({length:720},(_,i)=>.25+.5*Math.abs(Math.sin(i*.17)))}});
   if(route.request().url().includes('take='))await videoGate;
   if(route.request().url().includes('take=2'))await secondGate;
   const range=route.request().headers().range;if(range){const match=/bytes=(\d+)-(\d*)/.exec(range),start=Number(match[1]),end=match[2]?Math.min(bytes.length-1,Number(match[2])):bytes.length-1;return route.fulfill({status:206,headers:{'Content-Type':'video/webm','Accept-Ranges':'bytes','Content-Range':`bytes ${start}-${end}/${bytes.length}`},body:bytes.subarray(start,end+1)})}
@@ -66,6 +69,6 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-c
  await page.locator('#preview-play').click();
  await page.locator('#timeline-zoom-range').evaluate(input=>{input.value=16;input.dispatchEvent(new Event('input',{bubbles:true}))});await page.waitForTimeout(500);
  const waves=await page.locator('.editor-source-waveform,.editor-music-waveform').evaluateAll(nodes=>nodes.map(n=>({pixels:n.width,width:n.getBoundingClientRect().width,connected:n.isConnected})));assert.ok(waves.some(w=>w.pixels>300),JSON.stringify(waves));assert.ok(waves.every(w=>w.pixels<2000),JSON.stringify(waves));
- assert.deepEqual(errors,[]);console.log('PASS decoded audio waveforms at 16x zoom have bounded canvas allocations',JSON.stringify(waves));
+ assert.deepEqual(errors,[]);console.log('PASS cached audio waveforms at 16x zoom have bounded canvas allocations',JSON.stringify(waves));
  }finally{await browser.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});

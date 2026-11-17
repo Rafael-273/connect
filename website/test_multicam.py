@@ -461,6 +461,35 @@ class MulticamFFmpegTests(SimpleTestCase):
             self.assertIn('MulticamRenderService', inspect.getsource(ProjectProxyService.build_timeline_review_proxy))
             self.assertIn('MulticamRenderService', inspect.getsource(ExternalMediaProjectPipeline._prepare_final_master))
 
+    def test_secondary_frames_cannot_extend_the_master_duration(self):
+        with TemporaryDirectory() as folder:
+            folder = Path(folder)
+            main, side, output = folder / 'main.mp4', folder / 'side.mp4', folder / 'out.mp4'
+            self.run_media('-f', 'lavfi', '-i', 'color=red:s=160x120:r=30:d=4',
+                           '-f', 'lavfi', '-i', 'sine=frequency=440:duration=4', '-c:v', 'libx264', '-c:a', 'aac', '-shortest', main)
+            self.run_media('-f', 'lavfi', '-i', 'color=blue:s=160x120:r=30:d=4', '-c:v', 'libx264', side)
+            # Legacy/inconsistent timing can retime a secondary past the base EOF.
+            segment = {'camera_source_id': 'side', 'source_in_ms': 0, 'source_out_ms': 1000,
+                       'start_ms': 1000, 'end_ms': 2000, 'rate': .01}
+            revision = SimpleNamespace(timeline={'camera_segments': [segment], 'sequence': {'duration_ms': 4000}},
+                                       source_manifest={'sources': [{'id': 'side'}]})
+            with patch.object(SourceManifestBuilder, 'resolve_field', return_value=side):
+                MulticamRenderService(FFmpegRunner(), SimpleNamespace(ffmpeg_input=lambda field: side)).apply(None, revision, main, output, 160, 120)
+            frames = self.run_media('-i', output, '-an', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-')
+            self.assertEqual(len(frames) // (160 * 120 * 3), 120)
+            self.assertEqual(self.run_media('-i', main, '-vn', '-c:a', 'copy', '-f', 'adts', '-'),
+                             self.run_media('-i', output, '-vn', '-c:a', 'copy', '-f', 'adts', '-'))
+
+    def test_out_of_bounds_camera_fails_before_reading_media(self):
+        revision = SimpleNamespace(timeline={'sequence': {'duration_ms': 4000}, 'camera_segments': [
+            {'start_ms': 1000, 'end_ms': 5000}]})
+        runner, storage = Mock(), Mock()
+        from website.external_media.exceptions import ExternalMediaError
+        with self.assertRaises(ExternalMediaError):
+            MulticamRenderService(runner, storage).apply(None, revision, 'input', 'output', 160, 120)
+        runner.run.assert_not_called()
+        storage.ffmpeg_input.assert_not_called()
+
     def test_audio_extraction_resamples_and_missing_audio_fails_safely(self):
         with TemporaryDirectory() as folder:
             folder = Path(folder)
