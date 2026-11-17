@@ -3392,7 +3392,9 @@ class ExternalMediaAssetDownloadView(ExternalMediaRequiredMixin, View):
         asset = get_object_or_404(MediaAsset, pk=asset_id, job__public_id=public_id)
         if request.GET.get('preview') != '1':
             MediaAsset.objects.filter(pk=asset.pk).update(download_count=F('download_count') + 1)
-        return protected_file_response(request, asset.file)
+        return protected_file_response(
+            request, asset.file, force_stream=request.GET.get('download') == '1',
+        )
 
 
 class ExternalMediaOriginalDownloadView(ExternalMediaRequiredMixin, View):

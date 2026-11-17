@@ -3936,6 +3936,31 @@ class OffContextDetectionTests(SimpleTestCase):
 
 class ProtectedFileResponseRangeTests(SimpleTestCase):
     @override_settings(USE_S3=True)
+    def test_asgi_explicit_download_streams_s3_as_attachment(self):
+        file = Mock()
+        file.name = 'video.mp4'
+        file.storage.location = 'private_media'
+        file.storage.bucket_name = 'test-bucket'
+        body = Mock()
+        body.iter_chunks.return_value = iter([b'first', b'second'])
+        file.storage.connection.meta.client.get_object.return_value = {'Body': body, 'ContentLength': 11}
+        request = AsyncRequestFactory().get('/asset?download=1')
+        response = protected_file_response(request, file, force_stream=True)
+
+        async def consume():
+            return [chunk async for chunk in response.streaming_content]
+
+        try:
+            self.assertTrue(response.is_async)
+            self.assertIn('attachment', response['Content-Disposition'])
+            self.assertEqual(async_to_sync(consume)(), [b'first', b'second'])
+            file.storage.url.assert_not_called()
+            file.open.assert_not_called()
+        finally:
+            response.close()
+        body.close.assert_called()
+
+    @override_settings(USE_S3=True)
     def test_s3_download_redirects_to_signed_attachment(self):
         file = Mock()
         file.name = 'video.mp4'
