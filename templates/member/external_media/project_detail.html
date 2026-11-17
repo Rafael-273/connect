@@ -2023,6 +2023,18 @@
     };
     window.projectSubmitOverlay = {show, hide};
 
+    let downloadPending = false;
+    document.querySelectorAll('.project-header-download').forEach((link) => {
+        link.addEventListener('click', (event) => {
+            if (downloadPending) { event.preventDefault(); return; }
+            downloadPending = true;
+            show('Iniciando download…');
+            // O navegador assume a transferência; não há evento de conclusão
+            // confiável para downloads iniciados por um link comum.
+            window.setTimeout(() => { downloadPending = false; hide(); }, 3000);
+        });
+    });
+
     document.addEventListener('submit', (event) => {
         const form = event.target;
         if (!(form instanceof HTMLFormElement) || event.defaultPrevented || form.matches('[data-no-submit-overlay]')) return;

@@ -10,7 +10,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from PIL import Image, UnidentifiedImageError
+from asgiref.sync import sync_to_async
 from django.conf import settings
+from django.core.handlers.asgi import ASGIRequest
 from django.contrib import messages
 from django.db import IntegrityError, transaction
 from django.db.models import F, Max, Prefetch, Q, Sum
@@ -140,6 +142,24 @@ def _file_chunks(file_handle, start, length, block_size=8192):
         yield chunk
 
 
+def _asgi_stream_response(request, response):
+    """Keep synchronous file reads bounded when Django serves an ASGI request."""
+    if not isinstance(request, ASGIRequest) or not response.streaming:
+        return response
+    iterator = iter(response.streaming_content)
+    sentinel = object()
+
+    async def chunks():
+        while True:
+            chunk = await sync_to_async(next, thread_sensitive=True)(iterator, sentinel)
+            if chunk is sentinel:
+                break
+            yield chunk
+
+    response.streaming_content = chunks()
+    return response
+
+
 def protected_file_response(request, field_file, force_stream=False):
     """Serve locally (with HTTP Range for video seek) or redirect to a signed S3 URL."""
     # Web Audio fetches must stay on the authenticated app origin. A signed
@@ -160,7 +180,7 @@ def protected_file_response(request, field_file, force_stream=False):
         return redirect(url)
     if settings.USE_S3 and force_stream:
         from ..external_media.streaming import s3_stream_response
-        return s3_stream_response(request, field_file, content_type, preview=preview)
+        return _asgi_stream_response(request, s3_stream_response(request, field_file, content_type, preview=preview))
     try:
         file_handle = field_file.open('rb')
     except FileNotFoundError as exc:
@@ -210,7 +230,7 @@ def protected_file_response(request, field_file, force_stream=False):
         if disposition:
             response['Content-Disposition'] = disposition
         response._resource_closers.append(file_handle.close)
-        return response
+        return _asgi_stream_response(request, response)
 
     response = FileResponse(
         file_handle,
@@ -219,7 +239,7 @@ def protected_file_response(request, field_file, force_stream=False):
         filename=filename,
     )
     response['Accept-Ranges'] = 'bytes'
-    return response
+    return _asgi_stream_response(request, response)
 
 
 def cached_preview_response(request, project, kind, field, *, version='', options=None):
@@ -3372,15 +3392,7 @@ class ExternalMediaAssetDownloadView(ExternalMediaRequiredMixin, View):
         asset = get_object_or_404(MediaAsset, pk=asset_id, job__public_id=public_id)
         if request.GET.get('preview') != '1':
             MediaAsset.objects.filter(pk=asset.pk).update(download_count=F('download_count') + 1)
-        # A redirect to a signed S3 URL with Content-Disposition is interpreted
-        # as inline playback by some mobile browsers.  The explicit download
-        # variant keeps the response on this endpoint so Django sends the
-        # attachment header directly and the browser starts a download.
-        return protected_file_response(
-            request,
-            asset.file,
-            force_stream=request.GET.get('download') == '1',
-        )
+        return protected_file_response(request, asset.file)
 
 
 class ExternalMediaOriginalDownloadView(ExternalMediaRequiredMixin, View):

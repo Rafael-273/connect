@@ -15,11 +15,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from asgiref.sync import async_to_sync
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, RequestFactory, SimpleTestCase, TestCase, override_settings
+from django.test import AsyncRequestFactory, Client, RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from safedelete.models import HARD_DELETE
@@ -3934,6 +3935,41 @@ class OffContextDetectionTests(SimpleTestCase):
 
 
 class ProtectedFileResponseRangeTests(SimpleTestCase):
+    @override_settings(USE_S3=True)
+    def test_s3_download_redirects_to_signed_attachment(self):
+        file = Mock()
+        file.name = 'video.mp4'
+        file.storage.url.return_value = 'https://storage.example/video'
+        response = protected_file_response(RequestFactory().get('/asset?download=1'), file)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, 'https://storage.example/video')
+        self.assertIn('attachment', file.storage.url.call_args.kwargs['parameters']['ResponseContentDisposition'])
+        file.open.assert_not_called()
+
+    @override_settings(USE_S3=False)
+    def test_asgi_file_and_range_are_streamed_asynchronously(self):
+        with tempfile.TemporaryDirectory() as directory:
+            storage = FileSystemStorage(location=directory)
+            payload = b'0123456789' * 2000
+            name = storage.save('video.mp4', ContentFile(payload))
+            field = SimpleNamespace(name=name, size=len(payload), open=lambda mode: storage.open(name, mode))
+            factory = AsyncRequestFactory()
+
+            async def consume(response):
+                return [chunk async for chunk in response.streaming_content]
+
+            for request, expected in ((factory.get('/asset'), payload),
+                                      (factory.get('/asset', headers={'range': 'bytes=4-8'}), payload[4:9])):
+                response = protected_file_response(request, field)
+                try:
+                    self.assertTrue(response.is_async)
+                    chunks = async_to_sync(consume)(response)
+                    self.assertEqual(b''.join(chunks), expected)
+                    if len(expected) == len(payload):
+                        self.assertGreater(len(chunks), 1)
+                finally:
+                    response.close()
+
     @override_settings(USE_S3=True)
     def test_waveform_streams_protected_bytes_instead_of_redirecting_to_storage(self):
         file = Mock(name='audio')

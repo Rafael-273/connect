@@ -46,3 +46,11 @@ class PWATests(SimpleTestCase):
                 self.assertIn('pwa.js', html)
                 self.assertNotIn('-webkit-fill-available', html)
                 self.assertNotIn("register('/static/sw.js'", html)
+
+    def test_ios_install_instructions_include_web_app_mode(self):
+        for template in ('member/dashboard.html', 'member/profile.html'):
+            with self.subTest(template=template):
+                source = (Path(settings.BASE_DIR) / 'templates' / template).read_text()
+                self.assertIn('"Abrir como App"', source)
+                self.assertIn('novo ícone na Tela Inicial', source)
+                self.assertIn('remova-o da Tela Inicial', source)
