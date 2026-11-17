@@ -1127,21 +1127,6 @@
         console.warn('PWA requer HTTPS para funcionar em produção!');
     }
 
-    // Registra o service worker
-    if ('serviceWorker' in navigator && isSecureContext) {
-        navigator.serviceWorker.register('/static/sw.js', { updateViaCache: 'none' })
-            .then(registration => {
-                console.log('Service Worker registrado com sucesso:', registration);
-                // Força atualização do service worker
-                registration.update();
-            })
-            .catch(error => {
-                console.error('Falha ao registrar Service Worker:', error);
-            });
-    } else if (!isSecureContext) {
-        console.warn('Service Worker requer contexto seguro (HTTPS)');
-    }
-
     // Função para mostrar o prompt de instalação
     window.showInstallPrompt = function () {
         console.log('showInstallPrompt chamado. isIOS:', isIOS, 'isMobile:', isMobile, 'deferredPrompt:', !!deferredPrompt, 'isStandalone:', isStandalone);

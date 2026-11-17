@@ -254,6 +254,10 @@ EXTERNAL_MEDIA_FFMPEG_PRESET = os.getenv('EXTERNAL_MEDIA_FFMPEG_PRESET', 'veryfa
 EXTERNAL_MEDIA_RENDER_PRESET = os.getenv('EXTERNAL_MEDIA_RENDER_PRESET', 'superfast')
 EXTERNAL_MEDIA_INTERMEDIATE_PRESET = os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_PRESET', 'superfast')
 EXTERNAL_MEDIA_INTERMEDIATE_CRF = int(os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_CRF', 22))
+# Full-quality render checkpoints; independent from editor playback proxies.
+EXTERNAL_MEDIA_RENDER_CACHE_ENABLED = os.getenv('EXTERNAL_MEDIA_RENDER_CACHE_ENABLED', 'true').lower() in {'1', 'true', 'yes'}
+EXTERNAL_MEDIA_RENDER_CACHE_TTL_SECONDS = int(os.getenv('EXTERNAL_MEDIA_RENDER_CACHE_TTL_SECONDS', 604800))
+EXTERNAL_MEDIA_RENDER_CACHE_MAX_FILE_BYTES = int(os.getenv('EXTERNAL_MEDIA_RENDER_CACHE_MAX_FILE_BYTES', 2 * 1024 ** 3))
 # Mantém a renderização final rápida em máquinas multi-core sem abrir encodes
 # demais e deixar o computador sem responsividade.
 EXTERNAL_MEDIA_ASSEMBLY_WORKERS = int(os.getenv('EXTERNAL_MEDIA_ASSEMBLY_WORKERS', 2))
@@ -309,6 +313,10 @@ CELERY_BEAT_SCHEDULE = {
     'recover-source-take-analysis': {
         'task': 'external_media.recover_source_analysis',
         'schedule': timedelta(minutes=5),
+    },
+    'cleanup-render-checkpoints': {
+        'task': 'external_media.cleanup_render_checkpoints',
+        'schedule': timedelta(hours=24),
     },
     'cleanup-external-media-workspaces': {
         'task': 'external_media.cleanup_workspaces',

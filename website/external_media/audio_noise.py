@@ -528,61 +528,86 @@ class AudioCleanupService:
             return NoiseCleanupResult(media_path, {'applied': 0})
         global_decisions = [item for item in active if item.mode == ReductionMode.GLOBAL]
         local_decisions = [item for item in active if item.mode == ReductionMode.LOCAL]
+        # Work on audio only. Copying the entire video for every local event
+        # consumed the scratch disk and repeatedly encoded unaffected audio.
         current = media_path
+        owned = set()
+        extracted = output_path.parent / 'noise_source.wav'
+        def prepare_audio():
+            nonlocal current
+            if current == media_path:
+                owned.add(extracted)
+                self._extract_audio(media_path, extracted)
+                current = extracted
+        def advance(path):
+            nonlocal current
+            previous = current
+            owned.add(path)
+            current = path
+            if previous in owned and previous != path:
+                previous.unlink(missing_ok=True)
+                owned.discard(previous)
         metrics = {'applied': 0, 'global': 0, 'local': 0, 'segments': [], 'skipped': []}
         workdir = output_path.parent
-        if global_decisions:
-            strongest = max(
-                global_decisions,
-                key=lambda item: self.provider.STRENGTH_NR.get(item.strength, 0)
-                if hasattr(self.provider, 'STRENGTH_NR')
-                else 1,
-            )
-            global_path = workdir / 'noise_global.wav'
-            extracted = workdir / 'noise_source.wav'
-            self._extract_audio(current, extracted)
-            self.provider.reduce(extracted, global_path, strength=strongest.strength)
-            global_video = workdir / 'noise_global.mp4'
-            self._mux_audio(current, global_path, global_video)
-            current = global_video
-            metrics['global'] += 1
-            metrics['applied'] += 1
-        for index, decision in enumerate(local_decisions):
-            segment_start = max(0, decision.start_ms - LOCAL_MARGIN_MS)
-            segment_end = decision.end_ms + LOCAL_MARGIN_MS
-            treated = workdir / f'noise_local_{index}.mp4'
-            try:
-                self._apply_local(current, treated, decision, segment_start, segment_end)
-            except ExternalMediaError:
-                # A local reduction is an optional editorial enhancement. It must
-                # never fail an otherwise valid final render (for example, when a
-                # particular source has an audio stream FFmpeg cannot filter).
-                logger.exception(
-                    'noise_cleanup_local_skipped start_ms=%s end_ms=%s noise_type=%s',
-                    decision.start_ms, decision.end_ms, decision.noise_type,
+        try:
+            if global_decisions:
+                strongest = max(
+                    global_decisions,
+                    key=lambda item: self.provider.STRENGTH_NR.get(item.strength, 0)
+                    if hasattr(self.provider, 'STRENGTH_NR')
+                    else 1,
                 )
-                treated.unlink(missing_ok=True)
-                metrics['skipped'].append({
+                global_path = workdir / 'noise_global.wav'
+                prepare_audio()
+                owned.add(global_path)
+                self.provider.reduce(current, global_path, strength=strongest.strength)
+                advance(global_path)
+                metrics['global'] += 1
+                metrics['applied'] += 1
+            for index, decision in enumerate(local_decisions):
+                segment_start = max(0, decision.start_ms - LOCAL_MARGIN_MS)
+                segment_end = decision.end_ms + LOCAL_MARGIN_MS
+                treated = workdir / f'noise_local_{index}.wav'
+                prepare_audio()
+                owned.add(treated)
+                try:
+                    self._apply_local(current, treated, decision, segment_start, segment_end)
+                except ExternalMediaError as error:
+                    from .workspace import InsufficientWorkspaceCapacity
+                    if isinstance(error, InsufficientWorkspaceCapacity) or 'armazenamento temporário' in str(error) or 'sem espaco' in str(error):
+                        raise
+                    # A local reduction is an optional editorial enhancement. It must
+                    # never fail an otherwise valid final render (for example, when a
+                    # particular source has an audio stream FFmpeg cannot filter).
+                    logger.exception(
+                        'noise_cleanup_local_skipped start_ms=%s end_ms=%s noise_type=%s',
+                        decision.start_ms, decision.end_ms, decision.noise_type,
+                    )
+                    treated.unlink(missing_ok=True)
+                    owned.discard(treated)
+                    metrics['skipped'].append({
+                        'start_ms': decision.start_ms,
+                        'end_ms': decision.end_ms,
+                        'noise_type': decision.noise_type,
+                        'reason': 'ffmpeg_local_filter_failed',
+                    })
+                    continue
+                advance(treated)
+                metrics['local'] += 1
+                metrics['applied'] += 1
+                metrics['segments'].append({
                     'start_ms': decision.start_ms,
                     'end_ms': decision.end_ms,
+                    'strength': decision.strength,
                     'noise_type': decision.noise_type,
-                    'reason': 'ffmpeg_local_filter_failed',
                 })
-                continue
-            current = treated
-            metrics['local'] += 1
-            metrics['applied'] += 1
-            metrics['segments'].append({
-                'start_ms': decision.start_ms,
-                'end_ms': decision.end_ms,
-                'strength': decision.strength,
-                'noise_type': decision.noise_type,
-            })
-        # Each successful operation already writes a complete, playable MP4.
-        # Returning it directly avoids a final, redundant `-c copy` remux. That
-        # remux is exactly what was failing in the Render Workflow; it provides
-        # no quality or compatibility benefit here.
-        return NoiseCleanupResult(current, metrics)
+            if not metrics['applied']:
+                return NoiseCleanupResult(media_path, metrics)
+            self._mux_audio(media_path, current, output_path)
+            return NoiseCleanupResult(output_path, metrics)
+        finally:
+            for path in owned:
+                path.unlink(missing_ok=True)
 
     def render_preview_clip(
         self,
@@ -636,18 +661,27 @@ class AudioCleanupService:
             f'[0:a]atrim={end_s}:{duration_s},asetpts=PTS-STARTPTS[tail];'
             '[head][body][tail]concat=n=3:v=0:a=1,aresample=async=1:first_pts=0[aout]'
         )
+        audio_only = Path(output_path).suffix == '.wav'
         self.runner.run([
             settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(media_path),
             '-filter_complex', filter_complex,
-            '-map', '0:v:0?', '-map', '[aout]',
-            '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
+            *(['-map', '[aout]', '-c:a', 'pcm_f32le', '-rf64', 'auto'] if audio_only else
+              ['-map', '0:v:0?', '-map', '[aout]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']),
             str(output_path),
         ])
 
     def _extract_audio(self, media_path, wav_path):
+        from .workspace import DiskCapacityGuard
+        duration = self.editor.duration_ms(media_path)
+        # Two float-PCM stereo buffers, plus the single final video mux.
+        video_size = getattr(media_path, 'size_bytes', 0)
+        if isinstance(media_path, Path) and media_path.exists():
+            video_size = media_path.stat().st_size
+        audio_bytes = int(duration / 1000 * 48000 * 2 * 4)
+        DiskCapacityGuard.require_capacity(max(audio_bytes * 2, audio_bytes + video_size) + 1024 * 1024, Path(wav_path).parent)
         self.runner.run([
             settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(media_path),
-            '-vn', '-ac', '2', '-ar', '48000', '-c:a', 'pcm_s16le', str(wav_path),
+            '-vn', '-ac', '2', '-ar', '48000', '-c:a', 'pcm_f32le', '-rf64', 'auto', str(wav_path),
         ])
 
     def _mux_audio(self, video_path, audio_path, output_path):

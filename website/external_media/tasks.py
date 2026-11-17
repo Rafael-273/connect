@@ -114,6 +114,15 @@ def render_external_media(self, job_id):
     ExternalMediaPipeline().render_outputs(job_id)
 
 
+@shared_task(name='external_media.cleanup_render_checkpoints')
+def cleanup_render_checkpoints():
+    from io import StringIO
+    from django.core.management import call_command
+    output = StringIO()
+    call_command('cleanup_render_checkpoints', apply=True, stdout=output)
+    return output.getvalue().splitlines()[-1:]
+
+
 @shared_task(name='external_media.cleanup_workspaces')
 def cleanup_external_media_workspaces():
     """Safety net for scratch directories left by interrupted workers."""

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import bisect
+import inspect
 import json
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
@@ -1992,6 +1993,8 @@ class VideoAssemblyService:
                             normalized[index - 1],
                             f'assembly-{uuid.uuid4().hex[:12]}-{job["source_index"]:03d}',
                         )
+                        if isinstance(staged, RemoteMediaSource):
+                            staged.render_cache_key = self._render_checkpoints().keys.get(str(normalized[index - 1]))
                         normalized[index - 1] = staged
                         temporary_normalized.append(temporary_name)
                     if progress_callback:
@@ -2248,7 +2251,35 @@ class VideoAssemblyService:
             math.ceil(source_height * factor / 2) * 2,
         )
 
+    def _render_checkpoints(self):
+        from .render_cache import RenderCheckpointCache
+        if not hasattr(self, '_checkpoint_cache'):
+            self._checkpoint_cache = RenderCheckpointCache(self.runner)
+        return self._checkpoint_cache
+
     def _concat_group(self, paths, output_path, intervals=None):
+        cache = self._render_checkpoints()
+        key = None
+        expected_duration = None
+        if cache.enabled:
+            try:
+                expected_duration = sum(int(item['end_ms'])-int(item['start_ms']) if isinstance(item, dict) else int(item[1])-int(item[0]) for item in intervals) if intervals is not None else sum(SpeechEditService(self.runner).duration_ms(path) for path in paths)
+                key = cache.key('concat', {'sources': [cache.identity(path) for path in paths], 'intervals': intervals})
+            except Exception:
+                logger.info('render_checkpoint_identity_unavailable')
+        if cache.restore(key, output_path, expected_duration) is not None:
+            return
+        try:
+            self._concat_group_uncached(paths, output_path, intervals)
+        except ExternalMediaError as error:
+            seek_error = any(word in str(error).lower() for word in ('seek', 'seeking', 'busca'))
+            if not intervals or not seek_error:
+                raise
+            logger.warning('concat_seek_fallback intervals=%s', len(intervals))
+            self._concat_group_uncached(paths, output_path, intervals, seek_inputs=False)
+        cache.publish(key, output_path, expected_duration_ms=expected_duration)
+
+    def _concat_group_uncached(self, paths, output_path, intervals=None, *, seek_inputs=True):
         if not paths:
             raise ExternalMediaError('Não há trechos de vídeo para concatenar.')
         concat_filters, concat_inputs = [], []
@@ -2256,6 +2287,13 @@ class VideoAssemblyService:
         # for each batch. Parallelism belongs at the job/worker level here.
         command = [settings.FFMPEG_BINARY, '-y', '-threads', '1', '-filter_complex_threads', '1']
         for index, path in enumerate(paths):
+            seek_ms = 0
+            if intervals is not None and seek_inputs:
+                interval = intervals[index]
+                original_start = interval['start_ms'] if isinstance(interval, dict) else interval[0]
+                seek_ms = max(0, (int(original_start) // 1000 - 1) * 1000)
+            if seek_ms:
+                command.extend(['-ss', f'{seek_ms / 1000:.3f}', '-accurate_seek'])
             command.extend(['-i', self.runner.input_arg(path)])
             video_trim = audio_trim = ''
             transform_filter = ''
@@ -2267,7 +2305,7 @@ class VideoAssemblyService:
                 )
                 if start_ms < 0 or end_ms <= start_ms:
                     raise ExternalMediaError('A revisão contém um trecho de vídeo inválido.')
-                bounds = f'start={start_ms / 1000:.3f}:end={end_ms / 1000:.3f}'
+                bounds = f'start={(start_ms-seek_ms) / 1000:.3f}:end={(end_ms-seek_ms) / 1000:.3f}'
                 video_trim, audio_trim = f'trim={bounds},', f'atrim={bounds},'
                 transform = interval.get('manual_transform') if isinstance(interval, dict) else None
                 framing_width = interval.get('framing_width') if isinstance(interval, dict) else None
@@ -2370,10 +2408,44 @@ class VideoAssemblyService:
         proxy_height = self._even(proxy_width * height / width)
         return SimpleNamespace(width=proxy_width, height=proxy_height)
 
-    def _normalize(
+    def _normalize(self, *args, **kwargs):
+        from .render_cache import digest_file
+        cache = self._render_checkpoints()
+        bound = inspect.signature(self._normalize_uncached).bind(*args, **kwargs)
+        bound.apply_defaults()
+        recipe = dict(bound.arguments)
+        destination = recipe.pop('destination')
+        key = None
+        expected_duration = None
+        # A fresh detector run has no frozen plan and cannot be reused safely.
+        if cache.enabled and not (recipe.get('auto_reframe_config') and recipe.get('reframe_plan_data') is None):
+            try:
+                expected_duration = max(1, int(recipe.get('trim_end_ms') or SpeechEditService(self.runner).duration_ms(recipe['source'])) - int(recipe.get('trim_start_ms') or 0))
+                if recipe.get('reframe_plan_data') is not None:
+                    recipe['analysis_source'] = None
+                for name in ('source', 'analysis_source'):
+                    recipe[name] = cache.identity(recipe[name]) if recipe.get(name) is not None else None
+                recipe['lut_path'] = digest_file(recipe['lut_path']) if recipe.get('lut_path') else None
+                recipe.pop('source_index', None)
+                key = cache.key('normalize', recipe)
+            except Exception:
+                logger.info('render_checkpoint_identity_unavailable')
+        cached = cache.restore(key, destination, expected_duration)
+        if cached is not None:
+            try:
+                return AutoReframePlan.from_dict(cached['plan']) if cached.get('plan') else None
+            except (KeyError, TypeError, ValueError, AttributeError):
+                logger.warning('render_checkpoint_plan_invalid key=%s', key)
+                Path(destination).unlink(missing_ok=True)
+                cache.keys.pop(str(destination), None)
+        result = self._normalize_uncached(*args, **kwargs)
+        cache.publish(key, destination, expected_duration_ms=expected_duration, plan=result.as_dict() if result else None)
+        return result
+
+    def _normalize_uncached(
         self, source, destination, width, height, lut_path, lut_intensity=50, auto_reframe_config=None,
         analysis_source=None, reframe_plan_data=None, trim_start_ms=0, trim_end_ms=None,
-        preserve_framing=False, source_index=None, color_adjustment=None,
+        preserve_framing=False, source_index=None, color_adjustment=None, early_fps=True,
     ):
         has_audio = self._has_audio(source)
         metadata = RenderService(runner=self.runner).probe_video(source)
@@ -2384,6 +2456,9 @@ class VideoAssemblyService:
         # an audio PTS offset even if its video begins at zero; output-side
         # seeking preserves that gap and it becomes audible after concat.
         filters = self._timeline_trim_filters(trim_start_ms, trim_end_ms, 'trim')
+        static_sampling = early_fps and (not auto_reframe_config or bool((reframe_plan_data or {}).get('disabled')))
+        if static_sampling:
+            filters.append('fps=30')
         if metadata.is_hdr:
             filters.extend(RenderService.hdr_to_sdr_filters(metadata))
         reframe_plan = None
@@ -2437,7 +2512,9 @@ class VideoAssemblyService:
                 f'scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos',
                 f'crop={width}:{height}:(iw-ow)/2:(ih-oh)/2',
             ])
-        filters.extend(['fps=30', 'setsar=1'])
+        if not static_sampling:
+            filters.append('fps=30')
+        filters.append('setsar=1')
         if lut_path and int(lut_intensity or 0) > 0:
             escaped = str(lut_path).replace('\\', r'\\').replace(':', r'\:').replace("'", r"\'")
             intensity = min(100, max(0, int(lut_intensity))) / 100

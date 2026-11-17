@@ -7140,7 +7140,7 @@ class AudioNoiseCleanupUnitTests(SimpleTestCase):
         remote = RemoteMediaSource('https://example.test/source.mp4', storage_name='temporary/source.mp4')
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'output.mp4'
-            with patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')):
+            with patch.object(service, '_extract_audio'), patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')):
                 result = service.apply(remote, output, [decision])
 
         self.assertIs(result.path, remote)
@@ -7156,7 +7156,7 @@ class AudioNoiseCleanupUnitTests(SimpleTestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'output.mp4'
             source = Path(directory) / 'source.mp4'
-            with patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')):
+            with patch.object(service, '_extract_audio'), patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')):
                 result = service.apply(source, output, [decision])
 
         self.assertEqual(result.metrics['applied'], 0)
