@@ -10,7 +10,7 @@ from pathlib import Path
 
 from django.conf import settings
 
-from ..models.external_media import BackgroundMusicTrack
+from ..models.external_media import BackgroundMusicTrack, project_editor_settings
 from .audio_mixing import (
     DuckingSettings, build_ducking_envelope, build_dynamic_ducking_envelope,
     build_spectral_windows, combine_gain_envelopes, group_speech_blocks,
@@ -262,7 +262,7 @@ class InternalTimelineBuilder:
             'project': {
                 'id': str(project.public_id),
                 'name': project.name,
-                'template': project.template_version.template.name,
+                'template': project.template_version.template.name if project.template_version else None,
                 'created_by': project.created_by.name,
             },
             'sequence': {**sequence, 'duration_ms': duration_ms},
@@ -479,7 +479,7 @@ class InternalTimelineBuilder:
         )
 
     def _sequence(self, project, sources):
-        preset = project.template_version.preset
+        preset = project_editor_settings(project).preset
         first = sources[0][1] if sources else {}
         fps = float(first.get('fps') or 30.0)
         return {
@@ -654,7 +654,7 @@ class InternalTimelineBuilder:
         self.runner.run(command)
 
         processed_path = raw_path
-        version = project.template_version
+        version = project_editor_settings(project)
         decisions = self._noise_decisions(project)
         if version.audio_noise_cleanup_enabled and decisions:
             cleanup_result = AudioCleanupService(self.runner).apply(
@@ -833,7 +833,7 @@ class InternalTimelineBuilder:
         return {**keyframes[-1], 'source_time_ms': time_ms}
 
     def _music(self, project, package_root, duration_ms):
-        version = project.template_version
+        version = project_editor_settings(project)
         revision = project.approved_timeline_revision or project.current_timeline_revision
         revision_timeline = (revision.timeline if revision else {}) or {}
         revision_mix = dict(revision_timeline.get('audio_mix') or {})
@@ -954,7 +954,7 @@ class InternalTimelineBuilder:
         }
 
     def _captions(self, project, package_root):
-        if not project.render_job_id or not project.template_version.subtitles_enabled:
+        if not project.render_job_id or not project_editor_settings(project).subtitles_enabled:
             return [], []
         captions, assets = [], []
         from .caption_visibility import visible_caption_tracks
@@ -992,7 +992,7 @@ class InternalTimelineBuilder:
         as native captions in Premiere.
         """
         job = getattr(project, 'render_job', None)
-        if not job or not project.template_version.subtitles_enabled or duration_ms <= 0:
+        if not job or not project_editor_settings(project).subtitles_enabled or duration_ms <= 0:
             return None, None
         tracks = list(
             job.subtitle_tracks.filter(language__in=job.output_languages)
@@ -1013,7 +1013,7 @@ class InternalTimelineBuilder:
         if not source_style:
             return None, None
 
-        version = project.template_version
+        version = project_editor_settings(project)
         is_dual = (
             (version.default_settings or {}).get('language_mode') == 'translated'
             and bool(translated_tracks)
@@ -1128,7 +1128,7 @@ class InternalTimelineBuilder:
         )
 
     def _lut(self, project, package_root):
-        version = project.template_version
+        version = project_editor_settings(project)
         if not version.lut_file or not version.plugins.filter(is_enabled=True, code='lut').exists():
             return None
         relative = f'LUTs/{self._safe_name(Path(version.lut_file.name).stem)}{Path(version.lut_file.name).suffix.lower()}'
@@ -1137,7 +1137,7 @@ class InternalTimelineBuilder:
 
     @staticmethod
     def _effects(project, lut):
-        version = project.template_version
+        version = project_editor_settings(project)
         effects = []
         if lut:
             effects.append({'type': 'lut', 'asset_id': lut['id'], 'intensity': 1.0, 'portability': 'NON_PORTABLE'})
@@ -1188,7 +1188,7 @@ class InternalTimelineBuilder:
             warnings.append('EQ, compressão, de-esser e nivelamento foram aplicados ao stem de voz A1.')
         if any(effect['type'] == 'audio_noise_reduction' for effect in effects):
             warnings.append('As reduções de ruído aprovadas foram aplicadas ao stem de voz A1.')
-        if project.template_version.audio_mastering_enabled:
+        if project_editor_settings(project).audio_mastering_enabled:
             warnings.append('A masterização final não foi aplicada destrutivamente. Use “Masterizar Vídeo” após o Premiere.')
         if consolidated_video_available:
             warnings.append(

@@ -152,6 +152,37 @@ class SourceAnalysisIntegrationTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(self.item.trim_ranges, [])
         self.assertFalse(self.item.trim_reviewed)
 
+    @override_settings(EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED=False)
+    def test_free_caption_option_reuses_whisper_without_take_suggestions(self):
+        self.project.free_preset = self.preset
+        self.project.template_version = None
+        self.project.status = ExternalMediaProject.Status.AWAITING_REVIEW
+        self.project.configuration = {'automatic_captions': True}
+        self.project.save()
+        second = self.make_media(self.blocks[1])
+        with patch('website.external_media.services.VideoAssemblyService._has_audio', return_value=True):
+            analyze_source(self.item.pk)
+            analyze_source(second.pk)
+        self.transcribe.assert_called_once()
+        self.ai.assert_not_called()
+        self.assertEqual(SourceTakeAnalysis.objects.get(project=self.project).status, 'ready')
+
+    @override_settings(EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED=False)
+    def test_free_translation_is_cached_per_original_source(self):
+        self.project.free_preset = self.preset
+        self.project.template_version = None
+        self.project.status = ExternalMediaProject.Status.AWAITING_REVIEW
+        self.project.configuration = {'automatic_captions': True, 'caption_language': 'en'}
+        self.project.save()
+        second = self.make_media(self.blocks[1])
+        with patch('website.external_media.services.VideoAssemblyService._has_audio', return_value=True), \
+                patch('website.external_media.services.TranslationService._translate_batch', return_value=['Come on Sunday.']) as translate:
+            analyze_source(self.item.pk)
+            analyze_source(second.pk)
+        self.transcribe.assert_called_once()
+        translate.assert_called_once()
+        self.assertEqual(SourceTakeAnalysis.objects.get(project=self.project).translations['en'][0]['text'], 'Come on Sunday.')
+
     def test_different_blocks_and_content_have_independent_jobs(self):
         second = self.make_media(self.blocks[1], b'other-source')
         analyze_source(self.item.pk)
@@ -375,8 +406,10 @@ class TakeAnalysisMigrationTests(ExternalMediaFixtureMixin, TransactionTestCase)
             executor = MigrationExecutor(connection)
             executor.migrate([('website', '0128_projectblockmedia_take_analysis_and_more')])
             executor = MigrationExecutor(connection)
-            executor.migrate([('website', '0129_preserve_existing_take_markings')])
-            media.refresh_from_db()
+            target = [('website', '0129_preserve_existing_take_markings')]
+            executor.migrate(target)
+            historical_media = executor.loader.project_state(target).apps.get_model('website', 'ProjectBlockMedia')
+            media = historical_media.objects.get(pk=media.pk)
             self.assertTrue(media.trim_reviewed)
             self.assertEqual(media.take_analysis_status, 'unavailable')
             self.assertEqual(media.trim_ranges, [{'start_ms': 100, 'end_ms': 3000}])

@@ -4,6 +4,7 @@ import bisect
 import inspect
 import json
 from contextlib import contextmanager
+from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 import logging
@@ -24,6 +25,7 @@ from django.core.files.storage import storages
 from django.db import transaction
 from django.utils import timezone
 from safedelete.models import HARD_DELETE
+from PIL import ImageFont
 
 from website.ai import AIServiceError, TranscriptionSegment, get_ai_service
 from website.models.external_media import (
@@ -37,6 +39,7 @@ from website.models.external_media import (
     SubtitleCue,
     SubtitleStyle,
     SubtitleTrack,
+    project_editor_settings,
 )
 
 from .audio_mastering import AudioMasteringService, MasteringTarget
@@ -747,6 +750,7 @@ class SubtitleService:
                 width=width,
                 height=height,
                 margin_bottom=style.margin_bottom,
+                plain_text=self.wrap_text(cue.text, style.max_characters, style.max_lines),
             ))
         path.write_text(header + '\n'.join(rows) + '\n', encoding='utf-8-sig')
 
@@ -803,6 +807,7 @@ class SubtitleService:
                     width=width,
                     height=height,
                     margin_bottom=role_margin,
+                    plain_text=self._single_line_text(cue.text),
                 ))
         path.write_text(header + '\n'.join(rows) + '\n', encoding='utf-8-sig')
 
@@ -853,13 +858,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         width=0,
         height=0,
         margin_bottom=None,
+        plain_text=None,
     ):
         start = cls._ass_time(start_ms)
         end = cls._ass_time(end_ms)
         position_prefix = ''
         if width > 0 and height > 0 and margin_bottom is not None:
             position_prefix = cls._ass_position_override(style, margin_bottom, width, height)
-        full_prefix = f'{prefix}{position_prefix}'
+        scale = cls._fit_horizontal_scale(plain_text, style, width) if plain_text is not None else 100
+        fit_prefix = f'{{\\fscx{scale:.2f}}}' if scale < 100 else ''
+        full_prefix = f'{prefix}{position_prefix}{fit_prefix}'
         rows = []
         layer = cls._role_layer_base(role)
         dedicated_background = cls._needs_dedicated_background_layer(style)
@@ -887,6 +895,52 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             f'Dialogue: {layer},{start},{end},{role},,0,0,0,,{full_prefix}{background_override}{text}'
         )
         return rows
+
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def _measurement_font(font_name, font_weight, font_size):
+        """Use the same bundled fonts as libass; fall back to fontconfig's match."""
+        font_dir = Path(settings.BASE_DIR) / 'static' / 'fonts' / 'subtitles'
+        name = str(font_name or 'Arial')
+        if name.lower() == 'montserrat':
+            suffix = 'Bold' if font_weight >= 600 else 'Regular'
+            candidates = [font_dir / f'Montserrat-{suffix}.ttf']
+        else:
+            candidates = []
+        try:
+            result = subprocess.run(
+                ['fc-match', '-f', '%{file}', f'{name}:style={"Bold" if font_weight >= 600 else "Regular"}'],
+                capture_output=True, text=True, timeout=2, check=False,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                candidates.append(Path(result.stdout.strip()))
+        except (OSError, subprocess.SubprocessError):
+            pass
+        candidates.append(font_dir / ('Montserrat-Bold.ttf' if font_weight >= 600 else 'Montserrat-Regular.ttf'))
+        for path in candidates:
+            try:
+                return ImageFont.truetype(str(path), max(1, font_size))
+            except OSError:
+                continue
+        return None
+
+    @classmethod
+    def _fit_horizontal_scale(cls, text, style, width):
+        if not text or width <= 80:
+            return 100
+        font = cls._measurement_font(
+            str(getattr(style, 'font_name', 'Arial') or 'Arial'),
+            int(getattr(style, 'font_weight', 700) or 700),
+            max(1, int(getattr(style, 'font_size', 48) or 48)),
+        )
+        if font is None:
+            return 100
+        longest = max((font.getlength(line) for line in text.splitlines()), default=0)
+        padding = 2 * max(0, int(getattr(style, 'background_padding_x', 0) or 0)) if getattr(style, 'background_enabled', False) else 0
+        outline = max(0, int(getattr(style, 'outline_width', 0) or 0))
+        shadow = max(0, int(getattr(style, 'shadow', 0) or 0)) + max(0, int(getattr(style, 'shadow_size', 0) or 0)) + max(0, int(getattr(style, 'shadow_blur', 0) or 0))
+        available = max(1, width - 80 - 2 * (outline + shadow) - padding)
+        return min(100, max(.01, 100 * available / longest)) if longest else 100
 
     @staticmethod
     def _needs_shadow_layer(style):
@@ -1508,7 +1562,7 @@ class ProjectService:
 
         counts = {}
         errors = []
-        for item in project.block_media.all():
+        for item in project.block_media.filter(editor_only=False):
             if ProjectService.file_exists(item.file):
                 counts[item.block_id] = counts.get(item.block_id, 0) + 1
             else:
@@ -1516,14 +1570,14 @@ class ProjectService:
                 errors.append(
                     f'{owner.name if owner else "Vídeo principal"}: o vídeo enviado não está mais disponível. Envie-o novamente.'
                 )
-        if not project.template_version.blocks.exists():
+        if not project_editor_settings(project).blocks.exists():
             direct_count = sum(
-                1 for item in project.block_media.filter(block__isnull=True, custom_block__isnull=True)
+                1 for item in project.block_media.filter(editor_only=False, block__isnull=True, custom_block__isnull=True)
                 if ProjectService.file_exists(item.file)
             )
             if not direct_count:
                 errors.append('Envie o vídeo principal do projeto.')
-        for block in project.template_version.blocks.all():
+        for block in project_editor_settings(project).blocks.all():
             count = counts.get(block.pk, 0)
             has_default = ProjectService.file_exists(block.default_video)
             if block.default_video and not has_default and not count:
@@ -1552,7 +1606,7 @@ class ProjectService:
             if not ProjectService.file_exists(asset.file):
                 owner = asset.block or asset.custom_block
                 errors.append(f'{owner.name if owner else "B-roll"}: o asset {asset.original_filename} não está disponível.')
-        version = project.template_version
+        version = project_editor_settings(project)
         track = getattr(version, 'background_music', None)
         if track and track.audio_file and not ProjectService.file_exists(track.audio_file):
             errors.append(
@@ -2749,7 +2803,7 @@ class VideoAssemblyService:
 
 
 class ExternalMediaProjectPipeline:
-    """Orchestrates a template project and delegates subtitle work to the proven legacy engine."""
+    """Prepares model-based projects and renders approved project timelines."""
 
     def __init__(self):
         self.storage = StorageService()
@@ -2764,6 +2818,9 @@ class ExternalMediaProjectPipeline:
 
     def run(self, project_id):
         project = self._get_project(project_id)
+        if getattr(project, 'is_free', False):
+            raise ExternalMediaError('Projetos de edição livre são renderizados a partir da revisão aprovada.')
+        version = project_editor_settings(project)
         try:
             errors = self.projects.validate_uploads(project)
             if errors:
@@ -2792,7 +2849,7 @@ class ExternalMediaProjectPipeline:
                 workdir = workspace.path
                 sources, lut_path, music_path = self._materialize(project, plugins, workdir)
                 assembly_sources = sources
-                assembly_preset = project.template_version.preset
+                assembly_preset = version.preset
                 if wants_subtitles:
                     self._update(project, ExternalMediaProject.Status.ASSEMBLING, 10, 'Preparando seus vídeos')
                     assembly_sources = self._create_proxies(
@@ -2804,7 +2861,7 @@ class ExternalMediaProjectPipeline:
                             'Preparando seus vídeos',
                         ),
                     )
-                    assembly_preset = self.assembly.proxy_preset(project.template_version.preset)
+                    assembly_preset = self.assembly.proxy_preset(version.preset)
                 assembled = workdir / 'project_source.mp4'
                 self._update(project, ExternalMediaProject.Status.ASSEMBLING, 19, 'Organizando seu vídeo')
                 self._step(project, 'assembly', ProjectPipelineStep.Status.RUNNING)
@@ -2821,10 +2878,10 @@ class ExternalMediaProjectPipeline:
                 used_auto_reframe = self.assembly.assemble(
                     assembly_sources, assembled, assembly_preset, workdir,
                     lut_path=lut_path,
-                    lut_intensity=project.template_version.lut_intensity,
+                    lut_intensity=version.lut_intensity,
                     # Music is deferred until after VAD/transcription so it cannot mask silence.
                     music_path=None if speech_edit_enabled else music_path,
-                    music_volume=project.template_version.music_volume,
+                    music_volume=version.music_volume,
                     auto_reframe_config=(
                         auto_reframe_plugin.configuration or {'priority': 'face'}
                     ) if auto_reframe_plugin else None,
@@ -2867,7 +2924,7 @@ class ExternalMediaProjectPipeline:
                 for code in (MediaTemplatePlugin.Code.SUBTITLE_PT, MediaTemplatePlugin.Code.TRANSLATION_EN):
                     if code in plugin_codes:
                         self._step(project, code, ProjectPipelineStep.Status.FINISHED)
-            elif project.template_version.audio_noise_cleanup_enabled:
+            elif version.audio_noise_cleanup_enabled:
                 media_input = media_input_factory(job.original_video)
                 with JobWorkspace(
                     project.public_id,
@@ -2891,7 +2948,7 @@ class ExternalMediaProjectPipeline:
             BrollTimelineService.ensure_auto_decisions(project)
             if MediaTemplatePlugin.Code.BROLL in plugin_codes:
                 self._step(project, MediaTemplatePlugin.Code.BROLL, ProjectPipelineStep.Status.FINISHED)
-            if not project.template_version.interactive_preview_enabled and not (project.configuration or {}).get('multicam_alignments'):
+            if not version.interactive_preview_enabled and not (project.configuration or {}).get('multicam_alignments'):
                 self.render(project_id)
                 return
             from .preview import ProjectProxyService, TimelineRevisionService
@@ -2899,7 +2956,7 @@ class ExternalMediaProjectPipeline:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 64, 'Preparando a revisão')
             ProjectProxyService.prepare(project)
             TimelineRevisionService.ensure_initial(project)
-            if not project.template_version.interactive_preview_enabled:
+            if not version.interactive_preview_enabled:
                 self.render(project_id)
                 return
             job.status = ExternalMediaJob.Status.AWAITING_REVIEW
@@ -2921,12 +2978,13 @@ class ExternalMediaProjectPipeline:
 
     def render(self, project_id):
         project = self._get_project(project_id)
+        version = project_editor_settings(project)
         if not project.render_job_id:
             raise ExternalMediaError('O projeto ainda não possui conteúdo preparado.')
-        if project.template_version.interactive_preview_enabled and not project.approved_timeline_revision_id:
+        if version.interactive_preview_enabled and not project.approved_timeline_revision_id:
             raise ExternalMediaError('A edição precisa ser aprovada antes da renderização final.')
         if (
-            project.template_version.interactive_preview_enabled
+            version.interactive_preview_enabled
             and (
                 project.preview_dirty
                 or project.current_timeline_revision_id != project.approved_timeline_revision_id
@@ -2943,8 +3001,11 @@ class ExternalMediaProjectPipeline:
             from .caption_visibility import visible_caption_tracks
             revision = project.approved_timeline_revision or project.current_timeline_revision
             visible_tracks = visible_caption_tracks(ExternalMediaPipeline._ordered_output_tracks(project.render_job), revision)
-            if not project.template_version.subtitles_enabled:
+            if not version.subtitles_enabled:
                 visible_tracks = []
+            elif getattr(project, 'is_free', False):
+                active_tracks = {cue['track_id'] for cue in revision.timeline.get('captions', [])}
+                visible_tracks = [track for track in visible_tracks if track.pk in active_tracks]
             protected_ranges = self._subtitle_protected_ranges(project)
             subtitle_report = self.quality.validate_subtitles(
                 visible_tracks, protected_ranges,
@@ -2960,7 +3021,10 @@ class ExternalMediaProjectPipeline:
                 with JobWorkspace(
                     project.public_id,
                     'project-final',
-                    estimated_bytes=self._job_workspace_estimate(project.render_job),
+                    estimated_bytes=(
+                        self._project_workspace_estimate(project) if getattr(project, 'is_free', False)
+                        else self._job_workspace_estimate(project.render_job)
+                    ),
                 ) as workspace:
                     with timed_step('prepare_final_master', project=project.public_id):
                         self._prepare_final_master(project, workspace.path)
@@ -2975,7 +3039,8 @@ class ExternalMediaProjectPipeline:
                     estimated_bytes=self._job_workspace_estimate(project.render_job),
                 ) as workspace:
                     source = self.storage.ffmpeg_input(project.render_job.original_video)
-                    self.quality.validate_media(source, deep_audio=True).require_ok()
+                    silent_mix = {'allow_silence': True} if getattr(project, 'is_free', False) else {}
+                    self.quality.validate_media(source, deep_audio=True, **silent_mix).require_ok()
                     ExternalMediaPipeline._remove_stale_video_assets(project.render_job, project.render_job.original_language)
                     self.storage.save_asset_from_field(
                         project.render_job, MediaAsset.Kind.VIDEO,
@@ -3028,7 +3093,7 @@ class ExternalMediaProjectPipeline:
             return 0
         return media_input_factory(primary.file).workspace_estimate(needs_proxy=needs_proxy)
 
-    def _materialize(self, project, plugins, workdir):
+    def _materialize(self, project, plugins, workdir, *, revision=None):
         codes = {plugin.code for plugin in plugins}
         sources = []
 
@@ -3037,9 +3102,15 @@ class ExternalMediaProjectPipeline:
             self.storage.copy_to_local(field_file, path, purpose=name)
             return path
 
-        version = project.template_version
+        version = project_editor_settings(project)
         self._source_manifest = SourceManifestBuilder.build(project)
-        for item in self._source_manifest['sources']:
+        render_sources = self._source_manifest['sources']
+        if revision:
+            editorial_sources = [
+                item for item in revision.source_manifest.get('sources', []) if item.get('proxy_source_id')
+            ]
+            render_sources = [*render_sources, *editorial_sources]
+        for item in render_sources:
             if not (item.get('metadata') or {}).get('render_enabled', True):
                 continue
             field = SourceManifestBuilder.resolve_field(project, item)
@@ -3171,8 +3242,15 @@ class ExternalMediaProjectPipeline:
                 revision.timeline['camera_segments'],
                 (revision.timeline.get('sequence') or {}).get('duration_ms'),
             )
+        version = project_editor_settings(project)
         plugins = self.templates.enabled_plugins(project)
-        sources, lut_path, music_path = self._materialize(project, plugins, workdir)
+        has_editorial_sources = bool(revision and any(
+            source.get('proxy_source_id') for source in revision.source_manifest.get('sources', [])
+        ))
+        if has_editorial_sources:
+            sources, lut_path, music_path = self._materialize(project, plugins, workdir, revision=revision)
+        else:
+            sources, lut_path, music_path = self._materialize(project, plugins, workdir)
         assembled = workdir / 'project_master_original.mp4'
         source_intervals = (
             self._approved_source_intervals(project.approved_timeline_revision, sources)
@@ -3224,6 +3302,22 @@ class ExternalMediaProjectPipeline:
         preflight_report = {}
 
         def validate_source_timeline(ranges):
+            if getattr(project, 'is_free', False) or has_editorial_sources:
+                # Main-track edits use source-local intervals. The appended
+                # footage has never been part of the template analysis master.
+                if not project.is_free:
+                    original_count = sum(
+                        source.get('metadata', {}).get('render_enabled', True)
+                        for source in self._source_manifest['sources']
+                    )
+                    original_ranges = ranges[:original_count]
+                    if original_ranges:
+                        self._validate_analysis_timeline(
+                            configuration, int(original_ranges[-1]['end_ms']), original_ranges,
+                            source_intervals=source_intervals,
+                        )
+                preflight_report.update({'ok': True, 'coordinate_space': 'source_local'})
+                return
             preflight_report.update(self._validate_analysis_timeline(
                 configuration, int(ranges[-1]['end_ms']), ranges,
                 source_intervals=source_intervals,
@@ -3233,15 +3327,15 @@ class ExternalMediaProjectPipeline:
             self.assembly.assemble(
                 sources,
                 assembled,
-                project.template_version.preset,
+                version.preset,
                 workdir,
                 lut_path=lut_path,
-                lut_intensity=project.template_version.lut_intensity,
+                lut_intensity=version.lut_intensity,
                 # Music is never baked in here: mixing (with ducking, if enabled) always
                 # happens afterwards in `_finalize_audio`, once the speech-edit cuts (if
                 # any) have already reshaped the timeline.
                 music_path=None,
-                music_volume=project.template_version.music_volume,
+                music_volume=version.music_volume,
                 auto_reframe_config=(
                     auto_reframe_plugin.configuration or {'priority': 'face'}
                 ) if auto_reframe_plugin else None,
@@ -3362,7 +3456,6 @@ class ExternalMediaProjectPipeline:
             from .multicam import MulticamRenderService
             MulticamRenderService.validate_timing(revision.timeline['camera_segments'], expected_duration_ms)
         job = project.render_job
-        version = project.template_version
         if (
             music_path
             or version.audio_mastering_enabled
@@ -3443,10 +3536,12 @@ class ExternalMediaProjectPipeline:
                     final_path = OverlayRenderService(self.assembly.runner).apply(
                         processing_input, overlay_output, overlays, canvas_width, canvas_height, workdir,
                     )
+        silent_mix = {'allow_silence': True} if getattr(project, 'is_free', False) else {}
         quality_report = self.quality.validate_media(
             final_path,
             expected_duration_ms=expected_duration_ms,
             deep_audio=True,
+            **silent_mix,
         )
         quality_report.require_ok()
         render_contract = {
@@ -3836,7 +3931,7 @@ class ExternalMediaProjectPipeline:
         stereo bed, never looking at dialogue/music separately (see
         AudioMasteringService).
         """
-        version = project.template_version
+        version = project_editor_settings(project)
         revision = project.approved_timeline_revision or project.current_timeline_revision
         revision_timeline = (revision.timeline if revision else {}) or {}
         revision_mix = dict(revision_timeline.get('audio_mix') or {})
@@ -4052,8 +4147,25 @@ class ExternalMediaProjectPipeline:
             for item in ranges
         ]
 
+    @staticmethod
+    def ensure_free_render_job(project):
+        if project.render_job_id:
+            return project.render_job
+        style = SubtitleStyle.objects.filter(is_active=True).first()
+        if not style:
+            raise ValueError('Cadastre um estilo de legenda ativo para finalizar o projeto.')
+        version = project_editor_settings(project)
+        job = ExternalMediaJob.objects.create(
+            created_by=project.created_by, processing_project=project, name=project.name,
+            original_language=version.original_language, output_languages=list(version.output_languages),
+            preset=version.preset, subtitle_style=style, status=ExternalMediaJob.Status.AWAITING_REVIEW,
+        )
+        project.render_job = job
+        project.save(update_fields=['render_job', 'update_at'])
+        return job
+
     def _create_render_job(self, project, assembled):
-        version = project.template_version
+        version = project_editor_settings(project)
         output_languages = list(version.output_languages)
         plugin_codes = {plugin.code for plugin in self.templates.enabled_plugins(project)}
         if MediaTemplatePlugin.Code.TRANSLATION_EN not in plugin_codes:
@@ -4371,10 +4483,12 @@ class ExternalMediaPipeline:
     @staticmethod
     def _should_render_dual_subtitle_video(job, tracks):
         project = getattr(job, 'project', None)
-        version = getattr(project, 'template_version', None)
+        version = project_editor_settings(project) if project else None
         default_settings = getattr(version, 'default_settings', None) or {}
         return (
-            default_settings.get('language_mode') == 'translated'
+            (default_settings.get('language_mode') == 'translated'
+             or bool(project and getattr(project, 'is_free', False)
+                     and (project.configuration or {}).get('bilingual_captions')))
             and len(tracks) >= 2
             and any(track.language != job.original_language for track in tracks)
         )
@@ -4410,7 +4524,7 @@ class ExternalMediaPipeline:
     @staticmethod
     def _transcription_language(job):
         project = getattr(job, 'project', None)
-        version = getattr(project, 'template_version', None)
+        version = project_editor_settings(project) if project else None
         default_settings = getattr(version, 'default_settings', None) or {}
         if default_settings.get('language_mode') == 'bilingual_source':
             return None
@@ -4502,9 +4616,9 @@ class ExternalMediaPipeline:
 
     def _apply_noise_analysis(self, job, video_path, source_track=None, speech_blocks=None, workdir=None):
         project = getattr(job, 'project', None)
-        if not project or not project.template_version.audio_noise_cleanup_enabled:
+        if not project or not project_editor_settings(project).audio_noise_cleanup_enabled:
             return
-        version = project.template_version
+        version = project_editor_settings(project)
         settings_ = NoiseCleanupSettings.from_config(version.audio_noise_cleanup_config)
         if speech_blocks is None:
             speech_blocks = group_speech_blocks(
@@ -4569,14 +4683,14 @@ class ExternalMediaPipeline:
             self.speech_editor.apply(video_path, edited_path, plan)
             final_path = edited_path
         enabled_codes = {plugin.code for plugin in enabled_plugins}
-        music_field = MusicService.selected_file(project.template_version, enabled_codes)
+        music_field = MusicService.selected_file(project_editor_settings(project), enabled_codes)
         if music_field and not proxy_pipeline:
             music_path = workdir / f'speech_music{Path(music_field.name).suffix.lower()}'
             self.storage.copy_to_local(music_field, music_path, purpose='speech_music')
             mixed_path = workdir / 'speech_edited_with_music.mp4'
             final_path = AudioMixingService(self.audio.runner).mix(
                 final_path, music_path, mixed_path,
-                music_volume=project.template_version.music_volume,
+                music_volume=project_editor_settings(project).music_volume,
                 duration_ms=self.speech_editor.duration_ms(final_path),
                 ducking_enabled=False,
             ).path

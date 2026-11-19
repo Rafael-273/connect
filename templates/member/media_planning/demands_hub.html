@@ -6,7 +6,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{% static 'org_media.css' %}">
-<link rel="stylesheet" href="{% static 'delivery_review.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'delivery_review.css' %}?v=5">
 {% include 'member/media_planning/partials/delivery_format_styles.html' %}
 <style id="demands-hub-styles">
     :root { --media-color: #C90905; --media-rgb: 201, 9, 5; }
@@ -773,6 +773,10 @@
     .event-description-card { overflow: hidden; }
     .event-description-card .event-inline-display { padding: 1rem 1.1rem; }
     .demand-aside { display: grid; gap: .75rem; align-content: start; }
+    .demand-fact-summary, .demand-fact-summary__fields, .event-fact-summary, .event-fact-summary__fields { display: contents; }
+    .event-fact-summary__overview { display: none; }
+    .demand-facts-toggle { display: none; }
+    @media (min-width: 641px) { .demand-fact-summary__fields[hidden], .event-fact-summary__fields[hidden] { display: contents !important; } }
     .demand-fact-card { padding: .9rem 1rem; border: 1px solid #eceef1; border-radius: .75rem; background: #fafafa; }
     .demand-fact-card dt { font-size: .65rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #9ca3af; }
     .demand-fact-card dd { margin-top: .25rem; font-size: .8125rem; font-weight: 600; color: #374151; }
@@ -817,6 +821,8 @@
     .demand-fact-card .media-field-input:hover,
     .demand-fact-card .media-field-select:focus,
     .demand-fact-card .media-field-input:focus { border-color: rgba(201, 9, 5, .36) !important; background: #fffafa !important; box-shadow: 0 0 0 3px rgba(201, 9, 5, .07) !important; outline: none; }
+    .demands-filter-panel { max-height: min(65dvh, 32rem); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    .demands-filter-actions { position: sticky; bottom: -1rem; z-index: 1; margin-bottom: -1rem; padding-bottom: 1rem; background: #fff; }
     .demands-header-nav { position: absolute; top: 1.7rem; right: 2rem; z-index: 20; display: flex; align-items: center; gap: 0; }
     .demands-view-menu { max-width: 0; opacity: 0; overflow: hidden; filter: blur(2px); transform: translateX(1rem) scale(.94); transform-origin: right center; transition: max-width .38s cubic-bezier(.16, 1, .3, 1), opacity .2s ease, transform .38s cubic-bezier(.16, 1, .3, 1), filter .2s ease, margin .38s cubic-bezier(.16, 1, .3, 1); }
     .demands-header-nav.is-open .demands-view-menu { max-width: 34rem; margin-right: .5rem; opacity: 1; filter: blur(0); transform: translateX(0) scale(1); }
@@ -838,6 +844,34 @@
         .demands-active-view span { display: none; }
         .demands-active-view { width: 2.75rem; justify-content: center; padding: 0; }
     }
+
+    /* Mobile keeps both actions beside the title and opens navigation below. */
+    @media (max-width: 767px) {
+        .demands-hub-header > section { padding-right: 7rem; }
+        .demands-hub-header > section .gap-4 { gap: .65rem; }
+        .demands-hub-header > section h1 { font-size: clamp(.9rem, 4.4vw, 1.15rem); line-height: 1.2; white-space: nowrap; }
+        .demands-hub-header > section p { font-size: .7rem; line-height: 1.25; }
+        .demands-header-nav { position: absolute; top: 1.25rem; right: 1rem; z-index: 45; padding: 0; border: 0; gap: .5rem; }
+        .demands-header-nav > .relative { margin-left: 0; }
+        .demands-active-view, .demands-header-nav.is-open .demands-active-view { display: none; }
+        .demands-view-toggle, .demands-header-nav.is-open .demands-view-toggle { width: 2.75rem; height: 2.75rem; border-radius: .8rem; transform: none; }
+        #demands-create-toggle { width: 2.75rem; height: 2.75rem; padding: 0; }
+        .demands-view-menu, .demands-header-nav.is-open .demands-view-menu {
+            position: absolute; top: calc(100% + .5rem); right: 3.25rem;
+            width: min(14rem, calc(100vw - 2rem)); max-width: none; margin: 0;
+            overflow: visible; filter: none; transform: translateY(-.3rem); transform-origin: top right;
+            opacity: 0; visibility: hidden; pointer-events: none;
+            transition: opacity .16s ease, transform .16s ease, visibility .16s;
+        }
+        .demands-header-nav.is-open .demands-view-menu { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+        .demands-header-nav .demands-view-menu .demands-kind-chips { display: grid; width: 100%; max-width: none; gap: .15rem; padding: .4rem; border-radius: .875rem; box-shadow: 0 14px 36px rgba(15,23,42,.16); }
+        .demands-header-nav .demands-view-menu .demands-kind-chips .media-chip { justify-content: flex-start; width: 100%; min-height: 2.75rem; padding: .65rem .75rem; font-size: .8125rem; }
+        .demands-header-nav .demands-view-menu .demands-kind-chips .media-chip span { display: inline; }
+        .demands-header-nav .demands-view-menu .demands-kind-chips .media-chip i { width: 1.25rem; text-align: center; }
+        .media-create-menu { box-shadow: 0 14px 36px rgba(15,23,42,.16); }
+    }
+    @media (max-width: 360px) { .demands-hub-header > section h1 { white-space: normal; font-size: .95rem; } }
+    @media (prefers-reduced-motion: reduce) { .demands-view-menu { transition: none; } }
 
     .media-create-menu {
         position: absolute; right: 0; top: calc(100% + 0.5rem); z-index: 50;
@@ -921,6 +955,19 @@
     .demands-modal-footer {
         display: flex; gap: 0.5rem; padding-top: 1rem;
         position: sticky; bottom: 0; z-index: 10; background: #fff;
+    }
+    @media (max-width: 639px) {
+        #demands-modal-demand .demands-modal-card::before,
+        #demands-modal-event .demands-modal-card::before { width: 2.25rem; height: .25rem; margin: .7rem auto 0; background: #e1e3e8; }
+        .demands-create-header { align-items: flex-start; gap: .6rem; padding: 1rem 1rem 1.15rem; background: #fff; border-bottom: 1px solid #f0f1f4; }
+        .demands-create-header > div { align-items: flex-start; gap: .75rem; }
+        .demands-create-header .demands-modal-icon { width: 2.75rem; height: 2.75rem; border-radius: .85rem; background: #fff0f0; color: #c90905; font-size: 1.05rem; }
+        .demands-create-heading { display: grid; gap: .25rem; padding-top: .05rem; }
+        .demands-create-heading > p:first-child { color: #c90905; font-size: .625rem; line-height: 1.2; letter-spacing: .07em; }
+        .demands-create-heading h2 { margin: 0; color: #111827; font-size: 1.1rem; line-height: 1.3; letter-spacing: -.02em; }
+        .demands-create-heading h2 + p { margin: 0; color: #667085; font-size: .75rem; line-height: 1.4; overflow-wrap: anywhere; }
+        .demands-create-header .demands-modal-close { width: 2.75rem; height: 2.75rem; border-radius: .75rem; background: #f5f5f6; color: #667085; }
+        .demands-create-header .demands-modal-close:hover { background: #ececef; color: #344054; }
     }
     @media (min-width: 640px) {
         .demands-modal { align-items: center; padding: 1rem; }
@@ -1071,6 +1118,77 @@
         .demands-detail-modal-content .demand-title-input.event-title-input,
         .demands-detail-modal-content .event-detail-title { font-size: 1.375rem; }
     }
+
+    @media (max-width: 640px) {
+        .org-media input.demand-title-input,
+        .demands-detail-modal-content input.demand-title-input {
+            box-sizing: border-box; height: auto; min-height: 2.75rem;
+            padding: .3rem .4rem !important; line-height: 1.4 !important;
+        }
+        .demands-detail-modal-content input.demand-title-input { padding-left: 0 !important; padding-right: 0 !important; }
+    }
+
+    @media (max-width: 640px) {
+        .demand-detail-grid > .demand-aside, .event-detail-grid > .demand-aside { display: contents; }
+        .demand-detail-grid > .demand-aside > .demand-fact-summary, .event-detail-grid > .demand-aside > .event-fact-summary { display: grid; grid-row: 1; grid-template-columns: minmax(0,1fr) auto; gap: .6rem; align-items: stretch; }
+        .event-fact-summary__overview { display: flex; align-items: center; gap: .5rem; min-width: 0; padding: .75rem; border: 1px solid #e5e7eb; border-radius: .75rem; background: #fff; color: #344054; font-size: .75rem; font-weight: 600; }
+        .event-fact-summary__overview i { color: #c90905; }
+        .demand-facts-toggle { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 2.75rem; padding: .65rem .85rem; border: 1px solid #e5e7eb; border-radius: .75rem; background: #fff; color: #475467; font-size: .75rem; font-weight: 700; }
+        .demand-facts-toggle i { color: #c90905; font-size: .65rem; transition: transform .2s ease; }
+        .demand-facts-toggle[aria-expanded="true"] i { transform: rotate(180deg); }
+        .demand-fact-summary__fields:not([hidden]), .event-fact-summary__fields:not([hidden]) { display: grid; grid-column: 1 / -1; gap: .6rem; }
+        .demand-fact-summary__fields[hidden], .event-fact-summary__fields[hidden] { display: none !important; }
+        .demand-detail-grid > .space-y-4, .event-detail-grid > .event-detail-main { grid-row: 2; }
+        .demands-detail-modal-content .event-detail-grid { overflow-y: auto; grid-template-rows: auto auto; align-items: start; }
+        .demands-detail-modal-content .event-detail-main { display: block; }
+        .demands-detail-modal-content .event-phases-scroll { overflow: visible; padding-right: 0; }
+    }
+    @media (max-width: 380px) { .event-dates-card .event-date-inputs { grid-template-columns: minmax(0, 1fr); } }
+
+    /* Native iOS controls need room for their text and focus without zooming. */
+    @media (max-width: 640px) {
+        .demand-fact-card .media-field-select,
+        .demand-fact-card .media-field-input {
+            box-sizing: border-box; height: 3rem !important; min-height: 3rem !important; max-height: 3rem !important;
+            padding: 0 .875rem !important; font: 500 1rem / 1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
+        }
+        .demand-fact-card .media-field-select {
+            -webkit-appearance: none; appearance: none; padding-right: 2.5rem !important;
+        }
+    }
+
+    /* Give stage metadata and actions their own space on narrow screens. */
+    @media (max-width: 640px) {
+        .demand-task-steps { gap: .75rem; }
+        .demand-task-step, .demands-detail-modal-content .demand-task-step {
+            display: grid; grid-template-columns: 1.75rem minmax(0,1fr);
+            align-items: start; column-gap: .65rem; row-gap: 0;
+            padding: .85rem; border-color: #e6e8ed; border-radius: .9rem;
+            box-shadow: 0 2px 8px rgba(15,23,42,.035);
+        }
+        .demand-task-step.is-done { opacity: 1; }
+        .demand-task-order { grid-column: 1; grid-row: 1; width: 1.75rem; padding-top: .15rem; font-size: .7rem; }
+        .demand-task-check { grid-column: 1; grid-row: 1; width: 1.6rem; height: 1.6rem; margin: 1.8rem auto 0; position: relative; }
+        .demand-task-check::after { content: ''; position: absolute; inset: -.55rem; }
+        .demand-task-body { grid-column: 2; grid-row: 1; width: 100%; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .3rem .5rem; }
+        .demand-task-header { display: contents; }
+        .demand-task-header > div, .demand-task-step.is-editing-description .demand-task-header > div {
+            position: static; grid-column: 2; grid-row: 4; align-self: center; transform: none; gap: .35rem;
+        }
+        .demand-task-role { grid-column: 1 / -1; grid-row: 1; min-width: 0; font-size: .875rem; line-height: 1.35; overflow-wrap: anywhere; }
+        .demand-task-edit, .demand-task-delete { width: 2.25rem; height: 2.25rem; font-size: .75rem; }
+        .demand-task-meta { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .7rem; margin-top: .1rem; line-height: 1.35; }
+        .demand-task-assignee { max-width: 100%; }
+        .demand-task-assignee-name { min-width: 0; overflow-wrap: anywhere; }
+        .demand-task-date { flex: none; }
+        .demand-task-desc, .demand-task-desc--compact { grid-column: 1 / -1; grid-row: 3; margin-top: .3rem; padding-top: .55rem; border-top: 1px solid #f0f1f4; }
+        .demand-task-desc-link { min-height: 2rem; max-width: 100%; text-align: left; font-size: .75rem; line-height: 1.35; }
+        .demand-task-desc-link span { overflow-wrap: anywhere; }
+        .demand-task-desc-text { font-size: .8rem; }
+        .demand-task-delivery-action { grid-column: 1; grid-row: 4; min-width: 0; align-self: center; gap: .35rem; margin-top: 0; }
+        .demand-review-link { box-sizing: border-box; flex: 1 1 100%; min-width: 0; min-height: 2.25rem; justify-content: center; padding: .35rem .4rem; border-radius: .55rem; background: #fff4f3; font-size: .7rem; line-height: 1.25; text-align: center; }
+        .demand-task-desc-form-actions button { min-height: 2.5rem; }
+    }
 </style>
 {% endblock %}
 
@@ -1161,10 +1279,10 @@
     </div>
     {% else %}
     {% url 'member_dashboard' as dashboard_url %}
-    <div class="relative">
+    <div class="relative demands-hub-header">
         {% include 'parciais/org_media_header.html' with back_url=dashboard_url title='Demandas e' accent='eventos' subtitle='Organização da produção da mídia' %}
         <nav class="demands-header-nav" id="demands-header-nav" aria-label="Navegação de demandas e eventos">
-            <div class="demands-view-menu" id="demands-view-menu">
+            <div class="demands-view-menu" id="demands-view-menu" inert>
                 {% include 'parciais/demands_kind_chips.html' with active=filter_kind|default:'all' filter_status=filter_status filter_q=filter_q filter_responsible=filter_responsible filter_team=filter_team filter_event_type=filter_event_type filter_period_from=filter_period_from filter_period_to=filter_period_to selected=selected hide_content_kinds=True %}
             </div>
             <span class="demands-active-view" aria-label="Visualização atual">
@@ -1176,13 +1294,14 @@
                 <i class="fas fa-list" aria-hidden="true"></i><span>Todos</span>
                 {% endif %}
             </span>
-            <button type="button" class="demands-view-toggle" id="demands-view-toggle" aria-label="Abrir opções de visualização" aria-expanded="false" aria-controls="demands-view-menu">
+            <button type="button" class="demands-view-toggle" id="demands-view-toggle" aria-label="Abrir opções de navegação" aria-haspopup="true" aria-expanded="false" aria-controls="demands-view-menu">
                 <i class="fas fa-sliders-h" aria-hidden="true"></i>
             </button>
             <div class="relative flex-shrink-0">
                 <button type="button"
                         id="demands-create-toggle"
                         class="media-btn-primary sm"
+                        aria-label="Criar novo" aria-haspopup="true"
                         aria-expanded="false"
                         aria-controls="demands-create-menu">
                     <i class="fas fa-plus"></i>
@@ -1242,6 +1361,14 @@
 
 <script>
 (function () {
+    document.addEventListener('click', function (event) {
+        var toggle = event.target.closest('[data-demand-facts-toggle], [data-event-facts-toggle]');
+        if (!toggle) return;
+        var fields = toggle.closest('.demand-fact-summary, .event-fact-summary').querySelector('.demand-fact-summary__fields, .event-fact-summary__fields');
+        var open = fields.hidden;
+        fields.hidden = !open;
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
     var backBtn = document.getElementById('demands-mobile-back');
     var filterToggle = document.getElementById('demands-filter-toggle');
     var filterPanel = document.getElementById('demands-filter-panel');
@@ -1254,11 +1381,20 @@
     var isDetailPage = {% if detail_page %}true{% else %}false{% endif %};
     var detailModal = document.getElementById('demands-detail-modal');
     var detailModalContent = document.getElementById('demands-detail-modal-content');
+    var detailModalStack = [];
+    var detailModalRequest = 0;
 
     function isMobile() { return window.innerWidth < 1024; }
 
     function closeDetailModal() {
         if (!detailModal) return;
+        detailModalRequest++;
+        if (detailModalStack.length) {
+            var previous = detailModalStack.pop();
+            detailModalContent.replaceChildren(previous.content);
+            if (previous.trigger && previous.trigger.isConnected) previous.trigger.focus({preventScroll: true});
+            return;
+        }
         detailModal.classList.remove('is-open');
         detailModal.setAttribute('aria-hidden', 'true');
         detailModalContent.replaceChildren();
@@ -1320,16 +1456,22 @@
         return true;
     }
 
-    function openDetailModal(url) {
+    function openDetailModal(url, trigger) {
         if (!detailModal || !window.fetch) { window.location.href = url; return; }
+        if (trigger && detailModal.classList.contains('is-open') && detailModalContent.contains(trigger)) {
+            var content = document.createDocumentFragment();
+            while (detailModalContent.firstChild) content.appendChild(detailModalContent.firstChild);
+            detailModalStack.push({content: content, trigger: trigger});
+        }
+        var request = ++detailModalRequest;
         detailModalContent.innerHTML = '<div class="p-10 text-center text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Carregando detalhes…</div>';
         detailModal.classList.add('is-open');
         detailModal.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';
         fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
             .then(function (response) { if (!response.ok) throw new Error('Não foi possível abrir os detalhes.'); return response.text(); })
-            .then(function (html) { if (!mountDetailModal(html)) throw new Error('Detalhe indisponível.'); })
-            .catch(function () { window.location.href = url; });
+            .then(function (html) { if (request === detailModalRequest && !mountDetailModal(html)) throw new Error('Detalhe indisponível.'); })
+            .catch(function () { if (request === detailModalRequest) window.location.href = url; });
     }
 
     if (detailModal) {
@@ -1444,7 +1586,7 @@
         if (!trigger || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        openDetailModal(trigger.getAttribute('data-open-demand-detail'));
+        openDetailModal(trigger.getAttribute('data-open-demand-detail'), trigger);
     });
 
     document.addEventListener('keydown', function (event) {
@@ -1462,16 +1604,29 @@
         if (targetLabel) targetLabel.textContent = sourceLabel.textContent;
     }
 
+    document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape') return;
+        if (headerNav && headerNav.classList.contains('is-open')) {
+            headerNav.classList.remove('is-open'); document.getElementById('demands-view-menu').inert = true;
+            viewsToggle.setAttribute('aria-expanded', 'false'); viewsToggle.focus();
+        } else if (createMenu && !createMenu.hidden) {
+            createMenu.hidden = true; createToggle.setAttribute('aria-expanded', 'false'); createToggle.focus();
+        }
+    });
+
     if (viewsToggle && headerNav) {
         viewsToggle.addEventListener('click', function (e) {
             e.stopPropagation();
             var open = !headerNav.classList.contains('is-open');
             headerNav.classList.toggle('is-open', open);
+            document.getElementById('demands-view-menu').inert = !open;
             viewsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open && createMenu && createToggle) { createMenu.hidden = true; createToggle.setAttribute('aria-expanded', 'false'); }
         });
         document.addEventListener('click', function (e) {
             if (!headerNav.contains(e.target)) {
                 headerNav.classList.remove('is-open');
+                document.getElementById('demands-view-menu').inert = true;
                 viewsToggle.setAttribute('aria-expanded', 'false');
             }
         });
@@ -1485,6 +1640,7 @@
             event.preventDefault();
             if (headerNav && viewsToggle) {
                 headerNav.classList.remove('is-open');
+                document.getElementById('demands-view-menu').inert = true;
                 viewsToggle.setAttribute('aria-expanded', 'false');
             }
 
@@ -1679,6 +1835,7 @@
         createToggle.addEventListener('click', function (e) {
             e.stopPropagation();
             var open = createMenu.hasAttribute('hidden');
+            if (open && headerNav && viewsToggle) { headerNav.classList.remove('is-open'); document.getElementById('demands-view-menu').inert = true; viewsToggle.setAttribute('aria-expanded', 'false'); }
             if (open) createMenu.removeAttribute('hidden');
             else createMenu.setAttribute('hidden', '');
             createToggle.setAttribute('aria-expanded', open ? 'true' : 'false');

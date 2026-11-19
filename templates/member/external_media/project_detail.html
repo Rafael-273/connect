@@ -13,7 +13,7 @@
 
 {% block media_header_title %}
 <a href="{% url 'external_media_dashboard' %}" class="project-detail-header-title">
-    <span class="project-detail-header-title__meta"><i class="fas fa-layer-group"></i>{{ project.template_version.template.name }}</span>
+    <span class="project-detail-header-title__meta"><i class="fas fa-layer-group"></i>{% if project.is_free %}Edição livre{% else %}{{ project.template_version.template.name }}{% endif %}</span>
     <strong>{{ project.name }}</strong>
 </a>
 {% endblock %}
@@ -325,11 +325,11 @@
             <button type="button" class="project-media-action" data-close-reprocess-options aria-label="Fechar"><i class="fas fa-xmark"></i></button>
         </div>
         <div class="project-reprocess-options">
-            <form method="post" action="{% url 'external_media_project_resume_editing' project.public_id %}">{% csrf_token %}<button class="project-reprocess-option" type="submit"><span class="project-reprocess-option__icon"><i class="fas fa-layer-group"></i></span><span><strong>Voltar aos blocos</strong><small>Altere vídeos, B-rolls, câmeras extras e a organização das cenas antes de processar novamente.</small></span></button></form>
-            {% if project.template_version.interactive_preview_enabled and project.current_timeline_revision_id %}
+            {% if not project.is_free %}<form method="post" action="{% url 'external_media_project_resume_editing' project.public_id %}">{% csrf_token %}<button class="project-reprocess-option" type="submit"><span class="project-reprocess-option__icon"><i class="fas fa-layer-group"></i></span><span><strong>Voltar aos blocos</strong><small>Altere vídeos, B-rolls, câmeras extras e a organização das cenas antes de processar novamente.</small></span></button></form>{% endif %}
+            {% if project.editor_settings.interactive_preview_enabled and project.current_timeline_revision_id %}
             <form method="post" action="{% url 'external_media_project_reopen_review' project.public_id %}">{% csrf_token %}<button class="project-reprocess-option" type="submit"><span class="project-reprocess-option__icon"><i class="fas fa-sliders"></i></span><span><strong>Voltar à etapa de edição</strong><small>Abra a timeline atual para ajustar cortes, enquadramentos, B-rolls e legendas antes de uma nova renderização.</small></span></button></form>
             {% endif %}
-            <form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="project-reprocess-option" type="submit"><span class="project-reprocess-option__icon"><i class="fas fa-rotate"></i></span><span><strong>Reprocessar tudo</strong><small>Execute novamente a análise, legendas e renderização usando os vídeos já enviados.</small></span></button></form>
+            {% if not project.is_free %}<form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<input type="hidden" name="reset_manual_sequence" value="1"><button class="project-reprocess-option" type="submit"><span class="project-reprocess-option__icon"><i class="fas fa-rotate"></i></span><span><strong>Reprocessar tudo</strong><small>{% if project.has_manual_sequence %}Gere uma nova montagem a partir dos blocos e substitua a sequência manual.{% else %}Execute novamente a análise, legendas e renderização usando os vídeos já enviados.{% endif %}</small></span></button></form>{% endif %}
         </div>
         <div class="flex justify-end mt-5"><button type="button" class="media-btn media-muted" data-close-reprocess-options>Cancelar</button></div>
     </div>
@@ -591,7 +591,7 @@
     <ul class="mt-2 list-disc pl-5 space-y-1">{% for error in validation_errors %}<li>{{ error }}</li>{% endfor %}</ul>
 </div>
 {% endif %}
-<form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary w-full" {% if validation_errors %}disabled aria-describedby="project-validation-errors" style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
+<form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}{% if project.has_manual_sequence %}<label class="flex items-center gap-2 mb-3 text-sm"><input type="checkbox" name="reset_manual_sequence" value="1" required> Substituir a sequência manual pela montagem dos blocos</label>{% endif %}<button class="media-btn media-primary w-full" {% if validation_errors %}disabled aria-describedby="project-validation-errors" style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
 <script src="{% static 'external_media_s3_upload.js' %}"></script>
 <script src="{% static 'external_media_take_suggestions.js' %}"></script>
 <script>
@@ -1128,7 +1128,7 @@
     <h2 class="text-xl font-black">Tentar novamente</h2>
     <p class="text-gray-500 mb-5">Você pode repetir o projeto inteiro ou, quando as legendas já estiverem prontas, repetir só a renderização final.</p>
     <div class="flex flex-wrap justify-center gap-3">
-        <form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-secondary">Reprocessar projeto</button></form>
+        {% if not project.is_free and not project.has_manual_sequence %}<form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-secondary">Reprocessar projeto</button></form>{% endif %}
         {% if can_retry_render %}
         <form method="post" action="{% url 'external_media_project_render' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary">Tentar só a renderização</button></form>
         {% endif %}

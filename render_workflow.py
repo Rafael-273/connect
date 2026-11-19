@@ -21,7 +21,10 @@ from website.external_media.tasks import (
     analyze_source_take,
     create_project_preview,
     create_project_broll_preview,
+    create_preview_artifact,
     create_subtitle_review_preview,
+    create_timeline_thumbnail,
+    create_timeline_review_proxy,
     export_premiere_project,
     master_video,
     prepare_external_media,
@@ -35,7 +38,7 @@ app = Workflows()
 
 
 @app.task(plan='4c-8g', timeout_seconds=21600, retry=Retry(max_retries=0, wait_duration_ms=1000))
-async def process_video_work(operation: str, primary_id: int, secondary_id: int | None = None):
+async def process_video_work(operation: str, primary_id: int, secondary_id: int | str | None = None):
     """Run the synchronous Django pipeline outside Render's async event loop."""
     return await sync_to_async(_process_video_work, thread_sensitive=True)(
         operation, primary_id, secondary_id,
@@ -50,7 +53,7 @@ async def process_take_analysis(operation: str, primary_id: int, secondary_id: i
     return await sync_to_async(_process_video_work, thread_sensitive=True)(operation, primary_id, secondary_id)
 
 
-def _process_video_work(operation: str, primary_id: int, secondary_id: int | None = None):
+def _process_video_work(operation: str, primary_id: int, secondary_id: int | str | None = None):
     """Execute every external-media task without requiring a Celery worker."""
     primary_id = int(primary_id)
     if not settings.USE_S3:
@@ -82,6 +85,9 @@ def _process_video_work(operation: str, primary_id: int, secondary_id: int | Non
     tasks = {
         'take-analysis': (analyze_source_take, [primary_id]),
         'project-preview': (create_project_preview, [primary_id]),
+        'preview-artifact': (create_preview_artifact, [primary_id, secondary_id]),
+        'timeline-thumbnail': (create_timeline_thumbnail, [primary_id, secondary_id]),
+        'timeline-review-proxy': (create_timeline_review_proxy, [primary_id, secondary_id]),
         'broll-preview': (create_project_broll_preview, [primary_id]),
         'review-preview': (create_subtitle_review_preview, [primary_id]),
         'review-render': (render_reviewed_subtitles, [primary_id, secondary_id]),

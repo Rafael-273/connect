@@ -5,7 +5,7 @@
  * a fast scrub from showing a stale frame or resuming the wrong take.
  */
 window.ConnectPreviewSource = class ConnectPreviewSource {
-    constructor(video, {holdFrame = () => {}, releaseFrame = () => {}, onLoading = () => {}, onVideoChange = () => {}, onTransition = () => {}, onError = () => {}, frameTolerance = 1 / 30, play = () => {}, progressTimeoutMs = 5000, maxLoadMs = 30000, setTimer = (callback, delay) => setTimeout(callback, delay), clearTimer = timer => clearTimeout(timer), now = () => Date.now()} = {}) {
+    constructor(video, {holdFrame = () => {}, releaseFrame = () => {}, onLoading = () => {}, onVideoChange = () => {}, onTransition = () => {}, onError = () => {}, frameTolerance = 1 / 30, play = () => {}, progressTimeoutMs = 5000, maxLoadMs = 30000, maxTimeoutRetries = 0, fallbackPreloadOnTimeout = false, setTimer = (callback, delay) => setTimeout(callback, delay), clearTimer = timer => clearTimeout(timer), now = () => Date.now()} = {}) {
         this.video = video;
         this.holdFrame = holdFrame;
         this.releaseFrame = releaseFrame;
@@ -17,6 +17,9 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         this.onError = onError;
         this.progressTimeoutMs = progressTimeoutMs;
         this.maxLoadMs = maxLoadMs;
+        this.maxTimeoutRetries = maxTimeoutRetries;
+        this.fallbackPreloadOnTimeout = fallbackPreloadOnTimeout;
+        this.timeoutRetries = 0;
         this.setTimer = setTimer;
         this.clearTimer = clearTimer;
         this.now = now;
@@ -52,7 +55,8 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         this.failedSources = new Map();
     }
 
-    seek(source, timeSeconds, {autoplay = false, freeze = true} = {}) {
+    seek(source, timeSeconds, {autoplay = false, freeze = true, recovery = false} = {}) {
+        if (!recovery) this.timeoutRetries = 0;
         const time = Math.max(0, Number(timeSeconds) || 0);
         this.stopLoadWatch();
         if (this.finishSwap) this.finishSwap();
@@ -99,7 +103,12 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             for (const event of ['seeked', 'loadeddata', 'canplay', 'progress', 'error']) {
                 this.preloader.addEventListener(event, resume, waitOptions);
             }
-            this.watchLoad(this.preloader, () => this.failLoad(source, 'timeout'));
+            this.watchLoad(this.preloader, () => {
+                if (!this.fallbackPreloadOnTimeout) return this.failLoad(source, 'timeout');
+                this.onTransition({phase:'recovering', source, time, reason:'preload-timeout'});
+                this.warmController?.abort();this.preloader.pause();this.preloader.dataset.source='';this.preloadedSource='';
+                this.seek(source, time, {autoplay:this.target?.autoplay, freeze, recovery:true});
+            });
             // Readiness may have changed while the listeners were installed.
             resume();
             return;
@@ -161,7 +170,7 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
                 if(this.pendingFrameCheck)this.video.addEventListener('seeked',this.pendingFrameCheck,{once:true,signal:this.loadController.signal});
             }
             if (autoplay && this.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) this.play();
-            if (this.pendingFrameCheck) this.watchLoad(this.video, () => this.failLoad(source, 'timeout'));
+            if (this.pendingFrameCheck) this.watchLoad(this.video, () => this.handleLoadTimeout(source, freeze));
             this.flushWarm();
             return;
         }
@@ -223,15 +232,27 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         this.pendingFrameCheck=waitForTargetFrame;
         this.video.addEventListener('loadedmetadata', () => {
             if (loadId !== this.loadId) return;
-            decoder.currentTime = this.target.time;
+            if (Math.abs(decoder.currentTime-this.target.time) > .001) decoder.currentTime = this.target.time;
             this.video.addEventListener('seeked', waitForTargetFrame, options);
-            // At timestamp zero, some engines do not dispatch `seeked`.
-            if (this.target.time < 0.01) {
-                this.video.addEventListener('loadeddata', waitForTargetFrame, options);
-            }
+            // Safari may omit seeked when the requested frame is already current.
+            this.video.addEventListener('loadeddata', waitForTargetFrame, options);
+            if (!decoder.seeking && Math.abs(decoder.currentTime-this.target.time) <= .001) waitForTargetFrame();
         }, options);
         this.video.addEventListener('error', fail, options);
-        this.watchLoad(decoder, () => this.failLoad(source, 'timeout'));
+        this.watchLoad(decoder, () => this.handleLoadTimeout(source, freeze));
+    }
+
+    handleLoadTimeout(source, freeze) {
+        if (this.timeoutRetries < this.maxTimeoutRetries && this.target?.source === source) {
+            this.timeoutRetries++;
+            const {time, autoplay} = this.target;
+            this.onTransition({phase:'recovering', source, time, reason:'load-timeout'});
+            // A timed-out decoder may retain stale metadata. Force a fresh load.
+            this.video.dataset.source = '';
+            this.seek(source, time, {autoplay, freeze, recovery:true});
+            return;
+        }
+        this.failLoad(source, 'timeout');
     }
 
     stopLoadWatch() {
@@ -248,7 +269,9 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             if (this.loadWatch !== watch) return;
             const at = this.now();
             // Events such as progress/canplay can repeat without useful data.
-            const signature = [decoder.readyState, decoder.seeking, this.bufferedAhead(decoder, this.target?.time || 0).toFixed(3)].join(':');
+            const ranges=decoder.buffered;let buffered=0;
+            for(let i=0;i<(ranges?.length||0);i++)buffered+=Math.max(0,ranges.end(i)-ranges.start(i));
+            const signature = [decoder.readyState, decoder.seeking, this.bufferedAhead(decoder, this.target?.time || 0).toFixed(3), buffered.toFixed(3)].join(':');
             if (signature !== watch.signature) { watch.signature = signature; watch.progressed = at; }
             if (at-watch.progressed >= this.progressTimeoutMs || at-watch.started >= this.maxLoadMs) {
                 this.stopLoadWatch();

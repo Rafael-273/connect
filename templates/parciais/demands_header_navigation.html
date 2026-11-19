@@ -23,7 +23,7 @@
     }
 </style>
 <nav class="demands-page-nav" aria-label="Navegação de demandas e eventos">
-    <div class="demands-page-nav-menu">
+    <div class="demands-page-nav-menu" id="demands-page-nav-menu" inert>
         {% include 'parciais/demands_kind_chips.html' with active=active hide_content_kinds=True %}
     </div>
     <span class="demands-page-active" aria-label="Visualização atual">
@@ -39,11 +39,11 @@
         <i class="fas fa-list" aria-hidden="true"></i><span>Todos</span>
         {% endif %}
     </span>
-    <button type="button" class="demands-page-nav-toggle" aria-label="Abrir opções de visualização" aria-expanded="false">
+    <button type="button" class="demands-page-nav-toggle" aria-label="Abrir opções de visualização" aria-haspopup="true" aria-controls="demands-page-nav-menu" aria-expanded="false">
         <i class="fas fa-sliders-h" aria-hidden="true"></i>
     </button>
     {% if create_label %}
-    <a href="{{ create_href }}{% if search %}&search={{ search|urlencode }}{% endif %}" class="demands-page-create"><i class="fas fa-plus"></i><span>{{ create_label }}</span></a>
+    <a href="{{ create_href }}{% if search %}&search={{ search|urlencode }}{% endif %}" class="demands-page-create" aria-label="{{ create_label }}"><i class="fas fa-plus"></i><span>{{ create_label }}</span></a>
     {% endif %}
 </nav>
 <script>
@@ -51,17 +51,28 @@
     var nav = document.currentScript.previousElementSibling;
     if (!nav) return;
     var toggle = nav.querySelector('.demands-page-nav-toggle');
+    var menu = nav.querySelector('.demands-page-nav-menu');
     if (!toggle) return;
     toggle.addEventListener('click', function (event) {
         event.stopPropagation();
         var open = !nav.classList.contains('is-open');
         nav.classList.toggle('is-open', open);
+        menu.inert = !open;
         toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
     document.addEventListener('click', function (event) {
         if (!nav.contains(event.target)) {
             nav.classList.remove('is-open');
+            menu.inert = true;
             toggle.setAttribute('aria-expanded', 'false');
+        }
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && nav.classList.contains('is-open')) {
+            nav.classList.remove('is-open');
+            menu.inert = true;
+            toggle.setAttribute('aria-expanded', 'false');
+            toggle.focus();
         }
     });
 })();

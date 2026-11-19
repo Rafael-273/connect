@@ -1,8 +1,12 @@
 /* Touch presentation only: all edits and playback use the desktop operations. */
 (function(root){
     'use strict';
-    function bind({scroller,isMobile,isEditing,getZoom,setZoom,onTap}){
+    function bind({scroller,isMobile,isEditing,getZoom,setZoom,onTap,canHold,onHold}){
         const pointers=new Map();let pan=null,pinch=null,frame=null,blocked=false,cancellingShared=false;
+        let holdTimer=null,reorder=null;
+        const clearHold=()=>{clearTimeout(holdTimer);holdTimer=null};
+        const cancelReorder=()=>{clearHold();if(reorder){reorder.finish(false);reorder=null}};
+        const holdDelay=420, movementTolerance=8;
         const distance=()=>{const [a,b]=[...pointers.values()];return Math.hypot(a.x-b.x,a.y-b.y)};
         const center=()=>{const [a,b]=[...pointers.values()];return (a.x+b.x)/2-scroller.getBoundingClientRect().left};
         const paint=()=>{
@@ -16,6 +20,7 @@
             if(!isMobile()||event.pointerType!=='touch')return;
             pointers.set(event.pointerId,{x:event.clientX,y:event.clientY,target:event.target});
             if(pointers.size===2){
+                cancelReorder();
                 // Discard a provisional clip/needle drag before zooming. Its
                 // normal cancellation path releases the persistence barrier.
                 cancellingShared=true;
@@ -25,32 +30,150 @@
             }
             if(blocked||pointers.size>2){intercept(event);return}
             const direct=event.target.closest('.editor-ruler,.editor-playhead,button:not([data-clip-key]),input');
-            if(isEditing()||direct)return;
+            const holdTarget=canHold?.(event.target);
+            if((isEditing()&&!holdTarget)||direct)return;
+            if(!isEditing()&&event.target.closest('[data-clip-key]')){
+                const initial={x:event.clientX,y:event.clientY,target:event.target};
+                pan={...initial,left:scroller.scrollLeft,top:scroller.scrollTop,moved:false,shared:true};
+                if(holdTarget)holdTimer=setTimeout(()=>{
+                    if(!pan||pan.moved||pointers.size!==1)return;
+                    cancellingShared=true;
+                    initial.target.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true,pointerId:event.pointerId,pointerType:'touch'}));
+                    cancellingShared=false;
+                    reorder=onHold(holdTarget,pointers.get(event.pointerId));
+                    if(reorder)scroller.setPointerCapture(event.pointerId);
+                },holdDelay);
+                return;
+            }
             pan={x:event.clientX,y:event.clientY,left:scroller.scrollLeft,top:scroller.scrollTop,target:event.target,moved:false};
             intercept(event);scroller.setPointerCapture(event.pointerId);
+            if(holdTarget){
+                holdTimer=setTimeout(()=>{
+                    if(!pan||pan.moved||pointers.size!==1)return;
+                    reorder=onHold(holdTarget,pointers.get(event.pointerId));
+                },holdDelay);
+            }
         },true);
         scroller.addEventListener('pointermove',event=>{
             if(!pointers.has(event.pointerId))return;
             pointers.set(event.pointerId,{...pointers.get(event.pointerId),x:event.clientX,y:event.clientY});
             if(!pan&&!blocked)return;
-            if(pan&&Math.hypot(event.clientX-pan.x,event.clientY-pan.y)>7)pan.moved=true;
+            if(reorder){intercept(event);reorder.move(event.clientX,event.clientY);return}
+            if(pan&&Math.hypot(event.clientX-pan.x,event.clientY-pan.y)>movementTolerance){
+                pan.moved=true;clearHold();
+            }
+            if(pan?.shared)return;
             intercept(event);schedule();
         },true);
         const finish=event=>{
             if(!pointers.has(event.pointerId))return;
             // Synthetic cancellation above belongs to the shared drag handler.
             if(cancellingShared)return;
-            if(pan||blocked){
+            clearHold();
+            if((pan&&!pan.shared)||blocked||reorder){
                 intercept(event);if(frame!==null){cancelAnimationFrame(frame);paint()}
-                if(pan&&!pan.moved&&event.type==='pointerup')onTap(pan.target,event);
-                if(scroller.hasPointerCapture(event.pointerId))scroller.releasePointerCapture(event.pointerId);
+                if(reorder){
+                    const gesture=reorder;reorder=null;if(pan)pan.moved=true;
+                    if(event.type==='pointerup')gesture.move(event.clientX,event.clientY);
+                    gesture.finish(event.type==='pointerup');
+                }else if(pan&&!pan.moved&&event.type==='pointerup')onTap(pan.target,event);
+            }
+            if(pan?.shared&&!pan.moved&&!reorder&&!blocked&&event.type==='pointerup'){
+                const target=pan.target;queueMicrotask(()=>onTap(target,event));
             }
             pointers.delete(event.pointerId);pan=null;pinch=null;if(!pointers.size)blocked=false;
+            if(scroller.hasPointerCapture(event.pointerId))scroller.releasePointerCapture(event.pointerId);
         };
         scroller.addEventListener('pointerup',finish,true);scroller.addEventListener('pointercancel',finish,true);
+        scroller.addEventListener('lostpointercapture',finish,true);
+        scroller.addEventListener('contextmenu',event=>{if(pan&&canHold?.(pan.target))event.preventDefault()});
+        document.addEventListener('keydown',event=>{
+            if(event.key==='Escape'&&reorder){cancelReorder();if(pan)pan.moved=true;event.preventDefault()}
+        });
         // preventDefault on pointerdown suppresses compatibility mouse clicks.
         // Keep the browser-generated click from repeating a synthetic tap.
         scroller.addEventListener('click',event=>{if(isMobile()&&event.isTrusted&&event.pointerType==='touch'&&!isEditing()&&!event.target.closest('button:not([data-clip-key])'))event.stopImmediatePropagation()},true);
     }
-    root.ConnectEditorMobile={bind};
+    function insertionIndex(midpoints, x) {
+        const index = midpoints.findIndex(midpoint => x < midpoint);
+        return index < 0 ? midpoints.length : index;
+    }
+
+    function edgeScroll(x, left, right, edge = 42) {
+        if (x < left + edge) return -Math.min(24, Math.ceil((left + edge - x) / 2));
+        if (x > right - edge) return Math.min(24, Math.ceil((x - right + edge) / 2));
+        return 0;
+    }
+
+    function compactReorder({scroller, lane, items, index, point, onFinish}) {
+        const strip = document.createElement('div');
+        const viewport = document.createElement('div');
+        const track = document.createElement('div');
+        const guide = document.createElement('div');
+        strip.className = 'editor-compact-reorder';
+        strip.setAttribute('aria-hidden', 'true');
+        viewport.className = 'editor-compact-reorder__scroll';
+        track.className = 'editor-compact-reorder__track';
+        guide.className = 'editor-compact-reorder__guide';
+        const cards = items.map((item, position) => {
+            const card = document.createElement('div');
+            const label = document.createElement('span');
+            card.className = 'editor-compact-reorder__take';
+            card.classList.toggle('is-selected', position === index);
+            if (item.background) card.style.backgroundImage = item.background;
+            label.textContent = item.label;
+            card.append(label);
+            return card;
+        });
+        const ghost = cards[index].cloneNode(true);
+        ghost.classList.remove('is-selected');
+        ghost.classList.add('editor-compact-reorder__ghost');
+        ghost.setAttribute('aria-hidden', 'true');
+        track.append(...cards, guide);
+        viewport.append(track);strip.append(viewport);
+        const bounds = scroller.getBoundingClientRect(), laneBounds = lane.getBoundingClientRect();
+        strip.style.left = `${bounds.left}px`;
+        strip.style.top = `${Math.max(bounds.top, Math.min(laneBounds.top-7, bounds.bottom-65))}px`;
+        strip.style.width = `${scroller.clientWidth}px`;
+        document.body.append(strip, ghost);
+
+        viewport.scrollLeft = cards[index].offsetLeft + cards[index].offsetWidth/2 - (point.x-bounds.left);
+        const others = cards.filter((_, position) => position !== index);
+        const midpoints = others.map(card => card.offsetLeft + card.offsetWidth / 2);
+        let x = point.x, y = point.y, changed = false, before = index, frame;
+        const step = cards.length > 1 ? cards[1].offsetLeft-cards[0].offsetLeft : cards[0].offsetWidth;
+        function paint() {
+            ghost.style.left = `${x}px`;ghost.style.top = `${y-8}px`;
+            if (changed) {
+                viewport.scrollLeft += edgeScroll(x, bounds.left, bounds.right);
+                const localX = x - bounds.left + viewport.scrollLeft;
+                before = insertionIndex(midpoints, localX);
+            }
+            cards.forEach((card, position) => {
+                let shift = 0;
+                if (position === index) shift = before-index;
+                else if (before > index && position > index && position <= before) shift = -1;
+                else if (before < index && position >= before && position < index) shift = 1;
+                card.style.transform = `translateX(${shift*step}px)`;
+            });
+            guide.style.left = `${cards[index].offsetLeft+(before-index)*step+cards[index].offsetWidth/2}px`;
+        }
+        function tick() { paint();frame=requestAnimationFrame(tick); }
+        tick();
+        return {
+            move(nextX, nextY) {
+                x=nextX;y=nextY;
+                changed ||= Math.abs(x-point.x)>5;
+            },
+            finish(commit) {
+                cancelAnimationFrame(frame);
+                paint();
+                strip.remove();ghost.remove();
+                onFinish(commit && changed ? before : null);
+            },
+        };
+    }
+
+    root.ConnectEditorMobile={bind,compactReorder,edgeScroll,insertionIndex};
+    if(typeof module!=='undefined')module.exports=root.ConnectEditorMobile;
 })(typeof window==='undefined'?globalThis:window);

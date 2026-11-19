@@ -192,7 +192,7 @@ class ExternalMediaProjectAdmin(admin.ModelAdmin):
     list_filter = ('status', 'template_version__template')
     search_fields = ('name', 'created_by__name')
     readonly_fields = (
-        'public_id', 'created_by', 'template_version', 'configuration', 'status', 'progress',
+        'public_id', 'created_by', 'template_version', 'free_preset', 'configuration', 'status', 'progress',
         'current_step', 'error_message', 'started_at', 'finished_at', 'celery_task_id', 'render_job',
     )
     inlines = [ProjectBlockMediaInline, ProjectPipelineStepInline]

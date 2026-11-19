@@ -133,6 +133,10 @@
 
         {% if is_media_leader %}
         <aside class="demand-aside" aria-label="Informações do evento">
+            <div class="event-fact-summary">
+                <div class="event-fact-summary__overview"><i class="fas fa-calendar-alt" aria-hidden="true"></i><span>{{ detail.event.event_type.name|default:'Evento' }} · {{ detail.event.event_date|date:'d/m/Y' }}</span></div>
+                <button type="button" class="demand-facts-toggle" data-event-facts-toggle aria-expanded="false" aria-controls="event-facts-{{ detail.event.pk }}"><span>Detalhes</span><i class="fas fa-chevron-down" aria-hidden="true"></i></button>
+                <div class="event-fact-summary__fields" id="event-facts-{{ detail.event.pk }}" hidden>
             <form method="post" action="{% url 'media_event_update' detail.event.pk %}" class="demand-fact-card" data-auto-submit>
                 {% csrf_token %}<input type="hidden" name="event-title" value="{{ detail.event.title }}"><input type="hidden" name="event-event_date" value="{{ detail.event.event_date|date:'Y-m-d' }}"><input type="hidden" name="event-event_time" value="{{ detail.event.event_time|time:'H:i' }}"><input type="hidden" name="event-end_date" value="{{ detail.event.end_date|date:'Y-m-d' }}"><input type="hidden" name="event-end_time" value="{{ detail.event.end_time|time:'H:i' }}"><input type="hidden" name="event-location" value="{{ detail.event.location|default:'' }}"><input type="hidden" name="event-description" value="{{ detail.event.description|default:'' }}">
                 <dt>Tipo</dt><select name="event-event_type" class="media-field-select"><option value="">Sem tipo</option>{% for event_type in event_types %}<option value="{{ event_type.pk }}" {% if detail.event.event_type_id == event_type.pk %}selected{% endif %}>{{ event_type.name }}</option>{% endfor %}</select>
@@ -146,6 +150,8 @@
                 {% csrf_token %}<input type="hidden" name="event-title" value="{{ detail.event.title }}"><input type="hidden" name="event-event_type" value="{{ detail.event.event_type_id|default:'' }}"><input type="hidden" name="event-event_date" value="{{ detail.event.event_date|date:'Y-m-d' }}"><input type="hidden" name="event-event_time" value="{{ detail.event.event_time|time:'H:i' }}"><input type="hidden" name="event-end_date" value="{{ detail.event.end_date|date:'Y-m-d' }}"><input type="hidden" name="event-end_time" value="{{ detail.event.end_time|time:'H:i' }}"><input type="hidden" name="event-description" value="{{ detail.event.description|default:'' }}">
                 <dt>Local</dt><input name="event-location" value="{{ detail.event.location|default:'' }}" class="media-field-input" placeholder="Informe o local">
             </form>
+                </div>
+            </div>
         </aside>
         {% endif %}
     </div>

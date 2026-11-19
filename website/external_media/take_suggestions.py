@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from types import SimpleNamespace
 from datetime import timedelta
 import hashlib
 import json
@@ -129,24 +130,31 @@ def analysis_payload(item):
 
 def analyze_source(media_id):
     """Hash original, claim cache lease, checkpoint chunks, then make optional suggestions."""
-    from .services import AudioExtractor, TranscriptionService, VideoAssemblyService
+    from .services import AudioExtractor, TranscriptionService, TranslationService, VideoAssemblyService
     from .media_input import media_input_factory, RemoteMediaSource
 
     item = ProjectBlockMedia.objects.select_related('project__template_version', 'take_analysis').filter(pk=media_id).first()
-    if not item or item.project.status != 'DRAFT':
+    if not item:
         return
-    if not settings.EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED:
+    free = item.project.is_free
+    if not free and item.project.status != 'DRAFT':
+        return
+    if free and not item.project.editor_settings.subtitles_enabled:
+        return
+    if not free and not settings.EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED:
         ProjectBlockMedia.objects.filter(pk=media_id).update(take_analysis_status='unavailable')
         return
-    version = item.project.template_version
+    version = item.project.editor_settings
     language = 'auto' if (version.default_settings or {}).get('language_mode') == 'bilingual_source' else version.original_language
     token = uuid.uuid4()
     cache = None
     claimed = False
     try:
         # Original upload keys are immutable in the existing storage contract.
+        target = version.output_languages[-1] if free and version.translated_subtitles_enabled else None
         if (item.take_analysis and item.take_analysis.status == 'ready'
-                and item.take_analysis.language == language and item.take_analysis.version == 1):
+                and item.take_analysis.language == language and item.take_analysis.version == 1
+                and (not target or target in item.take_analysis.translations)):
             return
         media_input = media_input_factory(item.file)
         source = media_input.get_ffmpeg_input()
@@ -160,22 +168,32 @@ def analyze_source(media_id):
                 for block in iter(lambda: handle.read(1024 * 1024), b''):
                     digest.update(block)
             cache, _ = SourceTakeAnalysis.objects.get_or_create(project_id=item.project_id, sha256=digest.hexdigest(), language=language)
-            current = ProjectBlockMedia.objects.filter(pk=media_id, file=item.file.name, project__status='DRAFT')
+            current = ProjectBlockMedia.objects.filter(pk=media_id, file=item.file.name)
+            if not free:
+                current = current.filter(project__status='DRAFT')
             if not current.update(take_analysis=cache, take_analysis_status='running'):
                 return
             if cache.duration_ms:
                 current.update(duration_ms=cache.duration_ms)
             now = timezone.now()
-            claimed = bool(SourceTakeAnalysis.objects.filter(pk=cache.pk).exclude(status='ready').filter(
+            claimable = SourceTakeAnalysis.objects.filter(pk=cache.pk)
+            if not free or not target:
+                claimable = claimable.exclude(status='ready')
+            claimed = bool(claimable.filter(
                 Q(lease_until__isnull=True) | Q(lease_until__lt=now),
             ).update(status='running', lease=token, lease_until=now + timedelta(hours=2)))
             if not claimed:
                 return
             cache.refresh_from_db()
+            if free and target and target in cache.translations:
+                SourceTakeAnalysis.objects.filter(pk=cache.pk, lease=token).update(status='ready', lease=None, lease_until=None)
+                return
             owned = SourceTakeAnalysis.objects.filter(pk=cache.pk, lease=token)
             if not cache.transcript_ready:
-                chunks = AudioExtractor().extract(source, workspace.path)
-                transcription = TranscriptionService()
+                chunks = AudioExtractor().extract(source, workspace.path) if (
+                    not free or VideoAssemblyService()._has_audio(source)
+                ) else []
+                transcription = TranscriptionService() if chunks else None
                 for index, chunk in enumerate(chunks):
                     key = str(index)
                     if key in cache.chunks:
@@ -189,7 +207,7 @@ def analyze_source(media_id):
                     if not owned.update(chunks=cache.chunks, lease_until=timezone.now() + timedelta(hours=2)):
                         return
                 detailed = [TranscriptionSegment(**value) for key in sorted(cache.chunks, key=int) for value in cache.chunks[key]]
-                detailed = transcription._remove_chunk_overlap(detailed)
+                detailed = TranscriptionService._remove_chunk_overlap(detailed)
                 if any(not 0 <= word.start_ms < word.end_ms <= duration for word in detailed):
                     raise ValueError('A transcrição contém tempos fora do original.')
                 transcript = [asdict(word) for word in detailed]
@@ -197,6 +215,27 @@ def analyze_source(media_id):
                 if not owned.update(transcript=transcript, transcript_ready=True, duration_ms=duration):
                     return
                 cache.transcript, cache.duration_ms = transcript, duration
+            if free:
+                translations = dict(cache.translations or {})
+                if target and target not in translations:
+                    words = [TranscriptionSegment(**value) for value in cache.transcript]
+                    segments = TranscriptionService.group_for_subtitles(words)
+                    cues = [SimpleNamespace(cue_index=index, text=segment.text)
+                            for index, segment in enumerate(segments, 1)]
+                    translated = []
+                    translator = TranslationService() if cues else None
+                    batch_size = settings.EXTERNAL_MEDIA_TRANSLATION_BATCH_SIZE
+                    for offset in range(0, len(cues), batch_size):
+                        translated.extend(translator._translate_batch(
+                            cues[offset:offset + batch_size], language, target,
+                            (item.project.configuration or {}).get('translation_model', 'gpt-4.1-mini'),
+                        ))
+                    translations[target] = [
+                        {'start_ms': segment.start_ms, 'end_ms': segment.end_ms, 'text': text}
+                        for segment, text in zip(segments, translated)
+                    ]
+                owned.update(status='ready', translations=translations, lease=None, lease_until=None)
+                return
             words = [TranscriptionSegment(**value) for value in cache.transcript]
             # Bound tokens and avoid fragmenting a message across independently analyzed batches.
             if len(words) > 10000:

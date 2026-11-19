@@ -33,7 +33,7 @@ class OverlayTimelineService:
     def ensure_project_overlays(cls, project):
         presets = {item.code: item for item in OverlayPreset.objects.filter(is_active=True)}
         existing = {item.overlay_id: item for item in project.overlays.all()}
-        for block in project.template_version.blocks.all():
+        for block in project.editor_settings.blocks.all():
             for definition in block.overlay_definitions or []:
                 key = str(definition.get('key') or '').strip()
                 if not key:

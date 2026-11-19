@@ -1,10 +1,28 @@
 {% extends 'member/external_media/base.html' %}
 
+{% block media_bottom_nav %}{% endblock %}
+
 {% block title %}Projetos de edição{% endblock %}
 
 {% block head %}
 {{ block.super }}
 <style>
+    .project-caption-settings { margin-top: .75rem; padding: 1rem; border: 1px solid #e5e7eb; border-radius: .75rem; background: #f9fafb; }
+    .project-caption-settings > div + div { margin-top: .75rem; }
+    .project-caption-settings small { display: block; color: #6b7280; line-height: 1.4; }
+    .media-create-dialog .project-caption-option { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; font-weight: 500; }
+    .media-create-dialog .project-caption-option input { width: auto; }
+    .media-create-dialog [hidden] { display: none; }
+    .project-create-wrap { position: relative; flex-shrink: 0; }
+    .project-create-menu { position: absolute; right: 0; top: calc(100% + .5rem); z-index: 50; width: min(19rem, calc(100vw - 2rem)); padding: .5rem; text-align: left; background: #fff; border: 1px solid #e5e7eb; border-radius: .875rem; box-shadow: 0 12px 28px rgba(15, 23, 42, .14); }
+    .project-create-menu[hidden] { display: none; }
+    .project-create-menu a { display: flex; align-items: center; gap: .875rem; padding: .875rem 1rem; border-radius: .625rem; color: #374151; transition: background .15s ease; }
+    .project-create-menu a:hover, .project-create-menu a:focus-visible { background: #fff1f2; color: #8c0910; }
+    .project-create-menu i { width: 1.25rem; color: #c90905; text-align: center; flex-shrink: 0; }
+    .project-create-menu span { display: grid; gap: .1875rem; }
+    .project-create-menu strong { font-size: .9375rem; line-height: 1.25; }
+    .project-create-menu small { color: #6b7280; font-size: .75rem; line-height: 1.3; }
+
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(12px); }
         to   { opacity: 1; transform: translateY(0); }
@@ -472,21 +490,33 @@
             </div>
         </div>
 
-        <button type="button" data-open-create-project
+        <div class="project-create-wrap sm:hidden">
+        <button type="button" data-open-create-project aria-expanded="false"
            class="sm:hidden flex-shrink-0 w-10 h-10 text-white rounded-lg transition-all flex items-center justify-center"
            style="background-color: #C90905;"
            title="Novo projeto"
            aria-label="Novo projeto">
             <i class="fas fa-plus"></i>
         </button>
+        <div class="project-create-menu" hidden>
+                <a href="{% url 'external_media_create' %}?mode=template" data-create-mode="template"><i class="fas fa-layer-group" aria-hidden="true"></i><span><strong>Criar a partir de um modelo</strong><small>Automatize a edição com um modelo pronto</small></span></a>
+                <a href="{% url 'external_media_create' %}?mode=free" data-create-mode="free"><i class="fas fa-film" aria-hidden="true"></i><span><strong>Criar do zero</strong><small>Comece com uma timeline vazia</small></span></a>
+            </div>
+        </div>
         </form>
 
-        <button type="button" data-open-create-project
+        <div class="project-create-wrap hidden sm:block">
+        <button type="button" data-open-create-project aria-expanded="false"
            class="hidden sm:flex flex-shrink-0 px-4 py-2 text-white rounded-lg transition-all duration-200 items-center gap-2 text-sm font-semibold"
            style="background-color: #C90905;">
             <i class="fas fa-plus"></i>
             Novo projeto
         </button>
+        <div class="project-create-menu" hidden>
+                <a href="{% url 'external_media_create' %}?mode=template" data-create-mode="template"><i class="fas fa-layer-group" aria-hidden="true"></i><span><strong>Criar a partir de um modelo</strong><small>Automatize a edição com um modelo pronto</small></span></a>
+                <a href="{% url 'external_media_create' %}?mode=free" data-create-mode="free"><i class="fas fa-film" aria-hidden="true"></i><span><strong>Criar do zero</strong><small>Comece com uma timeline vazia</small></span></a>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -511,7 +541,7 @@
                         <h3 class="text-base font-bold text-gray-900 truncate">{{ project.name }}</h3>
                         <p class="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
                             <i class="fas fa-layer-group" style="color: #C90905;"></i>
-                            {{ project.template_version.template.name }}
+                            {% if project.is_free %}Edição livre{% else %}{{ project.template_version.template.name }}{% endif %}
                         </p>
                     </div>
                     <span class="media-status-badge media-project-header-status {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ project.get_status_display }}</span>
@@ -542,39 +572,47 @@
                         Ainda não há projetos criados. Comece produzindo o primeiro vídeo!
                     {% endif %}
                 </p>
-                <button type="button" data-open-create-project class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl transition-all hover:-translate-y-1 hover:opacity-90" style="background: #C90905;">
+                <div class="project-create-wrap inline-block">
+                <button type="button" data-open-create-project aria-expanded="false" class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl transition-all hover:-translate-y-1 hover:opacity-90" style="background: #C90905;">
                     <i class="fas fa-plus"></i>
                     Novo projeto
                 </button>
+                <div class="project-create-menu" hidden>
+                <a href="{% url 'external_media_create' %}?mode=template" data-create-mode="template"><i class="fas fa-layer-group" aria-hidden="true"></i><span><strong>Criar a partir de um modelo</strong><small>Automatize a edição com um modelo pronto</small></span></a>
+                <a href="{% url 'external_media_create' %}?mode=free" data-create-mode="free"><i class="fas fa-film" aria-hidden="true"></i><span><strong>Criar do zero</strong><small>Comece com uma timeline vazia</small></span></a>
+            </div>
+                </div>
             </div>
         {% endif %}
     </div>
 </div>
 
-<div id="create-project-modal" class="media-confirm-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="create-project-title">
-    <div class="media-confirm-dialog media-create-dialog" role="document">
-        <form method="post" action="{% url 'external_media_create' %}">
+<div id="create-project-dialog" class="media-confirm-overlay{% if create_mode == 'free' or create_mode == 'template' %} is-open{% endif %}" role="dialog" aria-modal="true" aria-labelledby="create-project-title" aria-hidden="{% if create_mode == 'free' or create_mode == 'template' %}false{% else %}true{% endif %}" data-initial-mode="{{ create_mode }}">
+    <div class="media-confirm-dialog media-create-dialog">
+        <form method="post" action="{% url 'external_media_create' %}" class="media-confirm-content">
             {% csrf_token %}
-            <div class="media-confirm-content">
-                <div class="flex items-start justify-between gap-4">
-                    <div class="flex items-start gap-3">
-                        <span class="media-confirm-icon"><i class="fas fa-plus"></i></span>
-                        <div class="pt-0.5">
-                            <h2 id="create-project-title" class="text-xl font-black text-gray-900">Novo projeto de edição</h2>
-                            <p class="text-sm text-gray-600 leading-relaxed mt-1">Dê um nome e escolha o template para começar.</p>
-                        </div>
+            <input type="hidden" name="mode" value="{{ create_mode|default:'template' }}">
+            <div class="flex items-start justify-between gap-4">
+                <div><h2 id="create-project-title" class="text-xl font-black text-gray-900">Novo projeto</h2><p class="text-sm text-gray-600 mt-1" id="create-project-description"></p></div>
+                <button type="button" data-close-project-dialog class="w-9 h-9 rounded-lg text-gray-400 hover:bg-gray-100" aria-label="Fechar"><i class="fas fa-xmark"></i></button>
+            </div>
+            {% for error in create_form.non_field_errors %}<p class="mt-4 text-sm text-red-700">{{ error }}</p>{% endfor %}
+            <div class="mt-5 space-y-4">
+                <div>{{ create_form.name.label_tag }}{{ create_form.name }}{{ create_form.name.errors }}</div>
+                <div data-project-template>{{ create_form.template_version.label_tag }}{{ create_form.template_version }}{{ create_form.template_version.errors }}</div>
+                <div data-project-free>{{ create_form.free_preset.label_tag }}{{ create_form.free_preset }}{{ create_form.free_preset.errors }}
+                    <label class="project-caption-option">{{ create_form.automatic_captions }} Gerar legendas automáticas</label>
+                    <div data-caption-language class="project-caption-settings">
+                        <div>{{ create_form.source_language.label_tag }}{{ create_form.source_language }}{{ create_form.source_language.errors }}</div>
+                        <div>{{ create_form.caption_language.label_tag }}{{ create_form.caption_language }}{{ create_form.caption_language.errors }}</div>
+                        <label class="project-caption-option">{{ create_form.bilingual_captions }} Exibir a legenda original e a tradução juntas</label>
+                        <small>Escolha o mesmo idioma do áudio para gerar apenas a legenda original.</small>
                     </div>
-                    <button type="button" data-close-create-project class="w-9 h-9 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors" aria-label="Fechar"><i class="fas fa-xmark"></i></button>
                 </div>
-                {% for error in create_form.non_field_errors %}<p class="mt-4 text-sm font-bold text-red-700">{{ error }}</p>{% endfor %}
-                <div class="mt-5 space-y-4">
-                    <div>{{ create_form.name.label_tag }}{{ create_form.name }}{{ create_form.name.errors }}</div>
-                    <div>{{ create_form.template_version.label_tag }}{{ create_form.template_version }}{{ create_form.template_version.errors }}</div>
-                </div>
-                <div class="media-confirm-actions">
-                    <button type="button" class="media-confirm-cancel" data-close-create-project>Cancelar</button>
-                    <button type="submit" class="media-confirm-delete"><i class="fas fa-arrow-right mr-1"></i>Continuar</button>
-                </div>
+            </div>
+            <div class="media-confirm-actions">
+                <button type="button" class="media-confirm-cancel" data-close-project-dialog>Cancelar</button>
+                <button type="submit" class="media-confirm-delete">Continuar <i class="fas fa-arrow-right ml-1"></i></button>
             </div>
         </form>
     </div>
@@ -646,32 +684,69 @@
     });
 
     (function() {
-        const modal = document.getElementById('create-project-modal');
-        const form = modal.querySelector('form');
+        const wraps = document.querySelectorAll('.project-create-wrap');
+        const dialog = document.getElementById('create-project-dialog');
+        const form = dialog.querySelector('form');
         let trigger = null;
-
-        function closeModal() {
-            modal.classList.remove('is-open');
-            modal.setAttribute('aria-hidden', 'true');
+        function showDialog(mode, focus = true) {
+            form.elements.mode.value = mode;
+            dialog.querySelector('[data-project-template]').hidden = mode !== 'template';
+            dialog.querySelector('[data-project-free]').hidden = mode !== 'free';
+            document.getElementById('create-project-title').textContent = mode === 'free' ? 'Criar projeto do zero' : 'Criar projeto com modelo';
+            document.getElementById('create-project-description').textContent = mode === 'free'
+                ? 'Escolha o nome e o formato para começar sua edição.'
+                : 'Escolha o nome e o modelo para começar sua edição.';
+            dialog.classList.add('is-open');
+            dialog.setAttribute('aria-hidden', 'false');
+            if (focus) form.elements.name.focus();
+        }
+        function closeDialog() {
+            dialog.classList.remove('is-open');
+            dialog.setAttribute('aria-hidden', 'true');
             trigger?.focus();
         }
+        dialog.querySelectorAll('[data-close-project-dialog]').forEach(button => button.addEventListener('click', closeDialog));
+        dialog.addEventListener('click', event => { if (event.target === dialog) closeDialog(); });
+        dialog.addEventListener('keydown', event => { if (event.key === 'Escape') closeDialog(); });
+        const captionsToggle = form.elements.automatic_captions;
+        const captionLanguage = dialog.querySelector('[data-caption-language]');
+        function updateCaptionLanguage() { captionLanguage.hidden = !captionsToggle.checked; }
+        captionsToggle.addEventListener('change', updateCaptionLanguage);
+        updateCaptionLanguage();
+        const initialMode = dialog.dataset.initialMode;
+        if (['free', 'template'].includes(initialMode)) showDialog(initialMode);
 
-        document.querySelectorAll('[data-open-create-project]').forEach((button) => {
+        function closeAll(except = null) {
+            wraps.forEach(wrap => {
+                if (wrap === except) return;
+                wrap.querySelector('.project-create-menu').hidden = true;
+                wrap.querySelector('[data-open-create-project]').setAttribute('aria-expanded', 'false');
+            });
+        }
+        wraps.forEach(wrap => {
+            const button = wrap.querySelector('[data-open-create-project]');
+            const menu = wrap.querySelector('.project-create-menu');
             button.addEventListener('click', () => {
-                trigger = button;
-                modal.classList.add('is-open');
-                modal.setAttribute('aria-hidden', 'false');
-                form.querySelector('input, select')?.focus();
+                const open = menu.hidden;
+                closeAll(wrap);
+                menu.hidden = !open;
+                button.setAttribute('aria-expanded', String(open));
+            });
+            wrap.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && !menu.hidden) {
+                    closeAll();
+                    button.focus();
+                }
             });
         });
-        modal.querySelectorAll('[data-close-create-project]').forEach((button) => {
-            button.addEventListener('click', closeModal);
-        });
-        modal.addEventListener('click', (event) => {
-            if (event.target === modal) closeModal();
-        });
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+        document.querySelectorAll('[data-create-mode]').forEach(link => link.addEventListener('click', event => {
+            event.preventDefault();
+            trigger = link.closest('.project-create-wrap').querySelector('[data-open-create-project]');
+            closeAll();
+            showDialog(link.dataset.createMode);
+        }));
+        document.addEventListener('click', event => {
+            if (!event.target.closest('.project-create-wrap')) closeAll();
         });
     })();
 

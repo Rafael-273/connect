@@ -1,0 +1,97 @@
+/* Neutral surfaces keep the footage and colored timeline clips in focus. */
+html.connect-app.editor-page,
+html.connect-app.editor-page body,
+.media-shell:has(.preview-shell) { background: #080809; }
+header:has(~ .media-shell .preview-shell) {
+    background: #080809;
+    border-color: #242426 !important;
+    color: #f5f5f5;
+}
+header:has(~ .media-shell .preview-shell) .media-header-identity strong { color: #f5f5f5; }
+header:has(~ .media-shell .preview-shell) .media-header-identity small { color: #a3a3a3; }
+header:has(~ .media-shell .preview-shell) .media-btn.media-muted,
+.editor-header-menu__trigger:before { background: #1b1b1b; border-color: #353535; }
+header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover { background: #292929; }
+.preview-shell { background: radial-gradient(ellipse at 50% 32%, #101011 0%, #09090a 55%, #070708 100%); }
+.preview-player-card, .preview-stage { background: #080808; border-color: #292929; }
+.preview-shell > .editor-timeline__transport { background: #09090a; border-color: #262628; box-shadow: inset 0 1px rgba(255,255,255,.025); }
+.editor-preview-tools { background: #09090a; border-color: #242426; scrollbar-color: #555 transparent; }
+.editor-preview-tools button { color: #c4c4c4; }
+.editor-preview-tools button i { color: #e2e2e2; }
+.editor-preview-tools button:hover { background: #262626; border-color: #494949; }
+.editor-preview-tools button.is-active { background: #2d1a1a; border-color: #793735; color: #fff; }
+.editor-preview-tools button.is-active i { color: #ff625c; }
+.editor-preview-tools__divider { flex:none; width:2.4rem; height:1px; margin:.35rem 0; background:#303030; }
+.editor-preview-tools__divider[hidden] { display:none; }
+.editor-timeline { background: #080809; }
+.editor-timeline__scroller { background: transparent; }
+.editor-ruler { background: #0a0a0b; border-color: #262628; color: #aaa; }
+.editor-track, .editor-track__label { background: #0d0d0e; border-color: #29292b; }
+.editor-track__label { color: #c9c9c9; }
+.editor-track__label:before, .editor-track--caption .editor-track__label:before { color: #a8a8a8; }
+.editor-track__lane, .editor-track--caption .editor-track__lane {
+    background-color: #0b0b0c;
+    background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 1px), rgba(255,255,255,.055) calc(10% - 1px), rgba(255,255,255,.055) 10%);
+}
+.editor-track--caption .editor-track__clip,
+.editor-track--caption .editor-track__caption--en { background: #303030; border-color: #515151; color: #f0f0f0; }
+.editor-track--caption .editor-track__clip:hover,
+.editor-track--caption .editor-track__caption--en:hover { background: #414141; }
+.caption-visibility { color: #b1b1b1; }
+.caption-visibility:hover { background: #303030; }
+.editor-filmstrip__label, .editor-waveform__label { background: rgba(12,12,12,.8); color: #f0f0f0; }
+
+/* Inspector surfaces use subtle elevation instead of blue borders. */
+.preview-shell .preview-adjustments { background: #09090a; border-color: #29292b; }
+.preview-adjustments__head { background: #0e0e0f; border-color: #29292b; }
+.preview-adjustments__head strong { color: #f5f5f5; }
+.preview-adjustments__head small { color: #aaa; }
+.preview-adjustments__close { background: #242424; border-color: #414141; color: #d0d0d0; }
+.preview-adjustments__close:hover { background: #343434; }
+.preview-adjustments .preview-list { background: #09090a; }
+.adjustment-tabs { background: #0c0c0d; border-color: #29292b; }
+.adjustment-tab { color: #b8b8b8; }
+.adjustment-tab:hover { background: #292929; }
+.preview-adjustments .preview-decision:not(.transcript-card),
+.preview-adjustments .preview-decision.transcript-card { background: #111112; border-color: #323234; box-shadow: 0 8px 24px rgba(0,0,0,.25), inset 0 1px rgba(255,255,255,.035); }
+.preview-adjustments .preview-decision:not(.transcript-card) strong { color: #f5f5f5; }
+.preview-adjustments .preview-decision:not(.transcript-card) label { color: #c3c3c3; }
+.preview-adjustments .preview-pill { background: #303030; border-color: #464646; color: #dedede; }
+.preview-adjustments .preview-decision input:not([type="range"]):not([type="checkbox"]),
+.preview-adjustments .preview-decision select,
+.preview-adjustments .preview-decision textarea { background: #141414 !important; border-color: #484848; color: #f1f1f1; }
+.preview-adjustments .preview-decision .media-btn:not(.media-primary) { background: #303030 !important; border-color: #4a4a4a !important; color: #f0f0f0 !important; }
+.preview-adjustments .preview-decision .media-btn:not(.media-primary):hover { background: #414141 !important; border-color: #777 !important; }
+.transcript-card__toolbar { background: #222; border-color: #383838; }
+.transcript-card__toolbar small, .transcript-help { color: #b5b5b5; }
+.transcript-download, .transcript-cue__time { background: #303030; border-color: #494949; color: #dedede; }
+.transcript-cue { background: #242424; border-color: #3a3a3a; color: #e5e5e5; }
+.transcript-cue:hover, .transcript-download:hover { background: #333; border-color: #666; }
+.transcript-cue.is-current { background: #3a2023; border-color: #d14d5d; }
+.transcript-help { background: #1b1b1b; border-color: #383838; }
+
+/* Dialogs and mobile controls share the same neutral palette. */
+.preview-modal__card, #text-element-modal .preview-modal__card,
+.editor-media-library, #shortcuts-dialog, #precision-dialog, #multicam-panel {
+    background: #111112;
+    border-color: #38383a;
+    color: #f5f5f5;
+}
+.editor-media-option, .editor-mobile-sheet__grid button, .multicam-card { background: #19191a; border-color: #414141; }
+.editor-media-option:hover:not(:disabled), .editor-media-option:focus-visible, .editor-media-option:focus-within { background: #333; border-color: #666; }
+.editor-media-option__content small, .editor-media-library__description { color: #b5b5b5; }
+.editor-compact-reorder { background: #191919; border-color: #4a4a4a; }
+.editor-compact-reorder__take { background-color: #333; border-color: #666; }
+.caption-context-menu { background: #242424; border-color: #494949; }
+.caption-context-menu button:hover, .caption-context-menu button:focus-visible { background: #383838; }
+@media (max-width: 760px) {
+    .preview-shell > .editor-timeline__transport { background: #0b0b0c; box-shadow: inset 0 1px #29292b; }
+    .editor-mobile-actions { background: #0e0e0f; border-color: #29292b; }
+    .editor-mobile-actions button { color: #c8c8c8; }
+    .editor-mobile-actions button:active:not(:disabled) { background: #303030; }
+    .editor-save-feedback { background: #1b1b1bef; }
+    .editor-header-menu__trigger:before { background: #1b1b1b; border-color: #353535; }
+}
+
+/* Direct shortcuts already choose the category. */
+.preview-adjustments.is-direct-adjustment .adjustment-tabs { display:none; }

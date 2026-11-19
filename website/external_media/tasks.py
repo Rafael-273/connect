@@ -56,7 +56,14 @@ def analyze_source_take(self, media_id):
 def enqueue_source_analysis(media_id):
     """Optional dispatch failures must never invalidate an upload preview."""
     from .render_workflow import enqueue_video_work
-    if not settings.EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED:
+    item = ProjectBlockMedia.objects.select_related('project').filter(pk=media_id).first()
+    if not item:
+        return
+    enabled = (
+        item.project.editor_settings.subtitles_enabled if item.project.is_free
+        else settings.EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED and not item.editor_only
+    )
+    if not enabled:
         ProjectBlockMedia.objects.filter(pk=media_id).update(take_analysis_status='unavailable')
         return
     try:
@@ -73,19 +80,22 @@ def enqueue_source_analysis(media_id):
 def recover_source_analysis():
     """Recover expired leases after a killed worker; never backfill historical uploads."""
     from website.models import SourceTakeAnalysis
-    if not settings.EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED:
-        return
     from datetime import timedelta
+    from django.db.models import Q
+
+    eligible = Q(project__template_version__isnull=True, project__configuration__automatic_captions=True)
+    if settings.EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED:
+        eligible |= Q(project__status='DRAFT', project__template_version__isnull=False, editor_only=False)
     cutoff = timezone.now() - timedelta(hours=2)
     # A worker may be killed while hashing, before it can associate a cache.
     for item_id in ProjectBlockMedia.objects.filter(
-        project__status='DRAFT', preview_status='READY', take_analysis__isnull=True,
+        eligible, preview_status='READY', take_analysis__isnull=True,
         take_analysis_status__in=['pending', 'running'], update_at__lt=cutoff,
     ).values_list('pk', flat=True)[:20]:
         if ProjectBlockMedia.objects.filter(pk=item_id, update_at__lt=cutoff).update(update_at=timezone.now()):
             enqueue_source_analysis(item_id)
     for cache_id in SourceTakeAnalysis.objects.filter(status='running', lease_until__lt=timezone.now()).values_list('pk', flat=True)[:20]:
-        item = ProjectBlockMedia.objects.filter(take_analysis_id=cache_id, project__status='DRAFT').first()
+        item = ProjectBlockMedia.objects.filter(eligible, take_analysis_id=cache_id).first()
         if not item:
             continue
         if SourceTakeAnalysis.objects.filter(pk=cache_id, status='running', lease_until__lt=timezone.now()).update(status='pending', lease=None, lease_until=None):
@@ -158,7 +168,9 @@ def create_project_preview(self, media_id):
         ) as workspace:
             preview = workspace.file('proxy', 'preview.mp4')
             source = media_input.get_ffmpeg_input()
-            VideoAssemblyService().create_proxy(source, preview)
+            assembly = VideoAssemblyService()
+            assembly.create_proxy(source, preview)
+            item.duration_ms = assembly._duration_ms(source)
             with preview.open('rb') as handle:
                 item.preview_file.save('preview.mp4', File(handle), save=False)
             try:
@@ -177,7 +189,7 @@ def create_project_preview(self, media_id):
                 logger.warning('project_media_thumbnail_failed media=%s', item.pk, exc_info=True)
         item.preview_status = ProjectBlockMedia.PreviewStatus.READY
         item.preview_error = ''
-        item.save(update_fields=['preview_file', 'thumbnail', 'preview_status', 'preview_error', 'update_at'])
+        item.save(update_fields=['preview_file', 'thumbnail', 'duration_ms', 'preview_status', 'preview_error', 'update_at'])
     except Exception as exc:
         item.preview_status = ProjectBlockMedia.PreviewStatus.ERROR
         item.preview_error = str(exc)[:255]

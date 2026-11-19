@@ -72,7 +72,20 @@ class ExternalMediaJobForm(forms.ModelForm):
 
 class ExternalMediaProjectForm(forms.ModelForm):
     template_version = forms.ModelChoiceField(
-        label='Template', queryset=MediaTemplateVersion.objects.none(), empty_label='Selecione um template',
+        label='Template', queryset=MediaTemplateVersion.objects.none(), empty_label='Selecione um template', required=False,
+    )
+
+    mode = forms.ChoiceField(choices=[('template', 'Modelo'), ('free', 'Do zero')], required=False, widget=forms.HiddenInput)
+    free_preset = forms.ModelChoiceField(label='Formato', queryset=RenderPreset.objects.none(), required=False)
+    automatic_captions = forms.BooleanField(label='Gerar legendas automáticas', required=False)
+    source_language = forms.ChoiceField(
+        label='Idioma do áudio', required=False, initial='pt',
+        choices=ExternalMediaJob.LANGUAGE_CHOICES,
+    )
+    bilingual_captions = forms.BooleanField(label='Exibir as duas legendas no vídeo', required=False)
+    caption_language = forms.ChoiceField(
+        label='Traduzir para', required=False, initial='pt',
+        choices=ExternalMediaJob.LANGUAGE_CHOICES,
     )
 
     class Meta:
@@ -82,6 +95,9 @@ class ExternalMediaProjectForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['free_preset'].queryset = RenderPreset.objects.filter(
+            is_active=True, width__gt=0, height__gt=0,
+        )
         latest = MediaTemplateVersion.objects.filter(
             template=OuterRef('template'),
         ).order_by('-version').values('pk')[:1]
@@ -91,6 +107,25 @@ class ExternalMediaProjectForm(forms.ModelForm):
                 pk=Subquery(latest),
             ).select_related('template').order_by('template__name')
         )
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('mode') == 'free':
+            cleaned['template_version'] = None
+            source = cleaned.get('source_language') or 'pt'
+            target = cleaned.get('caption_language') or source
+            if cleaned.get('automatic_captions') and cleaned.get('bilingual_captions') and source == target:
+                self.add_error('caption_language', 'Escolha um idioma diferente do áudio para a tradução.')
+            preset = cleaned.get('free_preset')
+            if not preset:
+                preset = self.fields['free_preset'].queryset.filter(code='youtube').first()
+                preset = preset or self.fields['free_preset'].queryset.first()
+            if not preset:
+                self.add_error('free_preset', 'Nenhum formato de vídeo está disponível.')
+            cleaned['free_preset'] = preset
+        elif not cleaned.get('template_version') and 'template_version' not in self.errors:
+            self.add_error('template_version', 'Selecione um template.')
+        return cleaned
 
 
 class ExternalMediaProjectEditForm(forms.ModelForm):
@@ -208,7 +243,7 @@ class ExternalMediaProjectSettingsForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.project = project
         configured = project.configuration.get('plugins', {})
-        for plugin in project.template_version.plugins.filter(is_enabled=True, user_can_override=True):
+        for plugin in project.editor_settings.plugins.filter(is_enabled=True, user_can_override=True):
             self.fields[f'plugin_{plugin.code}'] = forms.BooleanField(
                 label=plugin.get_code_display(),
                 required=False,

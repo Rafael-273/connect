@@ -38,6 +38,37 @@
         transition: opacity .15s;
     }
     .demand-link:hover { opacity: .8; }
+    @media (max-width: 767px) {
+        .event-types-header > section { padding-right: 7rem; }
+        .event-types-header > section .gap-4 { gap: .65rem; }
+        .event-types-header h1 { font-size: clamp(.95rem, 4.4vw, 1.15rem); line-height: 1.2; }
+        .event-types-header > section p { font-size: .7rem; line-height: 1.25; }
+        .event-types-header .demands-page-nav { position: absolute; top: 1.25rem; right: 1rem; z-index: 45; padding: 0; border: 0; gap: .5rem; }
+        .event-types-header .demands-page-active, .event-types-header .demands-page-nav.is-open .demands-page-active { display: none; }
+        .event-types-header .demands-page-nav-toggle, .event-types-header .demands-page-nav.is-open .demands-page-nav-toggle { width: 2.75rem; height: 2.75rem; border-radius: .8rem; transform: none; }
+        .event-types-header .demands-page-create { width: 2.75rem; height: 2.75rem; margin: 0; padding: 0; }
+        .event-types-header .demands-page-nav-menu, .event-types-header .demands-page-nav.is-open .demands-page-nav-menu { position: absolute; top: calc(100% + .5rem); right: 3.25rem; width: min(14rem, calc(100vw - 2rem)); max-width: none; margin: 0; overflow: visible; filter: none; transform: translateY(-.3rem); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .16s ease, transform .16s ease, visibility .16s; }
+        .event-types-header .demands-page-nav.is-open .demands-page-nav-menu { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+        .event-types-header .demands-kind-chips { display: grid; width: 100%; max-width: none; gap: .15rem; padding: .4rem; box-shadow: 0 14px 36px rgba(15,23,42,.16); }
+        .event-types-header .demands-kind-chips .media-chip { justify-content: flex-start; width: 100%; min-height: 2.75rem; padding: .65rem .75rem; font-size: .8125rem; }
+        .event-types-header .demands-kind-chips .media-chip span { display: inline; }
+        .event-types-header .demands-kind-chips .media-chip i { width: 1.25rem; text-align: center; }
+        .org-media .event-types-list { display: grid; gap: .875rem; }
+        .event-type-card { padding: 1rem; border-color: #e5e7eb; box-shadow: 0 1px 3px rgba(16,24,40,.04); }
+        .event-type-card__head { display: flex; align-items: flex-start; gap: .75rem; }
+        .event-type-card__icon { display: flex; align-items: center; justify-content: center; flex: 0 0 2.75rem; height: 2.75rem; border-radius: .75rem; color: #c90905; background: #fef2f2; }
+        .event-type-card__info { min-width: 0; flex: 1; }
+        .event-type-card__info h2 { overflow-wrap: anywhere; line-height: 1.35; }
+        .event-type-card__meta { margin-top: .35rem; color: #667085; font-size: .75rem; line-height: 1.4; }
+        .event-type-card__actions { display: flex; gap: .5rem; margin-top: .875rem; padding-top: .75rem; border-top: 1px solid #f0f1f3; }
+        .event-type-card__actions > a:first-child { min-width: 0; min-height: 2.75rem; display: inline-flex; align-items: center; justify-content: center; gap: .45rem; }
+        .event-type-card__actions .action-btn { flex: 0 0 2.75rem; width: 2.75rem; height: 2.75rem; }
+        .type-modal:not(.hidden) { align-items: flex-end; padding: 0; }
+        .type-modal-card { max-width: none; max-height: 92dvh; border-radius: 1.25rem 1.25rem 0 0; padding-bottom: env(safe-area-inset-bottom); }
+        .type-modal input[name="name"], .type-modal textarea { font-size: 1rem; line-height: 1.4; }
+    }
+    .type-modal.hidden { display: none; }
+    @media (prefers-reduced-motion: reduce) { .event-types-header .demands-page-nav-menu { transition: none; } }
 </style>
 {% endblock %}
 
@@ -46,53 +77,50 @@
     {% include 'parciais/messages.html' %}
 
     {% url 'media_content_list' as back_url %}
-    <div class="relative">
+    <div class="relative event-types-header">
         {% include 'parciais/org_media_header.html' with back_url=back_url title='Tipos de' accent='eventos' subtitle='Templates e demandas padrão da equipe' %}
         {% include 'parciais/demands_header_navigation.html' with active='event_types' create_label='Novo tipo' create_href='?create=1' %}
     </div>
 
-    <div class="px-4 sm:px-6 pb-4 w-full">
+    <div class="px-4 sm:px-6 pt-4 pb-4 w-full">
         <div class="flex items-center gap-2 mb-4">
             <form method="get" class="flex items-center gap-2 flex-1 min-w-0">
                 <input type="search" name="search" value="{{ search }}" placeholder="Buscar tipo de evento..."
                        class="w-full min-w-0 h-10 px-4 border border-gray-200 rounded-xl focus:outline-none focus:border-red-400 bg-white text-sm">
-                <button type="submit" class="flex-shrink-0 w-10 h-10 text-white rounded-xl flex items-center justify-center org-btn-primary !p-0 !w-10 !h-10" title="Buscar">
+                <button type="submit" class="flex-shrink-0 w-10 h-10 text-white rounded-xl flex items-center justify-center org-btn-primary !p-0 !w-10 !h-10" title="Buscar" aria-label="Buscar tipo de evento">
                     <i class="fas fa-search text-sm"></i>
                 </button>
             </form>
         </div>
 
-        <div class="block md:hidden space-y-3">
+        <div class="event-types-list block md:hidden">
             {% for et in event_types %}
-            <div class="admin-card p-4">
-                <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
-                        <h2 class="text-base font-bold text-gray-900 truncate">{{ et.name }}</h2>
+            <div class="admin-card event-type-card p-4">
+                <div class="event-type-card__head">
+                    <div class="event-type-card__icon" aria-hidden="true"><i class="fas fa-tags"></i></div>
+                    <div class="event-type-card__info">
+                        <h2 class="text-base font-bold text-gray-900">{{ et.name }}</h2>
                         {% if et.description %}<p class="text-xs text-gray-500 mt-0.5 line-clamp-2">{{ et.description }}</p>{% endif %}
                         {% if et.planning_template %}
-                        <a href="{% url 'media_template_detail' et.planning_template.pk %}" class="inline-flex mt-2 px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700 hover:bg-red-200 transition-colors">
-                            {{ et.template_item_count }} demanda{{ et.template_item_count|pluralize }} padrão
-                        </a>
+                        <p class="event-type-card__meta">{{ et.template_item_count }} demanda{{ et.template_item_count|pluralize }} padrão</p>
                         {% else %}
-                        <a href="{% url 'media_template_setup' et.pk %}" class="inline-flex mt-2 px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors">
-                            Configurar demandas
-                        </a>
+                        <p class="event-type-card__meta">Demandas padrão não configuradas</p>
                         {% endif %}
                     </div>
                     {% if et.is_active %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Ativo</span>{% else %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">Inativo</span>{% endif %}
                 </div>
-                <div class="flex gap-2 pt-3 mt-3 border-t border-gray-100">
+                <div class="event-type-card__actions">
                     {% if et.planning_template %}
                     <a href="{% url 'media_template_detail' et.planning_template.pk %}" class="org-btn-secondary flex-1 justify-center !py-2">
-                        Ver demandas
+                        <i class="fas fa-list" aria-hidden="true"></i> Ver demandas
                     </a>
                     {% else %}
                     <a href="{% url 'media_template_setup' et.pk %}" class="org-btn-primary flex-1 text-center !py-2">
-                        Configurar demandas
+                        <i class="fas fa-plus" aria-hidden="true"></i> Configurar demandas
                     </a>
                     {% endif %}
-                    <a href="{% url 'media_event_type_edit' et.pk %}" class="py-2 px-3 rounded-lg text-sm font-medium border border-red-100 text-red-600 bg-red-50" title="Editar tipo"><i class="fas fa-pen"></i></a>
-                    <button type="button" class="py-2 px-3 rounded-lg text-sm font-medium bg-red-50 text-red-600 border border-red-100" title="Excluir tipo"
+                    <a href="{% url 'media_event_type_edit' et.pk %}" class="action-btn action-btn-edit" title="Editar tipo" aria-label="Editar {{ et.name }}"><i class="fas fa-pen"></i></a>
+                    <button type="button" class="action-btn action-btn-delete" title="Excluir tipo" aria-label="Excluir {{ et.name }}"
                             data-delete-type data-delete-url="{% url 'media_event_type_delete' et.pk %}" data-delete-name="{{ et.name }}" data-demand-count="{{ et.template_item_count }}" data-event-count="{{ et.event_count }}"><i class="fas fa-trash"></i></button>
                 </div>
             </div>

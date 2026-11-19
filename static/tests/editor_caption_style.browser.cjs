@@ -1,4 +1,4 @@
-// The editable preview must preserve the ASS font size, anchor and explicit lines.
+// The editable preview keeps the template font height and fits long text in the output frame.
 const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-core');
 const assert=require('node:assert/strict');
 (async()=>{
@@ -24,12 +24,15 @@ const assert=require('node:assert/strict');
    await page.setViewportSize({width,height});await page.waitForTimeout(200);
    const result=await page.evaluate(()=>{
     const stage=document.querySelector('.preview-stage'),node=document.getElementById('preview-caption-source'),css=getComputedStyle(stage),style=getComputedStyle(node);
-    return {font:parseFloat(style.fontSize),expectedFont:72*stage.clientWidth/Number(css.getPropertyValue('--preview-width')),bottom:parseFloat(style.bottom),expectedBottom:140*stage.clientHeight/Number(css.getPropertyValue('--preview-height')),weight:style.fontWeight,color:style.color,whiteSpace:style.whiteSpace,width:node.getBoundingClientRect().width,stageWidth:stage.clientWidth,transform:node.style.transform};
+    return {font:parseFloat(style.fontSize),expectedFont:72*stage.clientWidth/Number(css.getPropertyValue('--preview-width')),bottom:parseFloat(style.bottom),expectedBottom:140*stage.clientHeight/Number(css.getPropertyValue('--preview-height')),weight:style.fontWeight,color:style.color,whiteSpace:style.whiteSpace,width:node.getBoundingClientRect().width,stageWidth:stage.clientWidth,stageLeft:stage.getBoundingClientRect().left,stageRight:stage.getBoundingClientRect().right,left:node.getBoundingClientRect().left,right:node.getBoundingClientRect().right,transform:node.style.transform};
    });
    assert.ok(Math.abs(result.font-result.expectedFont)<.05,JSON.stringify(result));
    assert.ok(Math.abs(result.bottom-result.expectedBottom)<.05,JSON.stringify(result));
-   assert.equal(result.weight,'700');assert.equal(result.color,'rgb(255, 204, 0)');assert.equal(result.whiteSpace,'pre');assert.ok(result.width>result.stageWidth);assert.match(result.transform,/-50%/);
+   assert.equal(result.weight,'700');assert.equal(result.color,'rgb(255, 204, 0)');assert.equal(result.whiteSpace,'pre');assert.ok(result.width<=result.stageWidth,JSON.stringify(result));assert.ok(result.left>=result.stageLeft&&result.right<=result.stageRight,JSON.stringify(result));assert.match(result.transform,/scaleX\(0\./);
   }
-  assert.deepEqual(errors,[]);console.log('PASS template font size, position, weight, color and explicit wrapping in mobile and desktop; no auto-shrinking');
+  await page.locator('#preview-range').evaluate(n=>{n.value=3500;n.dispatchEvent(new Event('input'))});
+  await page.waitForFunction(()=>document.getElementById('preview-caption-source').textContent==='Dois');
+  assert.match(await page.locator('#preview-caption-source').getAttribute('style'),/scaleX\(1\)/,'short captions keep their original width');
+  assert.deepEqual(errors,[]);console.log('PASS template font height, position, and long captions fitted within mobile and desktop output');
  }finally{await browser.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});

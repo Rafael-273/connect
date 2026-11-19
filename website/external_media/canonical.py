@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 from django.utils import timezone
 
-from website.models.external_media import MediaTemplatePlugin
+from website.models.external_media import MediaTemplatePlugin, project_editor_settings
 from .audio_mixing import resolved_ducking_config
 from .speech_edit import SpeechEditPlan
 
@@ -150,10 +150,10 @@ class EffectiveCapabilities:
             MediaTemplatePlugin.Code.MUSIC,
         }
         result = []
-        for plugin in project.template_version.plugins.filter(is_enabled=True).exclude(code__in=ignored_codes):
+        for plugin in project_editor_settings(project).plugins.filter(is_enabled=True).exclude(code__in=ignored_codes):
             if not plugin.user_can_override or configured.get(plugin.code, True):
                 result.append(plugin)
-        version = project.template_version
+        version = project_editor_settings(project)
         # Existing versions default to enabled; newer templates may explicitly
         # opt out without relying on empty styles or language hacks.
         if version.subtitles_enabled:
@@ -196,7 +196,7 @@ class SourceManifestBuilder:
     @classmethod
     def build(cls, project, processing_job_id=None):
         capabilities = {item.code for item in EffectiveCapabilities.resolve(project)}
-        version = project.template_version
+        version = project_editor_settings(project)
         sources, position = [], 0
 
         def append(kind, source_id, field, *, role, block=None, custom_block=None, media=None):
@@ -258,7 +258,7 @@ class SourceManifestBuilder:
             append('template_intro', f'template-intro-{version.pk}', version.intro_video, role='intro')
 
         media_by_block, media_by_custom, direct_media = {}, {}, []
-        for item in project.block_media.select_related('block', 'custom_block').all().order_by('position', 'camera_order', 'pk'):
+        for item in project.block_media.filter(editor_only=False).select_related('block', 'custom_block').order_by('position', 'camera_order', 'pk'):
             if item.block_id:
                 media_by_block.setdefault(item.block_id, []).append(item)
             elif item.custom_block_id:
@@ -321,7 +321,7 @@ class SourceManifestBuilder:
         return {
             'schema': SOURCE_MANIFEST_SCHEMA,
             'project_id': str(project.public_id),
-            'template_version_id': str(version.pk),
+            'template_version_id': str(version.pk) if getattr(version, 'pk', None) else None,
             'processing_job_id': str(processing_job_id) if processing_job_id else None,
             'created_at': timezone.now().isoformat(),
             'sources': sources,
@@ -340,7 +340,7 @@ class SourceManifestBuilder:
         if kind in {'upload', 'custom_upload', 'project_upload'}:
             item = project.block_media.select_related('block', 'custom_block').get(pk=reference)
             return item.file
-        version = project.template_version
+        version = project_editor_settings(project)
         if kind == 'template_default':
             return version.blocks.get(pk=reference).default_video
         if kind == 'template_intro':
@@ -399,7 +399,7 @@ class EditDecisionSetBuilder:
                     'reason': 'face_tracking', 'confidence': None, 'plan_reference': plan,
                     'metadata': {},
                 })
-        version = project.template_version
+        version = project_editor_settings(project)
         lut_file = version.color_lut.lut_file if version.color_lut_id and version.color_lut.lut_file else version.lut_file
         if lut_file:
             operations.append({

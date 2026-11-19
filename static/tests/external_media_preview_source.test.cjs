@@ -230,3 +230,31 @@ test('returning to a recently failed source cancels another cold load and offers
     h.player.retry();h.video.metadata();h.video.frame();h.flush();assert.equal(h.video.currentTime,4);assert.equal(h.player.failure,null);
     h.player.seek('c.mp4',0);h.advance(5000);h.player.seek('',0);h.player.retry();assert.equal(h.player.failure,null);assert.equal(h.errors.at(-1),null);
 });
+
+test('a stalled warm decoder falls back to the current decoder and preserves playback intent',()=>{
+    const h=harness({fallbackPreloadOnTimeout:true});h.video.dataset.source='a.mp4';h.video.readyState=3;
+    h.player.warm('b.mp4',2);const incoming=h.player.preloader;
+    h.player.seek('b.mp4',2,{autoplay:true});h.advance(5000);
+    assert.equal(h.player.failure,null);assert.equal(h.player.video,h.video);assert.equal(h.video.src,'b.mp4');
+    incoming.metadata();incoming.frame();h.flush();assert.equal(h.plays,0);
+    h.video.metadata();h.video.frame();h.flush();assert.equal(h.plays,1);assert.equal(h.loading.at(-1),false);
+});
+
+test('cold timeout retries once, keeps pause intent, then reports a real failure',()=>{
+    const h=harness({maxTimeoutRetries:1});h.player.seek('a.mp4',3,{autoplay:true});h.player.pause();
+    const initial=h.player.loadId;h.advance(5000);assert.equal(h.player.loadId,initial+1);assert.equal(h.player.failure,null);
+    assert.equal(h.player.target.autoplay,false);h.advance(5000);
+    assert.equal(h.player.failure.reason,'timeout');assert.equal(h.plays,0);assert.equal(h.timers.size,0);
+});
+
+test('progress in buffered ranges before the target extends the loading window',()=>{
+    const h=harness();let end=1;h.video.buffered={length:1,start:()=>0,end:()=>end};
+    h.player.seek('a.mp4',6);h.advance(4000);end=2;h.advance(1250);
+    assert.equal(h.player.failure,null);h.advance(4000);assert.equal(h.player.failure.reason,'timeout');
+});
+
+test('already-current nonzero frame can finish without a seeked event',()=>{
+    const h=harness();h.video._time=3;h.player.seek('a.mp4',3,{autoplay:true});
+    h.video.metadata();h.video.readyState=2;h.video.dispatchEvent(new Event('loadeddata'));h.flush();
+    assert.equal(h.plays,1);assert.equal(h.loading.at(-1),false);
+});

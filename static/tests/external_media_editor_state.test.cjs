@@ -163,3 +163,18 @@ test('an editorial response retains play intent while a transition is waiting fo
     vm.runInContext(`sourcePlayer.target={autoplay:true};sourcePlayer.waitingForPreload='b:0';loading=true;applyTimeline({editorial_version:6,timeline:{sequence:{duration_ms:10000},captions:[]}});observed=seekCalls.at(-1)[1]`,context);
     assert.equal(context.observed,true);
 });
+
+test('a rejected validation leaves the next queued edit on the same version', async () => {
+    const versions = [];
+    const editor = new EditorPersistence({version: 5, send: async (operation, version) => {
+        versions.push(version);
+        if (operation.url === '/invalid') throw Object.assign(new Error('Invalid edit'), {status: 400});
+        return {editorial_version: 6};
+    }});
+    const invalid = editor.enqueue('/invalid', {});
+    const valid = editor.enqueue('/valid', {});
+    await assert.rejects(invalid, /Invalid edit/);
+    await valid;
+    assert.deepEqual(versions, [5, 5]);
+    assert.equal(editor.error, null);
+});

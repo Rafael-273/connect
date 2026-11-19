@@ -105,8 +105,12 @@ class PreviewArtifactService:
     def enqueue(artifact_id, lease):
         def dispatch():
             try:
-                from .tasks import create_preview_artifact
-                create_preview_artifact.apply_async(args=(artifact_id, lease), queue='media_previews', retry=False, ignore_result=True)
+                if settings.RENDER_WORKFLOW_ENABLED:
+                    from .render_workflow import enqueue_video_work
+                    enqueue_video_work('preview-artifact', artifact_id, lease)
+                else:
+                    from .tasks import create_preview_artifact
+                    create_preview_artifact.apply_async(args=(artifact_id, lease), queue='media_previews', retry=False, ignore_result=True)
             except Exception:
                 logger.warning('Falha ao agendar cache de preview %s.', artifact_id, exc_info=True)
         Thread(target=dispatch, name=f'preview-artifact-{artifact_id}', daemon=True).start()

@@ -3,7 +3,7 @@
 O site Django permanece na hospedagem principal. Quando
 `RENDER_WORKFLOW_ENABLED=TRUE`, todos os jobs de Mídia Externa são enviados ao
 Render Workflow: pipeline, renderização final, prévias, revisão de legendas,
-masterização e exportação Premiere. Não é necessário iniciar um worker Celery
+masterização, exportação Premiere, proxies de revisão, formas de onda e miniaturas da timeline. Não é necessário iniciar um worker Celery
 ou Celery Beat na hospedagem principal para esses fluxos.
 
 ## Serviço Render

@@ -26,7 +26,11 @@
             </div>
             <div class="rounded-xl bg-gray-50 border border-gray-100 p-4 text-sm text-gray-600">
                 <i class="fas fa-layer-group mr-2" style="color:#C90905"></i>
-                Template selecionado: <strong>{{ project.template_version.template.name }}</strong>. O template não pode ser alterado após a criação porque os vídeos enviados seguem os blocos dele.
+                {% if project.is_free %}
+                    <strong>Edição livre</strong> · {{ project.free_preset.name }}
+                {% else %}
+                    Modelo selecionado <strong>{{ project.template_version.template.name }}</strong>
+                {% endif %}
             </div>
             <div class="flex flex-wrap justify-end gap-3 pt-2">
                 <a href="{% url 'external_media_project_detail' project.public_id %}" class="media-btn media-muted">Cancelar</a>

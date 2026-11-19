@@ -36,7 +36,7 @@ class MediaQualityService:
     def __init__(self, runner=None):
         self.runner = runner or FFmpegRunner()
 
-    def validate_media(self, path: Path, *, expected_duration_ms=None, deep_audio=False):
+    def validate_media(self, path: Path, *, expected_duration_ms=None, deep_audio=False, allow_silence=False):
         report = QualityReport()
         probe = self._probe(path)
         streams = probe.get('streams') or []
@@ -67,7 +67,7 @@ class MediaQualityService:
         if deep_audio and has_audio and report.ok:
             metrics = AudioAnalysisService(self.runner).analyze(path)
             report.metrics['audio'] = metrics
-            if metrics.get('integrated_lufs') is None:
+            if metrics.get('integrated_lufs') is None and not (allow_silence and metrics.get('silent')):
                 report.errors.append('Não foi possível medir o áudio final.')
             if metrics.get('clipping_detected'):
                 report.warnings.append('Foram detectados possíveis picos de áudio no limite digital.')

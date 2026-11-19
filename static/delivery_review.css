@@ -67,3 +67,15 @@
 .review-form-error[hidden] { display:none; }
 @media(max-width:600px) { .review-delivery-list { grid-template-columns:minmax(0, 1fr); } .review-delivery-preview { height:12rem; } }
 @media(max-width:360px) { .review-delivery-actions { gap:.35rem; } .review-delivery-actions > button { padding-inline:.35rem; font-size:.75rem; } }
+
+.review-delivery-download { box-sizing:border-box; display:flex; align-items:center; justify-content:center; gap:.5rem; width:100%; min-height:2.75rem; margin-top:.7rem; padding:.55rem .75rem; border:1px solid #e5e7eb; border-radius:.65rem; background:#fff; color:#9f211a; font-size:.8rem; font-weight:700; text-decoration:none; }
+.review-delivery-download:hover { border-color:#e7aaa4; background:#fff8f7; }
+.review-delivery-download:focus-visible { outline:2px solid #c90905; outline-offset:2px; }
+@media (max-width:600px) {
+    .delivery-review-dialog { position:fixed; inset:auto 0 0; width:100%; max-width:none; max-height:90dvh; margin:0; overflow:hidden; border-radius:1.15rem 1.15rem 0 0; border-bottom:0; }
+    .delivery-review-dialog .delivery-review-content { display:flex; flex-direction:column; max-height:90dvh; }
+    .delivery-review-dialog .delivery-review-heading { position:relative; flex:none; padding-top:1.6rem; }
+    .delivery-review-dialog .delivery-review-heading::before { content:''; position:absolute; top:.5rem; left:50%; width:2.5rem; height:.25rem; border-radius:999px; background:#d0d5dd; transform:translateX(-50%); }
+    .delivery-review-dialog .delivery-review-close { width:2.75rem; height:2.75rem; }
+    .delivery-review-dialog .delivery-review-body { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-bottom:calc(1rem + env(safe-area-inset-bottom, 0px)); }
+}

@@ -14,6 +14,7 @@ class SourceTakeAnalysis(models.Model):
     transcript = models.JSONField(default=list)
     chunks = models.JSONField(default=dict)
     transcript_ready = models.BooleanField(default=False)
+    translations = models.JSONField(default=dict, blank=True)
     suggestions = models.JSONField(default=list)
     review_reason = models.TextField(blank=True)
     updated_at = models.DateTimeField(auto_now=True)

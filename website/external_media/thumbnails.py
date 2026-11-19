@@ -1,4 +1,4 @@
-"""Persistent, versioned timeline thumbnails, generated only by preview workers."""
+"""Persistent, versioned timeline thumbnails."""
 import hashlib
 import logging
 import time
@@ -56,8 +56,12 @@ class TimelineThumbnailService:
     def enqueue(proxy_id, token):
         def dispatch():
             try:
-                from .tasks import create_timeline_thumbnail
-                create_timeline_thumbnail.apply_async(args=(proxy_id, token), queue='media_previews', retry=False, ignore_result=True)
+                if settings.RENDER_WORKFLOW_ENABLED:
+                    from .render_workflow import enqueue_video_work
+                    enqueue_video_work('timeline-thumbnail', proxy_id, token)
+                else:
+                    from .tasks import create_timeline_thumbnail
+                    create_timeline_thumbnail.apply_async(args=(proxy_id, token), queue='media_previews', retry=False, ignore_result=True)
             except Exception:
                 logger.warning('Não foi possível agendar miniatura do proxy %s.', proxy_id, exc_info=True)
         Thread(target=dispatch, name=f'thumbnail-{proxy_id}', daemon=True).start()

@@ -271,6 +271,47 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
             ),
         ]
 
+    def test_ass_fits_long_lines_without_changing_short_caption_size(self):
+        self.style.font_name = 'Montserrat'
+        self.style.font_size = 72
+        self.style.max_characters = 200
+        self.style.max_lines = 1
+        service = SubtitleService()
+        long_text = 'Uma legenda muito longa com palavras que não devem ultrapassar as laterais do vídeo ' * 3
+        self.assertLess(service._fit_horizontal_scale(long_text, self.style, 1080), 100)
+        self.assertEqual(service._fit_horizontal_scale('Legenda curta', self.style, 1080), 100)
+        self.cues[0].text = long_text
+        self.cues[0].save(update_fields=['text'])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'captions.ass'
+            service.write_ass(self.track, path, self.style, 1080, 1920)
+            rows = [line for line in path.read_text(encoding='utf-8-sig').splitlines() if line.startswith('Dialogue:')]
+        self.assertIn(r'\fscx', rows[0])
+        self.assertNotIn(r'\fscx', rows[-1])
+        self.assertIn('Uma legenda muito longa', rows[0])
+
+    def test_dual_ass_fits_long_lines_in_every_visual_layer(self):
+        self.style.font_name = 'Montserrat'
+        self.style.font_size = 72
+        self.style.background_enabled = True
+        self.style.background_height_percent = 70
+        self.style.shadow = 3
+        self.cues[0].text = 'Uma legenda muito longa que precisa caber na tela ' * 6
+        self.cues[0].save(update_fields=['text'])
+        translated = SubtitleTrack.objects.create(job=self.job, language='en')
+        SubtitleCue.objects.create(track=translated, cue_index=1, start_ms=1200, end_ms=4800, text='Short translation')
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'dual.ass'
+            SubtitleService().write_dual_ass([self.track, translated], path, self.style, 1080, 1920)
+            rows = [line for line in path.read_text(encoding='utf-8-sig').splitlines() if line.startswith('Dialogue:')]
+        original = [row for row in rows if ',Original' in row and 'Uma legenda muito longa' in row]
+        self.assertGreaterEqual(len(original), 2)
+        scales = [row.split(r'\fscx', 1)[1].split('}', 1)[0] for row in original]
+        self.assertEqual(len(set(scales)), 1)
+        translated_rows = [row for row in rows if ',Translated' in row]
+        self.assertTrue(translated_rows)
+        self.assertTrue(all(r'\fscx' not in row for row in translated_rows))
+
     def test_translation_preserves_every_timestamp(self):
         ai = Mock()
         ai.generate_text.return_value = (

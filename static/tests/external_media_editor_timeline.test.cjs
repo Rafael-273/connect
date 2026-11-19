@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {removeVideoRange}=require('../external_media_editor_timeline.js');
+const {removeVideoRange,moveVideo}=require('../external_media_editor_timeline.js');
 function fixture(){
  const clips=[{id:'a',asset_id:'camera',timeline_in_ms:0,timeline_out_ms:10000,source_in_ms:500,source_out_ms:10500,master_in_ms:0,master_out_ms:10000,effects:[{type:'transform',scale:1.2}]}];
  return {sequence:{duration_ms:10000},clips,decisions:[],captions:[],video_splits_ms:[2000,4000,6000],markers:[{time_ms:0},{time_ms:6000}],video_tracks:[{role:'main',clips}],overlays:[{id:'text',start_ms:7000,end_ms:8000}],brolls:[{id:'b',start_ms:7000,end_ms:8000}],music:{tracks:[{id:1,start_ms:0,end_ms:10000}]}};
@@ -39,4 +39,25 @@ test('legacy ranges can resolve master coordinates through earlier accepted cuts
 test('deleting the entire sequence produces an empty canonical timeline and validates ranges',()=>{
  const result=cut(fixture(),0,10000).timeline;assert.equal(result.sequence.duration_ms,0);assert.deepEqual(result.clips,[]);assert.deepEqual(result.video_splits_ms,[]);
  for(const [start,end] of [[-1,1000],[0,10001],[50,60],[1000,500]])assert.throws(()=>cut(fixture(),start,end));
+});
+
+test('moving a take remaps its captions and playhead while preserving independent layers', () => {
+    const original = fixture();
+    original.project = {mode: 'free'};
+    const first = {...original.clips[0], timeline_out_ms: 4000, source_out_ms: 4500, master_out_ms: 4000};
+    const last = {...first, id: 'b', asset_id: 'other', timeline_in_ms: 4000, timeline_out_ms: 10000,
+        source_in_ms: 100, source_out_ms: 6100, master_in_ms: 4000, master_out_ms: 10000};
+    original.clips = [first, last];
+    original.captions = [{id: 1, start_ms: 4500, end_ms: 5000}];
+    const {timeline, mapPoint} = moveVideo(original, {source_id:'other', start_ms:4000, end_ms:10000},
+        {source_id:'camera', start_ms:0, end_ms:4000});
+
+    assert.deepEqual(timeline.clips.map(clip => [clip.id, clip.timeline_in_ms, clip.timeline_out_ms,
+        clip.source_in_ms, clip.source_out_ms]), [['b',0,6000,100,6100], ['a',6000,10000,500,4500]]);
+    assert.deepEqual(timeline.captions, [{id: 1, start_ms: 500, end_ms: 1000}]);
+    assert.equal(mapPoint(4800), 800);
+    assert.deepEqual(timeline.brolls, original.brolls);
+    assert.deepEqual(timeline.overlays, original.overlays);
+    assert.deepEqual(timeline.music, original.music);
+    assert.equal(original.clips[0].timeline_in_ms, 0);
 });

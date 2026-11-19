@@ -36,7 +36,7 @@ class BrollTimelineService:
 
     @classmethod
     def configuration(cls, project):
-        plugin = project.template_version.plugins.filter(
+        plugin = project.editor_settings.plugins.filter(
             code=MediaTemplatePlugin.Code.BROLL,
         ).first()
         # B-roll is always available at the project/block level. A legacy

@@ -4,7 +4,10 @@
         for(let attempt=0;attempt<attempts;attempt++){
             if(signal?.aborted||!isCurrent())throw new DOMException('Operação cancelada.','AbortError');
             const response=await fetcher(url,{credentials:'same-origin',signal});
-            if(!response.ok)throw new Error(`Não foi possível preparar a mídia (${response.status}).`);
+            if(!response.ok){
+                const detail=await response.json().catch(()=>null);
+                throw new Error(detail?.error || `Não foi possível preparar a mídia (${response.status}).`);
+            }
             const data=await response.json();
             if(data.status==='ERROR')throw new Error('Não foi possível preparar esta prévia. Tente novamente mais tarde.');
             if(response.status!==202)return data;
