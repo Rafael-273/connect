@@ -63,6 +63,27 @@ class TemplateBrollTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(list(self.block.default_brolls.values_list('description', flat=True)), ['Pessoas reunidas'])
         self.assertEqual(list(project.broll_assets.values_list('description', flat=True)), ['Pessoas adorando', 'Congregação'])
 
+    def test_existing_project_imports_template_brolls_once(self):
+        project = ExternalMediaProject.objects.create(
+            name='Projeto anterior', template_version=self.version, created_by=self.member,
+            status=ExternalMediaProject.Status.DRAFT,
+        )
+        TemplateBrollAsset.objects.create(
+            block=self.block, original_filename='foto.jpeg', description='Área para crianças',
+            file=SimpleUploadedFile('foto.jpeg', b'image'),
+        )
+        MinistryMembership.objects.create(member=self.member, ministry=self.ministry)
+        self.client.force_login(self.user)
+        detail = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
+        self.assertContains(detail, 'Adicionar B-rolls do modelo')
+        url = reverse('external_media_project_broll_upload', args=[project.public_id, self.block.pk])
+        self.client.post(url, {'import_template_brolls': '1'})
+        asset = project.broll_assets.get()
+        self.assertEqual(asset.description, 'Área para crianças')
+        self.assertEqual(asset.media_type, 'IMAGE')
+        self.client.post(url, {'import_template_brolls': '1'})
+        self.assertEqual(project.broll_assets.count(), 1)
+
     def test_image_is_validated_and_copied_as_image(self):
         image = io.BytesIO()
         Image.new('RGB', (8, 8), 'red').save(image, format='PNG')

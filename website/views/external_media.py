@@ -1800,6 +1800,30 @@ class ExternalMediaProjectBrollUploadView(ExternalMediaRequiredMixin, View):
             custom_block = get_object_or_404(ProjectCustomBlock, pk=block_id, project=project)
         else:
             block = get_object_or_404(MediaTemplateBlock, pk=block_id, version=project.template_version)
+        if request.POST.get('import_template_brolls') == '1' and block:
+            with transaction.atomic():
+                project = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+                if project.status != ExternalMediaProject.Status.DRAFT:
+                    return self._error_response(request, project, 'Volte aos blocos antes de importar os elementos.', status=409)
+                if project.broll_assets.filter(block=block).exists():
+                    return self._error_response(request, project, 'Este bloco já possui elementos. A importação está disponível para blocos sem elementos.')
+                for source in block.default_brolls.all():
+                    media_type = (ProjectBrollAsset.MediaType.IMAGE
+                                  if Path(source.original_filename).suffix.lower() in IMAGE_EXTENSIONS
+                                  else ProjectBrollAsset.MediaType.VIDEO)
+                    asset = ProjectBrollAsset(
+                        project=project, block=block, media_type=media_type,
+                        original_filename=source.original_filename, description=source.description,
+                        position=source.position + 1,
+                    )
+                    with source.file.open('rb') as content:
+                        asset.file.save(source.original_filename, content, save=False)
+                    asset.file_size = source.file.size
+                    asset.save()
+                    if media_type == ProjectBrollAsset.MediaType.VIDEO:
+                        transaction.on_commit(lambda asset=asset: self._enqueue_preview(asset))
+            messages.success(request, 'B-rolls do modelo adicionados ao bloco.')
+            return redirect('external_media_project_detail', public_id=public_id)
         form = ProjectBrollAssetForm(request.POST, request.FILES)
         if not form.is_valid():
             return self._error_response(request, project, 'Não foi possível adicionar o B-roll: ' + ' '.join(

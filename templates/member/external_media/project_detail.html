@@ -449,9 +449,16 @@
         </div>
         {% endif %}
         {% if broll_config.enabled %}
-            <section id="scene-elements-card-{{ forloop.counter }}" class="order-3 mt-4 overflow-hidden rounded-xl border border-violet-100 bg-violet-50/30{% if not item.brolls %} hidden{% endif %}" data-broll-assets-list>
+            <section id="scene-elements-card-{{ forloop.counter }}" class="order-3 mt-4 overflow-hidden rounded-xl border border-violet-100 bg-violet-50/30{% if not item.brolls and not item.definition.default_brolls.exists %} hidden{% endif %}" data-broll-assets-list>
                 <div class="flex items-center justify-between gap-3 border-b border-violet-100 bg-violet-50/70 px-3 py-2"><div class="flex items-center gap-2"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600 text-xs text-white"><i class="fas fa-photo-film"></i></span><div><strong class="block text-sm text-gray-900">Elementos</strong><span class="block text-xs text-gray-500">Elementos visuais de apoio deste bloco</span></div></div>{% if not item.brolls %}<button type="button" class="project-media-action" aria-label="Fechar elementos" onclick="const panel=document.getElementById('scene-elements-panel-{{ forloop.counter }}');panel.open=false;this.closest('[data-broll-assets-list]').classList.add('hidden')"><i class="fas fa-xmark"></i></button>{% endif %}</div>
                 <div class="space-y-2 p-2" data-broll-assets-items>
+                {% if not item.is_custom and not item.brolls and item.definition.default_brolls.exists %}
+                <form method="post" action="{% url 'external_media_project_broll_upload' project.public_id item.definition.pk %}" class="flex flex-wrap items-center justify-between gap-2 p-2">
+                    {% csrf_token %}<input type="hidden" name="import_template_brolls" value="1">
+                    <span class="text-sm text-gray-600">Este bloco possui B-rolls padrão no modelo.</span>
+                    <button type="submit" class="media-btn media-muted text-sm"><i class="fas fa-layer-group"></i>Adicionar B-rolls do modelo</button>
+                </form>
+                {% endif %}
                 {% for broll in item.brolls %}
                 <div class="flex items-center justify-between gap-3 rounded-lg bg-white border border-violet-100 p-3">
                     <div class="min-w-0"><strong class="block truncate"><i class="fas {% if broll.media_type == 'VIDEO' %}fa-video{% else %}fa-image{% endif %} mr-1 text-violet-600"></i>{{ broll.original_filename }}</strong><span class="text-xs text-gray-500">{{ broll.get_media_type_display }}{% if broll.trim_start_ms or broll.trim_end_ms %} · corte aplicado{% endif %}</span></div>
