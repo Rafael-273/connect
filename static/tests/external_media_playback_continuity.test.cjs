@@ -36,7 +36,7 @@ test('timeline replacement invalidates a scheduled cut and continuous source spa
 test('preparation skips continuous blade spans to warm the next actual discontinuity',()=>{
  const start=template.indexOf('    function warmNextClip('),end=template.indexOf('    function seek(',start);
  const warmed=[],clips=[{source:'a',source_in_ms:0,source_out_ms:1},{source:'a',source_in_ms:1,source_out_ms:2},{source:'a',source_in_ms:8,source_out_ms:9}];
- vm.runInNewContext(template.slice(start,end)+';warmNextClip(clips[0]);',{clips,playbackIn,playbackOut,useReviewMaster:()=>false,nextClipAfter:clip=>clips[clips.indexOf(clip)+1],sourceFor:clip=>clip.source,sourcePlayer:{warm:(...args)=>warmed.push(args)}});
+ vm.runInNewContext(template.slice(start,end)+';warmNextClip(clips[0]);',{clips,playbackIn,playbackOut,isIOSPreview:false,useReviewMaster:()=>false,nextClipAfter:clip=>clips[clips.indexOf(clip)+1],sourceFor:clip=>clip.source,sourcePlayer:{warm:(...args)=>warmed.push(args)}});
  assert.deepEqual(warmed,[['a',.008]]);
 });
 

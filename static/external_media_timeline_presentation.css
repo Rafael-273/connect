@@ -1,0 +1,97 @@
+/* The timeline's playhead and clip coordinates always use the full lane. */
+#editor-scroller .editor-track {
+    --track-height: 3.15rem;
+    --lane-height: 2.65rem;
+    min-height: var(--track-height);
+    border-top-color: #263443;
+}
+#editor-scroller .editor-track--caption {
+    --track-height: 2.35rem;
+    --lane-height: 1.9rem;
+}
+#editor-scroller .editor-track__lane { height: var(--lane-height); }
+#editor-scroller .editor-track__label { min-height: var(--track-height); }
+.editor-track__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track-collapse { margin-left: auto; order: 2; display: grid; flex: 0 0 1.15rem; place-items: center; min-height: 24px; color: #93a7bd; }
+.track-collapse:hover, .track-collapse:focus-visible { color: #fff; background: #273547; border-radius: .2rem; }
+.track-collapse[aria-expanded="false"] i { transform: rotate(-90deg); }
+#editor-scroller.is-timeline-compact .editor-track { --track-height: 2.2rem; --lane-height: 1.75rem; }
+#editor-scroller .editor-track.is-track-collapsed { --track-height: 1.4rem; --lane-height: 1.15rem; }
+
+#editor-scroller.has-track-focus .editor-track:not(.is-track-focused) .editor-track__lane { opacity: .48; }
+#editor-scroller.has-track-focus .editor-track:not(.is-track-focused):focus-within .editor-track__lane { opacity: 1; }
+#editor-scroller .is-track-focused .editor-track__lane { box-shadow: inset 0 0 0 1px #6685a3; }
+#editor-scroller .is-track-focused .editor-track__label { background: #26384a; color: #eef6fd; }
+
+#editor-tracks [data-clip-key], #editor-tracks .editor-music-transition { container-type: inline-size; }
+#editor-scroller .editor-track__clip:not(.is-selected):not(.has-transition-in):not(.has-transition-out) {
+    border-color: rgba(155, 177, 197, .17);
+}
+#editor-scroller .editor-track--caption .editor-track__clip { background: #293d50; border-radius: .18rem; }
+#editor-scroller .editor-track--caption .editor-track__caption--en { background: #353852; }
+#editor-scroller .editor-track--caption .editor-track__clip:hover { background: #395066; }
+#editor-scroller .editor-track__clip.is-selected { outline-offset: -1px; }
+.editor-clip__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100%; }
+#editor-scroller .editor-waveform__label { display: none; }
+#editor-scroller .editor-track__clip.has-thumbnail:not(.is-selected):hover { filter: brightness(1.1); }
+
+@container (max-width: 66px) {
+    #editor-scroller .editor-clip__text,
+    #editor-scroller .editor-filmstrip__label,
+    #editor-scroller .editor-music-waveform__label { display: none; }
+}
+@container (max-width: 95px) {
+    .is-timeline-compact .editor-clip__text,
+    .is-timeline-compact .editor-filmstrip__label,
+    #editor-scroller.is-timeline-compact .editor-music-waveform__label,
+    #editor-scroller .editor-music-transition .editor-clip__text { display: none; }
+}
+@container (min-width: 67px) and (max-width: 125px) {
+    #editor-scroller .editor-track--caption .editor-clip__text { color: #b9c9da; font-weight: 600; }
+}
+@container (max-width: 33px) {
+    #editor-scroller .editor-source-waveform, #editor-scroller .editor-music-waveform { display: none; }
+}
+#editor-scroller.is-timeline-compact :is(.editor-source-waveform,.editor-music-waveform) { opacity: .46; }
+#editor-scroller .is-track-collapsed :is(.editor-clip__text,.editor-filmstrip__label,.editor-music-waveform__label,.editor-waveform__label,.editor-source-waveform,.editor-music-waveform,.editor-waveform__bars) { display: none; }
+#editor-scroller .is-track-collapsed .editor-track__clip { min-height: 0; top: 2px; bottom: 2px; border-radius: 2px; }
+#editor-scroller .is-track-collapsed .caption-visibility { visibility: hidden; }
+
+.timeline-display-dialog {
+    position: fixed; inset: 0; margin: auto; width: min(25rem, calc(100vw - 24px)); max-height: min(75vh, 32rem);
+    padding: .9rem; overflow: auto; overscroll-behavior: contain; color: #e0eaf3;
+    border: 1px solid #334458; border-radius: .8rem; background: #131b25; box-shadow: 0 10px 40px #0009;
+}
+.timeline-display-dialog::backdrop { background: #05070bb3; }
+.timeline-display-dialog header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: .45rem; }
+.timeline-display-dialog button { min-height: 44px; }
+.timeline-display-dialog [data-close-display] { width: 44px; border-radius: .35rem; }
+.timeline-display-dialog__mode { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; margin-bottom: .7rem; }
+.timeline-display-dialog__mode button, .timeline-display-dialog [data-track] { border-radius: .35rem; background: #1e2a39; padding: .45rem .65rem; text-align: left; }
+.timeline-display-dialog button:hover { background: #28384c; }
+.timeline-display-dialog button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px #e36768; background: #442629; }
+.timeline-display-dialog button:disabled { opacity: .5; }
+.timeline-display-dialog [data-track-controls] { display: grid; gap: .25rem; }
+.timeline-display-dialog [data-track] { display: flex; justify-content: space-between; align-items: center; gap: .75rem; font-size: .8rem; }
+.timeline-display-dialog [data-track] span { color: #a9bdd2; font-size: .73rem; }
+.timeline-display-dialog :focus-visible { outline: 2px solid #8ec5ff; outline-offset: -2px; }
+
+@media (max-width:760px) {
+    #timeline-display-open { display: none; }
+    #editor-scroller .editor-track { --track-height: 54px; --lane-height: 53px; }
+    #editor-scroller.is-timeline-compact .editor-track { --track-height: 46px; --lane-height: 45px; }
+    #editor-scroller .editor-track.is-track-collapsed { --track-height: 26px; --lane-height: 25px; }
+    #editor-scroller .editor-track__lane { grid-area: 1 / 1; width: 100%; }
+    #editor-scroller .editor-track::after {
+        content: attr(data-track-short-label);
+        grid-area: 1 / 1; position: sticky; left: 3px; align-self: start; justify-self: start;
+        z-index: 8; pointer-events: none; margin-top: 1px; padding: 0 4px;
+        font-size: .57rem; line-height: 11px; color: #c3d4e4; border-radius: 2px; background: #111a26;
+    }
+    #editor-scroller .is-track-collapsed::after { align-self: center; color: #edf4fb; }
+}
+.timeline-display-dialog [data-focus-track] { grid-column: 1 / -1; }
+@media (min-width:761px) and (max-width:1040px) {
+    .timeline-zoom-control { gap: .25rem; padding-left: .5rem; }
+    .timeline-zoom-control input { width: 4.5rem; }
+}

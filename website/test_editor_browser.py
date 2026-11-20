@@ -136,7 +136,55 @@ class EditorBrowserTests(EditorFixture, StaticLiveServerTestCase):
         self.browser_check('editor_media.browser.cjs', {'FILADELFIA_QA_MOBILE': '1'})
 
     def test_caption_style_matches_output_canvas(self):
-        self.browser_check('editor_caption_style.browser.cjs')
+        import json
+        from tempfile import TemporaryDirectory
+        from types import SimpleNamespace
+
+        from website.external_media.ffmpeg_runner import FFmpegRunner
+        from website.external_media.preview import PreviewCompositionService
+        from website.external_media.services import RenderService, SubtitleService
+
+        width, height = 1920, 1080
+        self.preset.width, self.preset.height = width, height
+        self.preset.save(update_fields=['width', 'height'])
+        self.style.font_name = 'Montserrat'
+        self.style.font_size = 72
+        self.style.font_weight = 700
+        self.style.primary_color = '#ffcc00'
+        self.style.alignment = 2
+        self.style.margin_bottom = 140
+        self.style.max_lines = 1
+        self.style.outline_width = 0
+        self.style.shadow = 0
+        self.style.save()
+        translated = SimpleNamespace(**{
+            **vars(self.style), 'font_size': 58, 'primary_color': '#00ff80', 'margin_bottom': 64,
+        })
+        pairs = [
+            ('pt', 'O amor de Cristo dentro do nosso país e além'),
+            ('en', 'The love of Christ throughout our country and beyond'),
+        ]
+        tracks = [
+            SimpleNamespace(language=language, cues=SimpleNamespace(all=lambda text=text: [
+                SimpleNamespace(cue_index=1, start_ms=1000, end_ms=2000, text=text),
+            ]))
+            for language, text in pairs
+        ]
+        with TemporaryDirectory(prefix='caption-size-') as directory:
+            ass = Path(directory) / 'captions.ass'
+            frame = Path(directory) / 'frame.png'
+            SubtitleService().write_dual_ass(tracks, ass, self.style, width, height, 'pt', translated)
+            FFmpegRunner().run([
+                settings.FFMPEG_BINARY, '-v', 'error', '-f', 'lavfi', '-i', f'color=black:s={width}x{height}',
+                '-vf', f"ass='{ass}':fontsdir='{RenderService.subtitle_fonts_dir()}'",
+                '-ss', '1.5', '-frames:v', '1', '-threads', '1', str(frame),
+            ])
+            self.browser_check('editor_caption_style.browser.cjs', {
+                'FILADELFIA_QA_CAPTION_FRAME': str(frame),
+                'FILADELFIA_QA_CAPTION_CASE': json.dumps({
+                    'texts': dict(pairs), 'translatedStyle': PreviewCompositionService.subtitle_style_payload(translated),
+                }),
+            })
 
     def prepare_template_music(self):
         from django.core.files.uploadedfile import SimpleUploadedFile
@@ -155,6 +203,9 @@ class EditorBrowserTests(EditorFixture, StaticLiveServerTestCase):
 
     def test_retained_nodes_focus_and_large_timeline(self):
         self.browser_check('editor_fluency.browser.cjs')
+
+    def test_adaptive_timeline_presentation(self):
+        self.browser_check('editor_timeline_presentation.browser.cjs')
 
     def test_real_media_scrubbing_playback_and_waveforms(self):
         self.browser_check('editor_media.browser.cjs')

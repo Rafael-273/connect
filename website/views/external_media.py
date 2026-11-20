@@ -2331,13 +2331,7 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
         # Caption styling was added after some revision snapshots already existed.
         # Enrich those read-only snapshots with the exact styles frozen on the job.
         if project.render_job_id:
-            timeline['caption_styles'] = {
-                'source': PreviewCompositionService.subtitle_style_payload(project.render_job.subtitle_style),
-                'translated': PreviewCompositionService.subtitle_style_payload(
-                    project.render_job.translated_subtitle_style or project.render_job.subtitle_style,
-                ),
-                'source_language': project.editor_settings.original_language,
-            }
+            timeline['caption_styles'] = PreviewCompositionService.caption_styles(project)
             for cue in timeline.get('captions', []):
                 cue['is_source'] = cue.get('language') == project.editor_settings.original_language
         job = project.render_job
@@ -2672,6 +2666,8 @@ def preview_revision_response(project, member, revision, **extra):
     """Keep preview mutations and history navigation on the same response shape."""
     timeline = preview_timeline_with_music(project, revision.timeline)
     PreviewCompositionService.hydrate_legacy_caption_clock(project, timeline)
+    if project.render_job_id:
+        timeline['caption_styles'] = PreviewCompositionService.caption_styles(project)
     # The page GET replaces stored/original asset URLs with the normalized
     # source proxies.  Mutations used to skip that step, so applying their JSON
     # response could make an already open preview decode a different video than

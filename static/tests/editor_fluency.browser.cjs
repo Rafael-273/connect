@@ -6,7 +6,7 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-c
  const address=new URL(url); const seed={url:address.pathname,cookie:session};
  const browser=await chromium.launch({headless:true,executablePath:process.env.FILADELFIA_CHROME_PATH||undefined});
  try{
- const context=await browser.newContext({viewport:{width:1600,height:1000}});await context.addCookies([{name:'sessionid',value:seed.cookie,domain:address.hostname,path:'/'}]);
+ const context=await browser.newContext({viewport:{width:1600,height:1000},serviceWorkers:'block'});await context.addCookies([{name:'sessionid',value:seed.cookie,domain:address.hostname,path:'/'}]);
  const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto(url);await page.waitForSelector('[data-clip-key]');await page.waitForTimeout(250);
  const sidebarVisible=async()=>{const bounds=await page.locator('.editor-preview-tools').boundingBox(),layout=await page.locator('.preview-layout').boundingBox();assert.ok(bounds.x>=layout.x&&bounds.x+bounds.width<=layout.x+layout.width+1,'preview tools must remain inside the visible workspace');for(const button of await page.locator('.editor-preview-tools button:visible').all()){const box=await button.boundingBox();assert.ok(box.x>=bounds.x&&box.x+box.width<=bounds.x+bounds.width+1,'sidebar buttons must not be clipped')}};

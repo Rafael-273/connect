@@ -441,6 +441,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     .editor-track__clip.has-transition-out{border-right:3px solid #fef3c7}
 </style>
 <link rel="stylesheet" href="{% static 'external_media_editor_mobile.css' %}?v=20261119-timeline-gestures">
+<link rel="stylesheet" href="{% static 'external_media_timeline_presentation.css' %}?v=1">
+<script src="{% static 'external_media_timeline_presentation.js' %}?v=1"></script>
 <link rel="stylesheet" href="{% static 'external_media_editor_theme.css' %}?v=20261118-4">
 {% endblock %}
 
@@ -489,7 +491,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             <div class="preview-list p-3 space-y-2" id="review-list"></div>
     </aside>
     </div>
-    <div class="editor-timeline__transport preview-controls"><div class="editor-timeline-actions" role="toolbar" aria-label="Ferramentas da timeline"></div><button type="button" class="preview-transport-step" id="preview-previous" aria-label="Voltar um quadro"><i class="fas fa-backward-step"></i></button><button class="preview-play" id="preview-play" aria-label="Reproduzir"><i class="fas fa-play"></i></button><button type="button" class="preview-transport-step" id="preview-next" aria-label="Avançar um quadro"><i class="fas fa-forward-step"></i></button><span class="text-sm tabular-nums" id="preview-time"><span id="preview-current-time">00:00</span><span class="preview-time-separator"> / </span><span id="preview-total-time">00:00</span></span><input class="preview-range" id="preview-range" type="range" min="0" max="1" value="0" aria-hidden="true" tabindex="-1"><div class="timeline-zoom-control" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-decrease" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-magnifying-glass-minus"></i></button><input id="timeline-zoom-range" type="range" min="1" max="16" step=".1" value="1" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-increase" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-magnifying-glass-plus"></i></button></div></div>
+    <div class="editor-timeline__transport preview-controls"><div class="editor-timeline-actions" role="toolbar" aria-label="Ferramentas da timeline"></div><button type="button" class="preview-transport-step" id="preview-previous" aria-label="Voltar um quadro"><i class="fas fa-backward-step"></i></button><button class="preview-play" id="preview-play" aria-label="Reproduzir"><i class="fas fa-play"></i></button><button type="button" class="preview-transport-step" id="preview-next" aria-label="Avançar um quadro"><i class="fas fa-forward-step"></i></button><span class="text-sm tabular-nums" id="preview-time"><span id="preview-current-time">00:00</span><span class="preview-time-separator"> / </span><span id="preview-total-time">00:00</span></span><input class="preview-range" id="preview-range" type="range" min="0" max="1" value="0" aria-hidden="true" tabindex="-1"><div class="timeline-zoom-control" aria-label="Zoom e visualização da timeline"><button type="button" id="timeline-display-open" aria-label="Visualização da timeline" title="Visualização da timeline" aria-haspopup="dialog"><i class="fas fa-layer-group" aria-hidden="true"></i></button><button type="button" id="timeline-zoom-decrease" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-magnifying-glass-minus"></i></button><input id="timeline-zoom-range" type="range" min="1" max="16" step=".1" value="1" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-increase" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-magnifying-glass-plus"></i></button></div></div>
     <p class="editor-mobile-help" id="mobile-gesture-help">Arraste os takes para mover · arraste o espaço vazio para navegar · pinça para zoom</p>
     <div class="editor-timeline" aria-label="Linha do tempo da edição"><div class="editor-timeline__bar" id="mobile-timeline-tools"><strong class="text-xs uppercase tracking-wider text-gray-500">Timeline</strong><div class="flex items-center gap-2"><button type="button" class="editor-tool is-active" data-tool="select" title="Ferramenta de seleção (V)" aria-label="Ferramenta de seleção"><i class="fas fa-arrow-pointer"></i><span class="sr-only">Seleção</span></button><button type="button" class="editor-tool" data-tool="blade" title="Lâmina: clique em um vídeo, legenda ou elemento para dividir (B)" aria-label="Ferramenta lâmina"><i class="fas fa-scissors"></i><span class="sr-only">Lâmina</span></button><button type="button" class="editor-tool" id="add-timeline-media" data-open-media title="Adicionar mídia" aria-label="Adicionar mídia"><i class="fas fa-folder-plus" aria-hidden="true"></i><span class="sr-only">Adicionar mídia</span></button><button type="button" class="editor-tool" id="add-timeline-element" title="Adicionar elemento visual" aria-label="Adicionar elemento visual"><i class="fas fa-photo-film"></i><span class="sr-only">Adicionar elemento</span></button><button type="button" class="editor-tool" id="add-timeline-camera" title="Adicionar take de câmera extra no cursor" aria-label="Adicionar câmera extra" hidden><i class="fas fa-camera"></i></button><button type="button" class="editor-tool" id="add-timeline-text" title="Adicionar texto" aria-label="Adicionar texto"><i class="fas fa-font"></i><span class="sr-only">Adicionar texto</span></button><button type="button" class="editor-tool" id="add-timeline-music" title="Adicionar música à timeline" aria-label="Adicionar música à timeline"><i class="fas fa-music"></i><span class="sr-only">Adicionar música</span></button><span class="editor-timeline__tool-divider" aria-hidden="true"></span><button type="button" class="editor-tool" data-timeline-zoom="out" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-minus"></i></button><output class="editor-timeline__zoom-value" id="timeline-zoom-value" aria-live="polite">100%</output><button type="button" class="editor-tool" data-timeline-zoom="in" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-plus"></i><span class="sr-only">Aumentar zoom</span></button><button type="button" class="editor-tool is-active" id="timeline-snap" aria-pressed="true" title="Encaixe magnético (S); Alt suspende durante o arraste" aria-label="Encaixe magnético"><i class="fas fa-magnet"></i></button><button type="button" class="editor-tool" id="timeline-precision" title="Ajustar início e fim por quadro (T)" aria-label="Ajustar tempos por quadro"><i class="fas fa-stopwatch"></i></button><button type="button" class="editor-tool" id="timeline-shortcuts" title="Ajuda e atalhos (?)" aria-label="Ajuda e atalhos"><i class="fas fa-circle-question" aria-hidden="true"></i></button><button type="button" id="delete-segment" disabled class="text-xs font-bold rounded bg-red-600 px-2 py-1 text-white disabled:opacity-40" title="Remover trecho selecionado (Del)" aria-label="Remover trecho selecionado"><i class="fas fa-trash"></i><span class="sr-only">Remover</span></button></div></div><div class="editor-timeline__scroller" id="editor-scroller" title="Use a roda do mouse para ampliar ou reduzir a timeline"><div class="editor-timeline__canvas" id="editor-canvas"><div class="editor-ruler"><span></span><div class="editor-ruler__scale"><span>00:00</span><span id="timeline-middle">00:00</span><span id="timeline-end">00:00</span></div></div><div id="editor-tracks"></div></div></div></div>
     <nav class="editor-mobile-actions" aria-label="Ferramentas da edição" aria-describedby="mobile-gesture-help">
@@ -511,9 +513,19 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     <div class="preview-modal__card">
         <div class="editor-mobile-sheet__head"><strong id="mobile-tools-title">Mais ferramentas</strong><button type="button" id="mobile-tools-close" aria-label="Fechar ferramentas"><i class="fas fa-xmark" aria-hidden="true"></i></button></div>
         <div class="editor-mobile-sheet__grid" data-mobile-section="add"></div>
-        <div class="editor-mobile-sheet__grid" data-mobile-section="more"><button type="button" id="mobile-edit-caption" hidden><i class="fas fa-pen" aria-hidden="true"></i><span>Editar texto</span></button><button type="button" id="mobile-expand" aria-pressed="false"><i class="fas fa-expand" aria-hidden="true"></i><span>Ampliar preview</span></button></div>
+        <div class="editor-mobile-sheet__grid" data-mobile-section="more"><button type="button" id="mobile-timeline-display" aria-haspopup="dialog"><i class="fas fa-layer-group" aria-hidden="true"></i><span>Visualização da timeline</span></button><button type="button" id="mobile-edit-caption" hidden><i class="fas fa-pen" aria-hidden="true"></i><span>Editar texto</span></button><button type="button" id="mobile-expand" aria-pressed="false"><i class="fas fa-expand" aria-hidden="true"></i><span>Ampliar preview</span></button></div>
     </div>
 </div>
+
+<dialog class="timeline-display-dialog" id="timeline-display" aria-labelledby="timeline-display-title">
+    <header><strong id="timeline-display-title">Visualização da timeline</strong><button type="button" data-close-display aria-label="Fechar visualização"><i class="fas fa-xmark" aria-hidden="true"></i></button></header>
+    <div class="timeline-display-dialog__mode">
+        <button type="button" data-compact aria-pressed="false"><i class="fas fa-bars-staggered" aria-hidden="true"></i> Compacto</button>
+        <button type="button" data-detailed aria-pressed="true"><i class="fas fa-list" aria-hidden="true"></i> Detalhado</button>
+        <button type="button" data-focus-track aria-pressed="false" disabled><i class="fas fa-bullseye" aria-hidden="true"></i> Foco na faixa</button>
+    </div>
+    <div data-track-controls></div>
+</dialog>
 
 <div class="preview-modal" id="back-to-blocks-modal" role="dialog" aria-modal="true" aria-labelledby="back-to-blocks-title">
     <div class="preview-modal__card">
@@ -875,39 +887,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             if(error?.name!=='AbortError')console.warn('Não foi possível iniciar o preview.',error);
         });
     }
-    const filmstripCache=new Map(),filmstripQueued=new Set(),filmstripQueue=[];
-    let filmstripBusy=false;
-    function filmstripSourceFor(source){if(!source)return '';return `${source}${source.includes('?')?'&':'?'}filmstrip=1`}
     function persistentThumbnailSource(source){const url=new URL(source,location.href);url.searchParams.set('thumbnail','1');return url.href}
-    function applyFilmstripThumbnail(key,thumbnail){document.querySelectorAll('[data-filmstrip-key]').forEach(clip=>{if(clip.dataset.filmstripKey!==key||!thumbnail)return;clip.style.backgroundImage=`url("${thumbnail}")`;clip.classList.add('has-thumbnail')})}
-    function processPersistentFilmstrip(task){
-        const image=new Image();let finished=false;
-        const finish=success=>{
-            if(finished)return;finished=true;clearTimeout(timeout);image.onload=image.onerror=null;filmstripBusy=false;
-            if(success){filmstripCache.set(task.key,task.source);filmstripQueued.delete(task.key);applyFilmstripThumbnail(task.key,task.source)}
-            else if((task.attempt||0)<5){setTimeout(()=>{filmstripQueue.push({...task,attempt:(task.attempt||0)+1});processFilmstripQueue()},Math.min(30000,5000*2**(task.attempt||0)))}
-            else{filmstripCache.set(task.key,'');filmstripQueued.delete(task.key)}
-            processFilmstripQueue();
-        };
-        const timeout=setTimeout(()=>finish(false),20000);
-        image.onload=()=>finish(true);image.onerror=()=>finish(false);image.src=task.source;
-    }
-    function processFilmstripQueue(){
-        if(filmstripBusy||!filmstripQueue.length||(isIOSPreview&&loading))return;
-        filmstripBusy=true;const task=filmstripQueue.shift();
-        if(task.image){processPersistentFilmstrip(task);return}
-        const worker=document.createElement('video');worker.muted=true;worker.playsInline=true;worker.preload='metadata';
-        let finished=false;
-        const finish=thumbnail=>{if(finished)return;finished=true;clearTimeout(timeout);worker.onerror=worker.onloadedmetadata=worker.onseeked=null;worker.pause();worker.removeAttribute('src');worker.load();filmstripCache.set(task.key,thumbnail||'');filmstripQueued.delete(task.key);applyFilmstripThumbnail(task.key,thumbnail);filmstripBusy=false;processFilmstripQueue()};
-        const timeout=setTimeout(()=>finish(''),30000);
-        worker.onerror=()=>finish('');worker.onloadedmetadata=()=>{try{worker.currentTime=Math.min(Math.max(.05,task.time),Math.max(.05,worker.duration-.05))}catch(_){finish('')}};
-        worker.onseeked=()=>{try{const canvas=document.createElement('canvas'),scale=Math.min(240/worker.videoWidth,135/worker.videoHeight,1);canvas.width=Math.max(1,Math.round(worker.videoWidth*scale));canvas.height=Math.max(1,Math.round(worker.videoHeight*scale));canvas.getContext('2d').drawImage(worker,0,0,canvas.width,canvas.height);finish(canvas.toDataURL('image/jpeg',.68))}catch(_){finish('')}};
-        worker.src=task.source;worker.load();
-    }
-    function queueFilmstripThumbnails(){
-        [...document.querySelectorAll('[data-filmstrip-source]')].slice(0,36).forEach(clip=>{const key=clip.dataset.filmstripKey,cached=filmstripCache.get(key);if(cached!==undefined){applyFilmstripThumbnail(key,cached);return}if(filmstripQueued.has(key))return;filmstripQueued.add(key);filmstripQueue.push({key,source:clip.dataset.filmstripSource,time:Number(clip.dataset.filmstripTime||0),image:clip.dataset.filmstripImage==='true'})});
-        processFilmstripQueue();
-    }
     function rgba(hex, opacity){const value=String(hex||'#000000').replace('#','');const normalized=value.length===3?[...value].map(char=>char+char).join(''):value;const number=parseInt(normalized,16);return `rgba(${(number>>16)&255},${(number>>8)&255},${number&255},${Math.max(0,Math.min(100,Number(opacity??100)))/100})`}
     function wrapCaptionText(value,style){
         const text=String(value??'').trim(),maxCharacters=Math.max(1,Number(style?.max_characters||42)),maxLines=Math.max(1,Number(style?.max_lines||2));
@@ -936,9 +916,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const previous=node._captionStyle;
         if(previous&&previous.style===style&&previous.margin===marginBottom&&previous.text===node.textContent&&previous.revision===previewStyleRevision&&previous.sequence===timeline.sequence)return;
         node._captionStyle={style,margin:marginBottom,text:node.textContent,revision:previewStyleRevision,sequence:timeline.sequence};
-        const stage=previewStage,width=stage.clientWidth,height=stage.clientHeight,sequenceWidth=Math.max(1,Number(getComputedStyle(stage).getPropertyValue('--preview-width'))||Number(timeline.sequence.width)||1920),sequenceHeight=Math.max(1,Number(getComputedStyle(stage).getPropertyValue('--preview-height'))||Number(timeline.sequence.height)||1080),alignment=Math.max(1,Math.min(9,Number(style?.alignment||2))),vertical=alignment>=7?'top':alignment>=4?'middle':'bottom',horizontal=(alignment-1)%3===0?'left':(alignment-1)%3===2?'right':'center',margin=Math.max(0,Number(marginBottom??style?.margin_bottom??60))/sequenceHeight*height,side=40/sequenceWidth*width,maxLines=Math.max(1,Number(style?.max_lines||2)),baseFontSize=Math.max(.1,Number(style?.font_size||48)/sequenceWidth*width),paddingX=style?.background_enabled?Math.max(0,Number(style?.background_padding_x||0))/sequenceWidth*width:0;
+        const stage=previewStage,width=stage.clientWidth,height=stage.clientHeight,sequenceWidth=Math.max(1,Number(getComputedStyle(stage).getPropertyValue('--preview-width'))||Number(timeline.sequence.width)||1920),sequenceHeight=Math.max(1,Number(getComputedStyle(stage).getPropertyValue('--preview-height'))||Number(timeline.sequence.height)||1080),alignment=Math.max(1,Math.min(9,Number(style?.alignment||2))),vertical=alignment>=7?'top':alignment>=4?'middle':'bottom',horizontal=(alignment-1)%3===0?'left':(alignment-1)%3===2?'right':'center',margin=Math.max(0,Number(marginBottom??style?.margin_bottom??60))/sequenceHeight*height,side=40/sequenceWidth*width,paddingX=style?.background_enabled?Math.max(0,Number(style?.background_padding_x||0))/sequenceWidth*width:0;
+        // ASS sizes ascent plus descent. CSS uses the font's em instead.
+        const nominalFontSize=Math.max(.1,Number(style?.font_size||48)*height/sequenceHeight);
+        const emScale=Number(style?.font_em_scale)||1,baseFontSize=nominalFontSize*emScale;
         const backgroundEnabled=Boolean(style?.background_enabled),backgroundHeight=Math.max(40,Math.min(100,Number(style?.background_height_percent??100)));
-        node.style.left=horizontal==='left'?`${side}px`:horizontal==='right'?'auto':'50%';node.style.right=horizontal==='right'?`${side}px`:'auto';node.style.top=vertical==='top'?`${margin}px`:vertical==='middle'?'50%':'auto';node.style.bottom=vertical==='bottom'?`${margin}px`:'auto';node.style.transform=`translate(${horizontal==='center'?'-50%':'0'},${vertical==='middle'?'-50%':'0'})`;node.style.textAlign=horizontal;node.style.fontFamily=style?.font||'Arial';node.style.fontWeight=Number(style?.font_weight??700)>=600?700:400;node.style.fontSize=`${baseFontSize}px`;node.style.lineHeight='1';node.style.whiteSpace='pre';node.style.wordBreak='normal';node.style.overflowWrap='normal';node.style.width='max-content';node.style.maxWidth='none';node.style.color=style?.color||'#ffffff';node.style.opacity=Math.max(0,Math.min(1,Number(style?.primary_opacity??100)/100));node.style.padding=backgroundEnabled?`${Math.max(0,Number(style?.background_padding_y||0))/sequenceHeight*height}px ${paddingX}px`:'0';node.style.background=backgroundEnabled?'transparent':'transparent';node.style.backgroundImage=backgroundEnabled?`linear-gradient(${rgba(style.background_color,style.background_opacity)},${rgba(style.background_color,style.background_opacity)})`:'none';node.style.backgroundRepeat='no-repeat';node.style.backgroundPosition='center';node.style.backgroundSize=backgroundEnabled?`100% ${backgroundHeight}%`:'auto';node.style.borderRadius=`${Number(style?.background_radius||0)/sequenceWidth*width}px`;
+        node.style.left=horizontal==='left'?`${side}px`:horizontal==='right'?'auto':'50%';node.style.right=horizontal==='right'?`${side}px`:'auto';node.style.top=vertical==='top'?`${margin}px`:vertical==='middle'?'50%':'auto';node.style.bottom=vertical==='bottom'?`${margin}px`:'auto';node.style.transform=`translate(${horizontal==='center'?'-50%':'0'},${vertical==='middle'?'-50%':'0'})`;node.style.textAlign=horizontal;node.style.fontFamily=style?.font||'Arial';node.style.fontWeight=Number(style?.font_weight??700)>=600?700:400;node.style.fontSize=`${baseFontSize}px`;node.style.lineHeight=String(nominalFontSize)+'px';node.style.whiteSpace='pre';node.style.wordBreak='normal';node.style.overflowWrap='normal';node.style.width='max-content';node.style.maxWidth='none';node.style.color=style?.color||'#ffffff';node.style.opacity=Math.max(0,Math.min(1,Number(style?.primary_opacity??100)/100));node.style.padding=backgroundEnabled?`${Math.max(0,Number(style?.background_padding_y||0))/sequenceHeight*height}px ${paddingX}px`:'0';node.style.background=backgroundEnabled?'transparent':'transparent';node.style.backgroundImage=backgroundEnabled?`linear-gradient(${rgba(style.background_color,style.background_opacity)},${rgba(style.background_color,style.background_opacity)})`:'none';node.style.backgroundRepeat='no-repeat';node.style.backgroundPosition='center';node.style.backgroundSize=backgroundEnabled?`100% ${backgroundHeight}%`:'auto';node.style.borderRadius=`${Number(style?.background_radius||0)/sequenceWidth*width}px`;
         const outline=Math.max(0,Number(style?.outline_width||0))/sequenceWidth*width,outlineColor=style?.outline_color||'#000',shadow=Math.max(0,Number(style?.shadow||0)+Number(style?.shadow_size||0)),angle=Number(style?.shadow_angle??45)*Math.PI/180,shadowX=Math.cos(angle)*shadow/sequenceWidth*width,shadowY=Math.sin(angle)*shadow/sequenceHeight*height,shadowBlur=Math.max(0,Number(style?.shadow_blur||0))/sequenceWidth*width,outlineShadow=outline?`${-outline}px 0 ${outlineColor},${outline}px 0 ${outlineColor},0 ${-outline}px ${outlineColor},0 ${outline}px ${outlineColor}`:'';node.style.webkitTextStroke='';node.style.textShadow=[outlineShadow,shadow?`${shadowX}px ${shadowY}px ${shadowBlur}px ${rgba('#000',style?.shadow_opacity??80)}`:''].filter(Boolean).join(',');node.style.textRendering='optimizeLegibility';
         // Mirror the renderer's horizontal fit while preserving the configured
         // font height and the explicit line breaks. Include box padding and
@@ -948,9 +931,11 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             captionFontsRequested.add(fontQuery);
             document.fonts.load(fontQuery).then(()=>{previewStyleRevision++;requestPreviewRender()}).catch(()=>{});
         }
-        const available=Math.max(1,width-2*side-2*(outline+Math.abs(shadowX)+shadowBlur));
-        const measured=node.getBoundingClientRect().width;
-        const scale=measured>0?Math.min(1,available/measured):1;
+        const shadowRoom=(shadow+Math.max(0,Number(style?.shadow_blur||0)))*width/sequenceWidth;
+        const available=Math.max(1,width-2*(side+outline+shadowRoom+paddingX));
+        // The ASS writer estimates horizontal compression in nominal font units.
+        const nominalWidth=Math.max(0,node.getBoundingClientRect().width-2*paddingX)/emScale;
+        const scale=nominalWidth>0?Math.max(.0001,Math.min(1,available/nominalWidth)):1;
         node.style.transformOrigin=`${horizontal==='left'?'left':horizontal==='right'?'right':'center'} center`;
         node.style.transform+=` scaleX(${scale})`;
     }
@@ -989,7 +974,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         }
         lastPreviewFrame={at,time:presentedTime};
     }
-    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{soundtrackClock.setLoading(value);if(loading===value)return;loading=value;if(!value){requestPreviewRender();if(isIOSPreview){processFilmstripQueue();requestWaveformPaint()}}},onVideoChange:(next,previous,options)=>{stopPlaybackClock();video=next;soundtrackClock.setVideo(next,options);multicamEditor?.setMainVideo(next);bindVideoEvents(next)},onTransition:reportPreviewTransition,onError:failure=>{document.getElementById('preview-load-error').classList.toggle('hidden',!failure);document.getElementById('preview-load-error-message').textContent=failure?(failure.reason==='timeout'?'O carregamento está demorando. Tente novamente.':'Não foi possível carregar este trecho do vídeo.'):''},frameTolerance:1/Number(timeline.sequence.fps||30),progressTimeoutMs:12000,maxLoadMs:60000,maxTimeoutRetries:1,fallbackPreloadOnTimeout:true,play:requestVideoPlay});
+    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{soundtrackClock.setLoading(value);if(loading===value)return;loading=value;if(isIOSPreview)timelinePresentation.setResourcesEnabled(!value);if(!value){requestPreviewRender();if(isIOSPreview)requestWaveformPaint()}},onVideoChange:(next,previous,options)=>{stopPlaybackClock();video=next;soundtrackClock.setVideo(next,options);multicamEditor?.setMainVideo(next);bindVideoEvents(next)},onTransition:reportPreviewTransition,onError:failure=>{document.getElementById('preview-load-error').classList.toggle('hidden',!failure);document.getElementById('preview-load-error-message').textContent=failure?(failure.reason==='timeout'?'O carregamento está demorando. Tente novamente.':'Não foi possível carregar este trecho do vídeo.'):''},frameTolerance:1/Number(timeline.sequence.fps||30),progressTimeoutMs:12000,maxLoadMs:60000,maxTimeoutRetries:1,fallbackPreloadOnTimeout:true,play:requestVideoPlay});
     document.addEventListener('visibilitychange',()=>{if(!document.hidden)sourcePlayer.resumeLoad()});
     window.addEventListener('pageshow',event=>{if(event.persisted)sourcePlayer.resumeLoad()});
     function playPendingPreview(){
@@ -1785,18 +1770,18 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             return peak;
         });
     }
-    function drawMusicWaveform(canvas,waveform,view,height){
+    function drawMusicWaveform(canvas,waveform,view,height,compact){
         if(!waveform?.length||!view.width||!height)return;
         const ratio=window.devicePixelRatio||1,width=Math.max(1,Math.round(view.width*ratio)),pixelsHigh=Math.max(1,Math.round(height*ratio));
         canvas.style.left=`${view.offset}px`;canvas.style.right='auto';canvas.style.width=`${view.width}px`;
         if(canvas.width!==width||canvas.height!==pixelsHigh){canvas.width=width;canvas.height=pixelsHigh}
         const context=canvas.getContext('2d');context.setTransform(ratio,0,0,ratio,0,0);context.clearRect(0,0,view.width,height);
-        const center=height/2,columns=Math.max(1,Math.ceil(view.width)),first=view.from*waveform.length,step=(view.to-view.from)*waveform.length/columns;
+        const center=height/2,columns=Math.max(1,Math.ceil(view.width/(compact?3:1))),first=view.from*waveform.length,step=(view.to-view.from)*waveform.length/columns;
         context.lineWidth=1;context.strokeStyle='rgba(204,255,234,.68)';context.beginPath();
         for(let column=0;column<columns;column++){
             const start=Math.floor(first+column*step),end=Math.min(waveform.length,Math.ceil(first+(column+1)*step));let peak=0;
             for(let index=start;index<end;index++)peak=Math.max(peak,waveform[index]||0);
-            const amplitude=Math.max(1,peak*(height*.43));context.moveTo(column+.5,center-amplitude);context.lineTo(column+.5,center+amplitude);
+            const amplitude=Math.max(1,peak*(height*.43));const x=column*view.width/columns+.5;context.moveTo(x,center-amplitude);context.lineTo(x,center+amplitude);
         }
         context.stroke();
     }
@@ -1815,21 +1800,21 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         }
     }
     function paintVisibleWaveforms(){
-        const viewport=document.getElementById('editor-scroller').getBoundingClientRect();let painted=0,more=false;
+        const viewport=editorScroller.getBoundingClientRect(),compact=editorScroller.classList.contains('is-timeline-compact');let painted=0,more=false;
         for(const clip of visibleWaveforms){
             if(!clip.isConnected){visibleWaveforms.delete(clip);continue}
             const item=clip._waveform;if(!item||item.failed)continue;
             const bounds=clip.getBoundingClientRect(),view=window.ConnectEditorView.waveformWindow(bounds,viewport);
-            if(!view)continue;
+            if(!view||bounds.width<(compact?46:36)||clip.closest('.is-track-collapsed'))continue;
             if(!item.audio){
                 if(isIOSPreview&&loading)continue;
                 if(!item.pending){item.pending=true;item.attempts++;loadMusicWaveform(item.source).then(audio=>{item.pending=false;if(clip._waveform!==item||!clip.isConnected)return;item.audio=audio;item.peaks=waveformRange(audio,item.start,item.end,720,item.loop);clip.classList.add('has-real-waveform');requestWaveformPaint()}).catch(()=>{if(clip._waveform!==item||!clip.isConnected)return;if(item.attempts<2){setTimeout(()=>{if(clip._waveform!==item||!clip.isConnected)return;item.pending=false;requestWaveformPaint()},1000)}else{item.pending=false;item.failed=true;clip.classList.remove('has-real-waveform')}})}
                 continue;
             }
-            const key=[view.offset,view.width,bounds.height,window.devicePixelRatio||1].join(':');
+            const key=[view.offset,view.width,bounds.height,window.devicePixelRatio||1,compact].join(':');
             if(item.drawn===key)continue;
             if(painted>=2){more=true;continue}
-            drawMusicWaveform(item.canvas,item.peaks,view,bounds.height);item.drawn=key;painted++;
+            drawMusicWaveform(item.canvas,item.peaks,view,bounds.height,compact);item.drawn=key;painted++;
         }
         if(more)requestWaveformPaint();
     }
@@ -1889,11 +1874,24 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const makeTrack=(label,items,kind='',isVideo=false,isCaption=false,selectKind=null,canBlade=false,trackKey=null)=>{
             const key=trackKey||`${selectKind||'base'}:${label}`;
             let row=rowsByKey.get(key);
-            if(!row){row=document.createElement('div');row.dataset.trackKey=key;const title=document.createElement('span');title.className='editor-track__label';row.append(title,document.createElement('div'))}
-            row.className=`editor-track editor-track--${selectKind||'base'}`;
+            if(!row){
+                row=document.createElement('div');row.dataset.trackKey=key;
+                const title=document.createElement('span');title.className='editor-track__label';
+                const name=document.createElement('span');name.className='editor-track__name';
+                const collapse=document.createElement('button');collapse.type='button';collapse.className='track-collapse';collapse.dataset.collapseTrack='';
+                collapse.innerHTML='<i class="fas fa-chevron-down" aria-hidden="true"></i>';
+                title.append(name,collapse);row.append(title,document.createElement('div'));
+            }
+            row.classList.add('editor-track',`editor-track--${selectKind||'base'}`);
+            const layer=trackKey&&Number(trackKey.split(':')[1]);
+            const shortLabel=isCaption?(label.split(' ')[1]||'PT'):label;
+            row.dataset.trackLabel=isCaption?`Legenda ${shortLabel}`:layer>0?`${label} ${layer+1}`:label;
+            row.dataset.trackShortLabel=isCaption?shortLabel:row.dataset.trackLabel;
             const title=row.firstElementChild,lane=row.lastElementChild;
-            title.title=label;
-            if(title.textContent!==label)title.textContent=label;
+            title.title=row.dataset.trackLabel;
+            const name=title.querySelector('.editor-track__name');
+            if(name.textContent!==shortLabel)name.textContent=shortLabel;
+            title.querySelector('[data-collapse-track]').setAttribute('aria-label',`Recolher ou expandir ${row.dataset.trackLabel}`);
             lane.className=`editor-track__lane ${(isVideo||isCaption||canBlade)&&editTool==='blade'?'is-blade':''}`;
             const nextClips=items.map((item,index)=>{
                 const clipKey=`${selectKind}:${item.id??`${item.assetId}:${item.masterStartMs}:${item.masterEndMs}`}`;
@@ -1901,7 +1899,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 if(!clip){clip=document.createElement('button');clip.type='button';clip.dataset.clipKey=clipKey}
                 clip._timeline={item,kind:selectKind,duration,isSourceSegment:isVideo||kind.includes('source-audio'),canBlade:isVideo||isCaption||canBlade};
                 const rawWidth=(item.end-item.start)/duration*100,isSourceSegment=clip._timeline.isSourceSegment;
-                const tiny=isSourceSegment&&rawWidth<.35,isBroll=kind.includes('editor-track__broll'),isFilmstrip=(kind.includes('editor-video-clip')||isBroll)&&!tiny;
+                const tiny=isSourceSegment&&rawWidth<.35,isBroll=kind.includes('editor-track__broll'),isFilmstrip=kind.includes('editor-video-clip')||isBroll;
                 const decorated=clip.classList.contains('has-thumbnail')?'has-thumbnail':'';
                 clip.className=`editor-track__clip ${kind} ${tiny?'is-tiny':''} ${decorated}`;
                 const transitionEdges = Object.fromEntries(ConnectVisualTransitions.edges(item.transitions,item.end-item.start).map(([side,,length])=>[side,length]));
@@ -1909,19 +1907,17 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 clip.classList.toggle('has-transition-out', Boolean(item.transitions===undefined?item.legacyOut:transitionEdges.out));
                 clip.style.left=`${Math.max(0,item.start/duration*100)}%`;clip.style.width=`${Math.max(.02,rawWidth)}%`;
                 const assetSource=isFilmstrip?(isBroll?item.assetUrl:asset(item.assetId)?.url):'';
-                const usingMaster=isFilmstrip&&!isBroll&&!assetSource&&Boolean(timeline.review_master_url);
-                const source=assetSource||(usingMaster?timeline.review_master_url:''),thumbnailTime=usingMaster?editedToMaster(item.start):Number(item.sourceTimeMs||0);
-                const contentKey=JSON.stringify([kind,item.label,tiny,source,thumbnailTime,item.mediaType]);
+                const source=assetSource||(isFilmstrip&&!isBroll?timeline.review_master_url:'');
+                const thumbnail=assetSource?(String(item.mediaType||'').toUpperCase()==='IMAGE'?assetSource:persistentThumbnailSource(assetSource)):'';
+                const contentKey=JSON.stringify([kind,item.label,source,thumbnail]);
                 if(clip._contentKey!==contentKey){
-                    clip._contentKey=contentKey;clip.style.backgroundImage='';clip.classList.remove('has-thumbnail');
-                    delete clip.dataset.filmstripKey;delete clip.dataset.filmstripSource;delete clip.dataset.filmstripTime;delete clip.dataset.filmstripImage;
+                    clip._contentKey=contentKey;timelinePresentation.clearImage(clip);
+                    delete clip.dataset.filmstripSource;
                     if(isFilmstrip&&source){
-                        clip.dataset.filmstripKey=`${isBroll?'broll-'+item.id:item.assetId}:${Math.round(thumbnailTime)}`;
                         clip.innerHTML=`<span class="editor-filmstrip__label">${esc(item.label)}</span>`;
-                        if(String(item.mediaType||'').toUpperCase()==='IMAGE'){clip.style.backgroundImage=`url("${source}")`;clip.classList.add('has-thumbnail')}
-                        else if(!usingMaster){clip.dataset.filmstripKey=`thumbnail:${source}`;clip.dataset.filmstripSource=persistentThumbnailSource(source);clip.dataset.filmstripImage='true'}
-                    }else if(kind.includes('source-audio'))clip.innerHTML='<span class="editor-waveform__bars"></span><span class="editor-waveform__label">Áudio original</span>';
-                    else clip.textContent=tiny?'':item.label;
+                        if(thumbnail)clip.dataset.filmstripSource=thumbnail;
+                    }else if(kind.includes('source-audio'))clip.innerHTML='<span class="editor-waveform__bars"></span>';
+                    else clip.innerHTML=`<span class="editor-clip__text">${esc(item.label)}</span>`;
                 }
                 if(isFilmstrip&&source)clip.classList.add('editor-filmstrip');
                 if(kind.includes('source-audio'))clip.classList.add('editor-waveform');
@@ -1952,6 +1948,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 if(isCaption)clip.ondblclick=event=>{event.preventDefault();event.stopPropagation();const cue=timeline.captions.find(value=>value.id===item.id);if(cue)openSubtitleEditor(cue)};
                 if(isSourceSegment)clip.title+=' · arraste para mover vídeo e áudio juntos';
                 if(created){if(isSourceSegment)makeSourceTakeDraggable(clip);else if(selectKind==='music')makeMusicTimelineItemDraggable(clip,lane,item,duration);else makeTimelineItemDraggable(clip,lane,item,selectKind,duration)}
+                clip.setAttribute('aria-label',clip.title);
                 if(isMobileEditor())clip.removeAttribute('title');
                 return clip;
             });
@@ -2036,7 +2033,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 const item=musicItems[index];if(!item?.audioUrl)return;
                 clip.classList.add('has-real-waveform');clip.dataset.musicWaveformSource=item.audioUrl;
                 clip.dataset.musicWaveformStart=String(item.sourceInMs||0);clip.dataset.musicWaveformEnd=String(Number(item.sourceInMs||0)+item.end-item.start);
-                if(!clip.querySelector('.editor-music-waveform'))clip.innerHTML=`<canvas class="editor-music-waveform" aria-hidden="true"></canvas><span class="editor-music-waveform__label">${esc(item.label)}</span>`;
+                if(!clip.querySelector('.editor-music-waveform'))clip.innerHTML=`<canvas class="editor-music-waveform" aria-hidden="true"></canvas><span class="editor-music-waveform__label editor-clip__text">${esc(item.label)}</span>`;
             });
             musicItems.slice(0,-1).forEach((item,index)=>{
                 const next=musicItems[index+1],left=musicTracks[index],right=musicTracks[index+1];
@@ -2049,7 +2046,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 const seconds=((end-start)/1000).toFixed(2);
                 transition.className='editor-music-transition';transition.dataset.transitionIndex=String(index+1);transition.classList.toggle('is-selected',inspectorSelection?.transitionIndex===index+1);transition.style.left=`${start/duration*100}%`;transition.style.width=`${Math.max(.02,(end-start)/duration*100)}%`;
                 transition.title=transitionWindow||legacy?`Potência constante · ${seconds}s — editar transição`:right.audio_transition?'Sem handles disponíveis — editar transição':'Adicionar transição de áudio';
-                transition.textContent=transitionWindow||legacy?`↔ ${seconds}s`:right.audio_transition?'↔ 0s':'+';
+                transition.innerHTML=`<span class="editor-clip__text">${transitionWindow||legacy?`↔ ${seconds}s`:right.audio_transition?'↔ 0s':'+'}</span>`;
                 transition.setAttribute('aria-label',transition.title);
                 transition.addEventListener('pointerdown',event=>event.stopPropagation());
                 transition.addEventListener('dblclick',event=>event.stopPropagation());
@@ -2057,14 +2054,15 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 musicLane.append(transition);
             });
         }
-        reconcileChildren(tracks,nextRows);renderTimelineSelection();
-        queueSourceAudioWaveforms();queueMusicWaveforms();queueFilmstripThumbnails();
+        reconcileChildren(tracks,nextRows);renderTimelineSelection();timelinePresentation.refresh();
+        queueSourceAudioWaveforms();queueMusicWaveforms();
         let head=timelineCanvas.querySelector('.editor-playhead');
         if(!head){head=document.createElement('i');head.className='editor-playhead';timelineCanvas.append(head)}
         renderTimelinePlayhead();
     }
     function renderTimelineSelection(){
         document.querySelectorAll('.editor-music-transition').forEach(node=>node.classList.toggle('is-selected',inspectorSelection?.kind==='music'&&inspectorSelection.transitionIndex===Number(node.dataset.transitionIndex)));
+        let chosenTrack=null, matchingTrack=null;
         document.querySelectorAll('#editor-tracks [data-clip-key]').forEach(clip=>{
             const descriptor=clip._timeline,item=descriptor.item;
             const selected=descriptor.kind==='caption'?selectedCaptionIds.has(String(item.id))
@@ -2072,8 +2070,15 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 :descriptor.isSourceSegment?Boolean(selectedSegment&&selectedSegment.start===item.start&&selectedSegment.end===item.end&&String(selectedSegment.assetId)===String(item.assetId))
                 :inspectorSelection?.kind===descriptor.kind&&String(inspectorSelection.id)===String(item.id);
             clip.classList.toggle('is-selected',selected);
+            if(selected){
+                const row=clip.closest('[data-track-key]');
+                chosenTrack||=row.dataset.trackKey;
+                if(descriptor.kind===inspectorSelection?.kind&&String(item.id)===String(inspectorSelection.id))matchingTrack=row.dataset.trackKey;
+                else if(descriptor.isSourceSegment&&descriptor.kind===inspectorSelection?.kind)matchingTrack=row.dataset.trackKey;
+            }
             clip.parentElement.classList.toggle('is-blade',descriptor.canBlade&&editTool==='blade');
         });
+        timelinePresentation.select(matchingTrack||chosenTrack);
     }
     function decisionStart(item){return Number(item.source_in_ms||0)}
     // remove_segment/audio_noise_reduction decisions are recorded against the
@@ -2855,7 +2860,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(editorPersistence.gestures){timelineResizePending=true;return}
         const width=timelineViewportWidth();
         editorCanvas.style.setProperty('width',`${Math.max(width,Math.round(width*timelineZoom))}px`,'important');
-        renderTimelinePlayhead();
+        renderTimelinePlayhead();timelinePresentation.schedule();
         requestAnimationFrame(()=>{keepTimelinePlayheadInView(viewportX);queueSourceAudioWaveforms();queueMusicWaveforms()});
     });
     let observedTimelineWidth=0;
@@ -3035,7 +3040,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         setZoom:value=>{
             timelineZoom=value;updateTimelineZoomControls();
             editorCanvas.style.setProperty('width',`${Math.round(timelineViewportWidth()*value)}px`,'important');
-            renderTimelinePlayhead();requestWaveformPaint();
+            renderTimelinePlayhead();requestWaveformPaint();timelinePresentation.schedule();
         },
         canHold:target=>{
             const caption=target.closest('.editor-track--caption .editor-track__lane');
@@ -3331,9 +3336,18 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     placeMobileControls();
     const historyContainer=document.querySelector('.timeline-zoom-control');
     const historyButtons=[...document.querySelectorAll('[data-history]')];
-    historyContainer.setAttribute('aria-label','Histórico de alterações e zoom da timeline');
+    historyContainer.setAttribute('aria-label','Histórico, zoom e visualização da timeline');
     historyContainer.prepend(...historyButtons);
     multicamEditor=ConnectMulticam.create({panel:document.getElementById('multicam-panel'),stage:document.querySelector('.preview-stage'),mainVideo:video,getTimeline:()=>timeline,getTime:()=>globalMs,seek,editor:true,newOnly:true,save:async payload=>applyTimeline(await api('{% url "external_media_project_preview_camera" project.public_id %}',payload))});
+    const timelinePresentation=ConnectTimelinePresentation({
+        scroller:editorScroller,tracks:timelineTracks,dialog:document.getElementById('timeline-display'),
+        preferenceKey:'{{ project.public_id }}',
+        onLayout:()=>{renderTimelinePlayhead();requestWaveformPaint();scheduleTimelineHeight()},
+    });
+    document.getElementById('timeline-display-open').onclick=event=>timelinePresentation.open(event.currentTarget);
+    document.getElementById('mobile-timeline-display').onclick=()=>{
+        closeMobileTools(false);timelinePresentation.open(document.getElementById('mobile-tools'));
+    };
     configureMusic();seek(globalMs);renderEditorTimeline();renderReviewProxyStatus();renameVisualMedia();updateEditControls();scheduleRevisionProxyPoll();
     requestAnimationFrame(()=>{renderList();enhanceReframeClipboard();renderEditorTimeline()});
 })();

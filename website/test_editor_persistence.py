@@ -56,6 +56,21 @@ class EditorFixture(ExternalMediaFixtureMixin):
 
 
 class EditorPersistenceTests(EditorFixture, TestCase):
+    def test_legacy_history_response_restores_font_metrics_from_render_job(self):
+        from website.views.external_media import preview_revision_response
+
+        self.style.font_name = 'Montserrat'
+        self.style.save(update_fields=['font_name'])
+        self.project.refresh_from_db()
+        revision = self.project.current_timeline_revision
+        revision.timeline.pop('caption_styles', None)
+
+        response = preview_revision_response(self.project, self.member, revision)
+
+        source = json.loads(response.content)['timeline']['caption_styles']['source']
+        self.assertEqual(source['font'], 'Montserrat')
+        self.assertAlmostEqual(source['font_em_scale'], 1000 / 1562)
+
     def test_removing_template_music_is_revisioned_and_used_by_render(self):
         from website.external_media.services import MusicService
         version = self.project.template_version

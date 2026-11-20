@@ -28,7 +28,7 @@ from ..models.external_media import (
 )
 from .canonical import EditDecisionSetBuilder, ProjectProcessingState, SourceManifestBuilder
 from .exceptions import ExternalMediaError
-from .services import ExternalMediaProjectPipeline, MusicService, StorageService, VideoAssemblyService
+from .services import ExternalMediaProjectPipeline, MusicService, StorageService, SubtitleService, VideoAssemblyService
 from .quality_control import MediaQualityService
 from .overlays import OverlayTimelineService
 from .transitions import normalize_transitions
@@ -677,6 +677,7 @@ class PreviewCompositionService:
             return {}
         return {
             'font': style.font_name, 'font_weight': style.font_weight,
+            'font_em_scale': SubtitleService.preview_font_em_scale(style.font_name, style.font_weight),
             'font_size': style.font_size, 'color': style.primary_color,
             'primary_opacity': style.primary_opacity, 'alignment': style.alignment,
             'margin_bottom': style.margin_bottom, 'background_enabled': style.background_enabled,
@@ -688,6 +689,17 @@ class PreviewCompositionService:
             'shadow_angle': style.shadow_angle, 'shadow_size': style.shadow_size,
             'shadow_blur': style.shadow_blur, 'shadow_opacity': style.shadow_opacity,
             'max_lines': style.max_lines, 'max_characters': style.max_characters,
+        }
+
+    @classmethod
+    def caption_styles(cls, project):
+        job = project.render_job if project.render_job_id else None
+        source = job.subtitle_style if job else None
+        translated = job.translated_subtitle_style if job else None
+        return {
+            'source': cls.subtitle_style_payload(source),
+            'translated': cls.subtitle_style_payload(translated or source),
+            'source_language': project_editor_settings(project).original_language,
         }
 
     @classmethod
@@ -1045,13 +1057,7 @@ class PreviewCompositionService:
             'overlays': overlays,
             'captions': captions,
             'caption_clock': 'edited',
-            'caption_styles': {
-                'source': cls.subtitle_style_payload(getattr(project.render_job, 'subtitle_style', None))
-                if project.render_job_id else {},
-                'translated': cls.subtitle_style_payload(getattr(project.render_job, 'translated_subtitle_style', None))
-                if project.render_job_id else {},
-                'source_language': project_editor_settings(project).original_language,
-            },
+            'caption_styles': cls.caption_styles(project),
             'markers': markers,
             'decisions': operations,
             'review_items': review_items,

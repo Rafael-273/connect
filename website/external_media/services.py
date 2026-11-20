@@ -17,6 +17,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from struct import error as StructError, unpack
 from tempfile import TemporaryDirectory
 
 from django.conf import settings
@@ -923,6 +924,39 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             except OSError:
                 continue
         return None
+
+    @staticmethod
+    @lru_cache(maxsize=64)
+    def preview_font_em_scale(font_name, font_weight):
+        """Map ASS real-dimension font sizes to the browser's em box."""
+        nominal_size = 1024
+        font = SubtitleService._measurement_font(font_name, font_weight, nominal_size)
+        if font is None:
+            return 1
+        try:
+            with open(font.path, 'rb') as face:
+                # OpenType collections store the offset table for each face.
+                if face.read(4) == b'ttcf':
+                    face.seek(12 + 4 * font.index)
+                    offset, = unpack('>I', face.read(4))
+                    face.seek(offset + 4)
+                count, = unpack('>H', face.read(2))
+                face.read(6)
+                tables = {}
+                for _ in range(count):
+                    tag, _, offset, _ = unpack('>4sIII', face.read(16))
+                    tables[tag] = offset
+                face.seek(tables[b'head'] + 18)
+                units, = unpack('>H', face.read(2))
+                face.seek(tables[b'OS/2'] + 74)
+                ascent, descent = unpack('>hh', face.read(4))
+                if units and ascent + descent > 0:
+                    # libass uses the Windows ascent and descent for this face.
+                    return units / (ascent + descent)
+        except (OSError, KeyError, StructError):
+            pass
+        ascent, descent = font.getmetrics()
+        return nominal_size / (ascent + descent) if ascent + descent > 0 else 1
 
     @classmethod
     def _fit_horizontal_scale(cls, text, style, width):
