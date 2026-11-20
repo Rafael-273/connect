@@ -65,6 +65,11 @@
             const left = Math.max(start, Number(item.start_ms)), right = Math.min(end, Number(item.end_ms));
             if (right <= left) return [];
             const next = {...item, start_ms: left + offset, end_ms: right + offset};
+            if (item.transitions) {
+                next.transitions = {...item.transitions};
+                if (left > item.start_ms) delete next.transitions.in;
+                if (right < item.end_ms) delete next.transitions.out;
+            }
             if (item.source_in_ms != null) next.source_in_ms = Number(item.source_in_ms) + left - item.start_ms;
             return [next];
         }).map((item, index) => index ? {...item, id: `${item.id}-local-${index}`} : item);

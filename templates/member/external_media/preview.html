@@ -99,26 +99,35 @@
     .preview-adjustments .preview-decision.is-current{border:0;background:transparent;box-shadow:none}
     .preview-adjustments>.p-4.border-b{display:none}
     /* The inspector is the surface: B-roll controls live directly on it, not in a second card. */
-    .preview-adjustments .broll-inspector{padding:.35rem .1rem .7rem!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
-    .broll-inspector__header{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding-bottom:.65rem}
-    .broll-inspector__header strong{margin-top:.22rem!important;font-size:.88rem}
-    .broll-inspector__header small{font-size:.68rem}
-    .broll-inspector__tools{display:flex;align-items:center;gap:.5rem;flex-shrink:0}
-    .broll-inspector__tools [data-jump]{display:grid;place-items:center;width:1.8rem;height:1.8rem;border-radius:.45rem;background:#171f2c;color:#9d4edd}
-    .broll-card-actions{display:flex;align-items:center;flex-wrap:wrap;justify-content:flex-end;gap:.45rem;margin:0;color:#9ba8ba;font-size:.68rem}
-    .broll-card-actions button{font-weight:800;white-space:nowrap}
-    .broll-effect{border-top:1px solid #273244}
-    .broll-effect summary{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.58rem 0;cursor:pointer;color:#cbd5e1;font-size:.73rem;font-weight:800;list-style:none}
+    .preview-adjustments .broll-inspector{display:grid;gap:.7rem;min-width:0;padding:.6rem!important;border:0!important;background:transparent!important;box-shadow:none!important}
+    .broll-inspector__header{display:flex;align-items:center;justify-content:space-between;gap:.65rem;min-width:0}
+    .broll-inspector__identity{display:flex;align-items:center;gap:.65rem;min-width:0}
+    .broll-inspector__icon{display:grid;place-items:center;flex:none;width:2.5rem;height:2.5rem;border-radius:.65rem;background:#29213f;color:#d3b5ff}
+    .broll-inspector__identity strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.86rem;color:#eef2f7}
+    .broll-inspector__identity small,.broll-hint{font-size:.73rem;color:#aeb9c9;line-height:1.4}
+    .broll-card-actions{display:flex;align-items:center;flex-wrap:wrap;gap:.3rem}
+    .broll-action{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;min-height:2.5rem;padding:.35rem .55rem;border-radius:.45rem;font-size:.76rem;font-weight:650;color:#dbe5f1}
+    .broll-action:hover{background:#263244}
+    .broll-action:focus-visible{outline:2px solid #8ec5ff;outline-offset:2px}
+    .broll-action--jump{flex:none;background:#19212c;border:1px solid #374457}
+    .broll-action--danger{color:#fda4af}
+    .broll-effect{min-width:0;border:1px solid #303a48;border-radius:.65rem;background:#11161f}
+    .broll-effect summary{display:flex;align-items:center;gap:.5rem;min-height:2.65rem;padding:.52rem .7rem;cursor:pointer;color:#edf2f8;font-size:.8rem;font-weight:700;list-style:none}
     .broll-effect summary::-webkit-details-marker{display:none}
-    .broll-effect summary::before{content:'›';margin-right:.35rem;color:#7c8aa0;font-size:1rem;transition:transform .15s ease}
+    .broll-effect summary::before{content:'›';color:#9cacbf;font-size:1.1rem;transition:transform .15s ease}
     .broll-effect[open] summary::before{transform:rotate(90deg)}
-    .broll-effect summary span{margin-right:auto}
-    .broll-effect summary small{color:#718096;font-size:.66rem;font-weight:600}
-    .broll-effect__body{padding:0 0 .7rem}
-    .broll-effect .grid{margin-top:0!important}
-    .broll-effect label{font-size:.67rem!important}
-    .broll-effect input,.broll-effect select{min-height:1.85rem!important;padding:.28rem .45rem!important;font-size:.72rem!important}
-    .broll-effect [data-broll-transform-range]{min-height:auto!important;padding:0!important}
+    .broll-effect__body{display:grid;gap:.55rem;padding:.1rem .75rem .75rem}
+    .broll-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem}
+    .broll-field{display:block;min-width:0;color:#dbe5f1;font-size:.75rem}
+    .broll-field select,.broll-field input[type=number],.broll-value input{min-height:2.5rem;padding:.35rem .5rem;border:1px solid #435167;border-radius:.48rem;font-variant-numeric:tabular-nums}
+    .broll-field select,.broll-field>input[type=number]{display:block;width:100%;margin-top:.25rem}
+    .broll-field__controls{display:flex;align-items:center;gap:.65rem;margin-top:.2rem}
+    .broll-field__controls input[type=range]{flex:1;min-width:0;min-height:2rem;accent-color:#ed706e}
+    .broll-value{display:flex;align-items:center;gap:.25rem;color:#aeb9c9;font-size:.75rem}
+    .broll-value input{width:5rem}
+    .broll-inspector__footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.3rem}
+    .broll-inspector__footer small{color:#aeb9c9;font-size:.73rem}
+    @media(max-width:760px){.broll-action{min-height:44px}.broll-value input{width:4.65rem}}
     /* The timeline becomes the lower surface of the editor instead of leaving a detached empty strip. */
     .media-shell:has(.preview-shell){min-height:calc(100vh - 92px)!important}
     .preview-shell{display:flex;flex-direction:column;min-height:calc(100vh - 92px)!important}
@@ -133,7 +142,6 @@
     .preview-transform-box__handle--nw{top:0;left:0;cursor:nwse-resize}.preview-transform-box__handle--ne{top:0;right:0;cursor:nesw-resize}.preview-transform-box__handle--sw{bottom:0;left:0;cursor:nesw-resize}.preview-transform-box__handle--se{right:0;bottom:0;cursor:nwse-resize}
     .preview-transform-box__hint{position:absolute;z-index:3;left:50%;top:12px;transform:translateX(-50%);padding:6px 10px;border:1px solid rgba(255,255,255,.15);border-radius:999px;background:rgba(15,20,29,.85);color:#f3f5f8;font-size:.67rem;font-weight:600;line-height:1;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.25)}
     .preview-transform-box.is-dragging .preview-transform-box__hint,.preview-transform-box[data-kind="broll"] .preview-transform-box__hint{opacity:0}
-    @media(max-width:640px){.broll-inspector__header{align-items:flex-start}.broll-inspector__tools{gap:.3rem}.broll-card-actions{gap:.3rem}.broll-card-actions button{font-size:.62rem}.broll-effect__body .grid-cols-2{grid-template-columns:1fr 1fr}}
     .editor-add-menu{position:relative;display:block!important}
     .editor-add-menu__popover{position:absolute;z-index:20;top:0;left:calc(100% + .55rem);display:none;width:12rem;padding:.35rem;border:1px solid #354154;border-radius:.65rem;background:#151b25;box-shadow:0 12px 28px rgba(0,0,0,.35)}
     .editor-add-menu__popover.is-open{display:grid;gap:.2rem}
@@ -399,8 +407,40 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     .multicam-new{margin-top:.7rem;border:1px dashed #435167;border-radius:.7rem;background:#101722}.multicam-new__summary{padding:.7rem .8rem;color:#b9c5d5;font-size:.75rem;font-weight:900;cursor:pointer;list-style:none}.multicam-new__summary:before{content:'+';margin-right:.45rem;color:#ff8d87;font-size:1rem}.multicam-new[open]>.multicam-card{border:0;border-top:1px solid #354154;border-radius:0;background:transparent}.multicam-card--new .multicam-card__heading>i{background:#183c38;color:#76e6c2}
     @media(max-width:700px){.multicam-body{padding:.75rem}.multicam-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.multicam-field:first-child{grid-column:1/-1}.multicam-actions{display:grid;grid-template-columns:1fr}.multicam-button{width:100%}.multicam-button--danger{margin-left:0}.multicam-fields--advanced .multicam-field{grid-column:auto}}
 
+    .transition-inspector{display:grid;gap:.8rem;min-width:0}
+    .transition-inspector [hidden]{display:none!important}
+    .transition-phases{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.3rem;padding:.25rem;background:#0d1118;border:1px solid #303a48;border-radius:.65rem}
+    .transition-phase,.transition-chip,.transition-choice{display:flex;align-items:center;justify-content:center;gap:.42rem;min-height:2.5rem;padding:.4rem .5rem;border:1px solid transparent;border-radius:.48rem;color:#c7d2e1;font-size:.8rem;font-weight:700;cursor:pointer}
+    .transition-phase[aria-selected=true],.transition-chip[aria-pressed=true],.transition-choice[aria-pressed=true]{background:#352127;color:#fff;border-color:#ac565d}
+    .transition-phase small{font-size:.68rem;color:#f4bbb9}
+    .transition-panel{display:grid;gap:.8rem;min-width:0}
+    .transition-row{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+    .transition-row strong{font-size:.82rem;color:#eef2f7}
+    .transition-link{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;min-height:2.5rem;padding:.4rem .65rem;border-radius:.5rem;font-size:.78rem;font-weight:700;color:#e9edf5}
+    .transition-link:hover,.transition-chip:hover,.transition-phase:hover,.transition-choice:hover{background-color:#293344}
+    .transition-effects,.transition-durations,.transition-directions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.35rem}
+    .transition-effect{display:grid;justify-items:center;align-content:center;gap:.3rem;position:relative;min-height:3.25rem;padding:.35rem .15rem;background:#19212c;border:1px solid #374457;border-radius:.62rem;color:#dbe5f1;font-size:.72rem;font-weight:700;text-align:center;cursor:pointer}
+    .transition-effect i{font-size:1rem}
+    .transition-effect input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+    .transition-effect:has(input:checked){background:#352127;color:#fff;border-color:#ed9392;box-shadow:inset 0 -3px #e36b6b}
+    .transition-effect:focus-within,.transition-inspector button:focus-visible{outline:2px solid #8ec5ff;outline-offset:2px}
+    .transition-chip,.transition-choice{background:#19212c;border-color:#374457}
+    .transition-duration{display:grid;gap:.35rem}
+    .transition-duration input[type=range],.transition-config input[type=range]{width:100%;min-height:2.15rem;accent-color:#ed706e}
+    .transition-settings{border-top:1px solid #303a48;padding-top:.55rem}
+    .transition-settings h3{margin:0;color:#d4deeb;font-size:.8rem;font-weight:700}
+    .transition-config{display:grid;gap:.55rem;margin-top:.65rem;padding:.65rem;border:1px solid #303a48;border-radius:.55rem}
+    .transition-config strong,.transition-config label,.transition-settings>label{font-size:.78rem;color:#dbe5f1}
+    .transition-settings>label{display:block;margin:.45rem 0;min-width:0}
+    .transition-settings select{display:block;width:100%;min-width:0;min-height:2.5rem;margin-top:.3rem;padding:.35rem .5rem;border:1px solid #435167;border-radius:.48rem}
+    .transition-choice{flex-direction:column;gap:.15rem;font-size:.68rem}
+    .transition-footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.35rem;border-top:1px solid #303a48;padding-top:.4rem}
+    .transition-footer small,.transition-hint{font-size:.73rem;color:#aeb9c9}
+    @media(max-width:760px){.transition-phase,.transition-chip,.transition-choice,.transition-link{min-height:44px}}
+    .editor-track__clip.has-transition-in{border-left:3px solid #fef3c7}
+    .editor-track__clip.has-transition-out{border-right:3px solid #fef3c7}
 </style>
-<link rel="stylesheet" href="{% static 'external_media_editor_mobile.css' %}?v=20261118-9">
+<link rel="stylesheet" href="{% static 'external_media_editor_mobile.css' %}?v=20261119-timeline-gestures">
 <link rel="stylesheet" href="{% static 'external_media_editor_theme.css' %}?v=20261118-4">
 {% endblock %}
 
@@ -408,7 +448,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 
 {% block media_content %}
 <script src="{% static 'external_media_multicam.js' %}"></script>
-<script src="{% static 'external_media_editor_mobile.js' %}"></script>
+<script src="{% static 'external_media_editor_mobile.js' %}?v=20261119-timeline-gestures"></script>
+<script src="{% static 'external_media_transitions.js' %}"></script>
 {{ timeline|json_script:"preview-timeline" }}
 {{ music_tracks|json_script:"music-tracks" }}
 <div class="preview-shell">
@@ -425,7 +466,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             <button type="button" data-preview-adjustment="cuts" aria-pressed="false" hidden><i class="fas fa-scissors" aria-hidden="true"></i><span>Cortes</span></button>
             <button type="button" data-preview-adjustment="audio" aria-pressed="false" hidden><i class="fas fa-volume-high" aria-hidden="true"></i><span>Áudio</span></button>
             <button type="button" data-preview-adjustment="elements" aria-pressed="false" hidden><i class="fas fa-layer-group" aria-hidden="true"></i><span>Elementos</span></button>
-            <button type="button" data-preview-adjustment="captions" aria-pressed="false" hidden><i class="fas fa-closed-captioning" aria-hidden="true"></i><span>Legendas</span></button>
+            <button type="button" data-preview-adjustment="transitions" hidden><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Transições</span></button>
+        <button type="button" data-preview-adjustment="captions" aria-pressed="false" hidden><i class="fas fa-closed-captioning" aria-hidden="true"></i><span>Legendas</span></button>
             <button type="button" data-caption-edit="desktop" aria-label="Editar legenda" hidden><i class="fas fa-pen" aria-hidden="true"></i><span>Editar</span></button>
             <button type="button" data-preview-adjustment="details" aria-pressed="false" hidden><i class="fas fa-sliders" aria-hidden="true"></i><span>Detalhes</span></button>
         </nav>
@@ -454,6 +496,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         <button type="button" data-mobile-adjustment="framing" hidden><i class="fas fa-crop-simple" aria-hidden="true"></i><span>Enquadrar</span></button>
         <button type="button" data-mobile-adjustment="color" hidden><i class="fas fa-palette" aria-hidden="true"></i><span>Cor</span></button>
         <button type="button" data-mobile-adjustment="audio" hidden><i class="fas fa-volume-high" aria-hidden="true"></i><span>Áudio</span></button>
+        <button type="button" data-mobile-adjustment="elements" hidden><i class="fas fa-layer-group" aria-hidden="true"></i><span>Elementos</span></button>
+        <button type="button" data-mobile-adjustment="transitions" hidden><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span>Transições</span></button>
         <button type="button" data-mobile-adjustment="captions" hidden><i class="fas fa-closed-captioning" aria-hidden="true"></i><span>Legendas</span></button>
         <button type="button" data-caption-edit="mobile" aria-label="Editar legenda" hidden><i class="fas fa-pen" aria-hidden="true"></i><span>Editar</span></button>
         <button type="button" id="mobile-properties" disabled><i class="fas fa-sliders" aria-hidden="true"></i><span>Ajustes</span></button>
@@ -736,8 +780,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const requestPreviewRender=frameLatest(()=>renderPosition());
     const requestTimelineRender=frameLatest(()=>renderEditorTimeline());
     const fmt = ms => {const s=Math.max(0,Math.floor(ms/1000)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
-    const minFromMs = ms => Number(ms || 0) / 60000;
-    const msFromMin = min => Math.round(Number(min) * 60000);
+    const secondsFromMs = ms => Number(ms || 0) / 1000;
+    const msFromSeconds = seconds => Math.round(Number(seconds) * 1000);
     let assetArray=null,assetsById=new Map(),previewIndexes=null;
     const EMPTY_STYLE={};
     const asset=id=>{if(assetArray!==timeline.assets){assetArray=timeline.assets;assetsById=new Map((assetArray||[]).map(item=>[String(item.id),item]))}return assetsById.get(String(id))};
@@ -1015,7 +1059,64 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function renderOverlays(){
         if(reviewRenders('OVERLAYS')){overlayLayer.replaceChildren();return}
         const active=new Set();
-        indexedPreview().overlays.at(globalMs).forEach(item=>{const visibleStart=item.start_ms+Math.max(0,Number(item.animation?.delay||0)*1000);if(globalMs<visibleStart||globalMs>=item.end_ms)return;active.add(item.id);let node=overlayLayer.querySelector(`[data-overlay-id="${CSS.escape(item.id)}"]`);const entering=!node||node.hidden;if(!node){node=document.createElement('div');node.className='preview-overlay-item';node.dataset.overlayId=item.id;overlayLayer.append(node)}const pos=item.position||{},style=item.style||{},configuredWidth=Number(pos.width??style.max_width??.24);node.style.left=`${Number(pos.x??.5)*100}%`;node.style.top=`${Number(pos.y??.82)*100}%`;node.style.width=configuredWidth<=1?`${configuredWidth*100}%`:`${configuredWidth}px`;if(item.type==='TEXT'){node.classList.add('preview-overlay-text');node.textContent=item.content?.text||Object.values(item.content||{})[0]||'';node.style.color=style.color||'#fff';node.style.background=`color-mix(in srgb, ${style.background||'#000'} ${Number(style.background_opacity??.72)*100}%, transparent)`;node.style.fontFamily=style.font||'Arial';node.style.fontWeight=style.font_weight||700;node.style.textAlign=['left','right','center'].includes(style.alignment)?style.alignment:'center';node.style.borderRadius=`${style.border_radius||10}px`;node.style.fontSize=`clamp(12px,${Math.max(1,Number(style.font_size||48)/18)}vw,${style.font_size||48}px)`}else{node.classList.remove('preview-overlay-text');let img=node.querySelector('img');if(!img){img=document.createElement('img');node.replaceChildren(img)}const src=overlayAssetPattern.replace('__overlay__',encodeURIComponent(item.id))+`?r=${timeline.timeline_revision}`;if(img.dataset.src!==src){img.src=src;img.dataset.src=src}}node.hidden=false;if(entering){const kind=item.animation?.type||'NONE',from={opacity:kind==='NONE'?1:0,transform:'translate(-50%,-50%)'};if(kind==='SLIDE_UP')from.transform='translate(-50%,20%)';if(kind==='SLIDE_DOWN')from.transform='translate(-50%,-120%)';if(kind==='SLIDE_LEFT')from.transform='translate(20%,-50%)';if(kind==='SLIDE_RIGHT')from.transform='translate(-120%,-50%)';if(kind==='POP')from.transform='translate(-50%,-50%) scale(.82)';node.animate([from,{opacity:1,transform:'translate(-50%,-50%) scale(1)'}],{duration:Number(item.animation?.duration||.35)*1000,easing:item.animation?.easing||'ease-out'})}});overlayLayer.querySelectorAll('[data-overlay-id]').forEach(node=>{node.hidden=!active.has(node.dataset.overlayId)})
+        indexedPreview().overlays.at(globalMs).forEach((item,order)=>{
+            const visibleStart=item.start_ms+Math.max(0,Number(item.animation?.delay||0)*1000);
+            if(globalMs<visibleStart||globalMs>=item.end_ms)return;
+            active.add(item.id);
+            let node=overlayLayer.querySelector(`[data-overlay-id="${CSS.escape(item.id)}"]`);
+            const entering=!node||node.hidden;
+            if(!node){node=document.createElement('div');node.className='preview-overlay-item';node.dataset.overlayId=item.id;overlayLayer.append(node)}
+            node.style.zIndex=String(order);
+            const pos=item.position||{},style=item.style||{},configuredWidth=Number(pos.width??style.max_width??.24);
+            const centerX=Number(pos.x??.5),centerY=Number(pos.y??.82);
+            node.style.left=`${centerX*100}%`;node.style.top=`${centerY*100}%`;
+            const modern=item.transitions!==undefined;
+            if(modern){
+                const width=Number(timeline.sequence.width||1920);
+                const pixels=Math.max(80,Math.round(configuredWidth<=1?configuredWidth*width:configuredWidth));
+                node.style.width=`${Math.min(1,pixels/width)*100}%`;
+            }else node.style.width=configuredWidth<=1?`${configuredWidth*100}%`:`${configuredWidth}px`;
+            const localText=item.type==='TEXT'&&(!modern||pendingPropertyEdits.get(`overlay:${item.id}`)?.content);
+            node.classList.toggle('preview-overlay-text',Boolean(localText));
+            if(localText){
+                const content=item.content?.text||Object.values(item.content||{})[0]||'';
+                if(node.textContent!==content||node.firstElementChild)node.textContent=content;
+                node.style.color=style.color||'#fff';
+                node.style.background=`color-mix(in srgb, ${style.background||'#000'} ${Number(style.background_opacity??.72)*100}%, transparent)`;
+                node.style.fontFamily=style.font||'Arial';node.style.fontWeight=style.font_weight||700;
+                node.style.textAlign=['left','right','center'].includes(style.alignment)?style.alignment:'center';
+                node.style.borderRadius=`${style.border_radius||10}px`;
+                node.style.fontSize=`clamp(12px,${Math.max(1,Number(style.font_size||48)/18)}vw,${style.font_size||48}px)`;
+            }else{
+                node.style.background='';node.style.borderRadius='';
+                let img=node.querySelector('img');
+                if(!img){img=document.createElement('img');img.alt=item.type==='TEXT'?(item.content?.text||'Texto'):'';node.replaceChildren(img)}
+                const src=overlayAssetPattern.replace('__overlay__',encodeURIComponent(item.id))+`?r=${timeline.timeline_revision}`;
+                if(img.dataset.src!==src){img.src=src;img.dataset.src=src}
+            }
+            node.hidden=false;
+            if(modern){
+                if(entering||!node._usesTransitions)node.getAnimations?.().forEach(animation=>animation.cancel());
+                node._usesTransitions=true;
+                ConnectVisualTransitions.apply(node,item,globalMs-visibleStart,item.end_ms-visibleStart,{
+                    x:'-50%',y:'-50%',scale:1,centerX,centerY,
+                    rotation:Number(pos.rotation??style.rotation??0),opacity:Number(pos.opacity??style.opacity??1),
+                });
+            }else{
+                if(node._usesTransitions){node._usesTransitions=false;node.style.filter='';node.style.clipPath='';node.style.maskImage='';node.style.opacity='';node.style.transform=''}
+                if(!entering)return;
+                const kind=item.animation?.type||'NONE',from={opacity:kind==='NONE'?1:0,transform:'translate(-50%,-50%)'};
+                if(kind==='SLIDE_UP')from.transform='translate(-50%,20%)';
+                if(kind==='SLIDE_DOWN')from.transform='translate(-50%,-120%)';
+                if(kind==='SLIDE_LEFT')from.transform='translate(20%,-50%)';
+                if(kind==='SLIDE_RIGHT')from.transform='translate(-120%,-50%)';
+                if(kind==='POP')from.transform='translate(-50%,-50%) scale(.82)';
+                node.animate([from,{opacity:1,transform:'translate(-50%,-50%) scale(1)'}],{
+                    duration:Number(item.animation?.duration||.35)*1000,easing:item.animation?.easing||'ease-out',
+                });
+            }
+        });
+        overlayLayer.querySelectorAll('[data-overlay-id]').forEach(node=>{node.hidden=!active.has(node.dataset.overlayId)});
     }
     function releaseBrollNode(node){
         node._brollController?.abort();
@@ -1055,9 +1156,15 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             if(fullscreen){node.style.left='0';node.style.top='0';node.style.width='100%';node.style.height='100%'}else{node.style.left=`${Number(transform.x??.82)*100}%`;node.style.top=`${Number(transform.y??.78)*100}%`;node.style.width=`${Math.max(.08,Math.min(.9,Number(transform.scale??.28)))*100}%`;node.style.height='auto'}
             let scale=fullscreen?Math.max(1,Math.min(2,Number(transform.scale??1))):1;const motionType=String(motion.type||'NONE');if(motionType==='ZOOM_IN')scale*=Number(motion.from_scale||1)+(Number(motion.to_scale||1.06)-Number(motion.from_scale||1))*progress;if(motionType==='ZOOM_OUT')scale*=Number(motion.to_scale||1.06)+(Number(motion.from_scale||1)-Number(motion.to_scale||1.06))*progress;
             let x=fullscreen?'0':'-50%',y=fullscreen?'0':'-50%';if(motionType==='PAN_LEFT')x=`calc(${x} - ${progress*3}%)`;if(motionType==='PAN_RIGHT')x=`calc(${x} + ${progress*3}%)`;
+            const baseScale=scale,baseX=x,baseY=y;
             const entryType=String(item.entry?.type||'NONE'),exitType=String(item.exit?.type||'NONE'),entryDuration=Math.max(1,Number(item.entry?.duration_ms||300)),exitDuration=Math.max(1,Number(item.exit?.duration_ms||250)),entryProgress=Math.min(1,elapsed/entryDuration),exitProgress=Math.min(1,remaining/exitDuration);
             let opacity=1;if(['FADE','SCALE'].includes(entryType))opacity=Math.min(opacity,entryProgress);if(['FADE','SCALE'].includes(exitType))opacity=Math.min(opacity,exitProgress);if(entryType==='SLIDE'&&entryProgress<1)x=`calc(${x} - ${(1-entryProgress)*100}%)`;if(exitType==='SLIDE'&&exitProgress<1)x=`calc(${x} + ${(1-exitProgress)*100}%)`;if(entryType==='SCALE'&&entryProgress<1)scale*=.82+.18*entryProgress;if(exitType==='SCALE'&&exitProgress<1)scale*=.82+.18*exitProgress;
-            node.style.transform=`translate(${x},${y}) scale(${scale})`;node.style.opacity=String(opacity);node.hidden=false;
+            node.hidden=false;
+            if(item.transitions!==undefined){
+                ConnectVisualTransitions.apply(node,item,elapsed,duration,{x:baseX,y:baseY,scale:baseScale,centerX:fullscreen ? .5 : Number(transform.x??.82),centerY:fullscreen ? .5 : Number(transform.y??.78),rotation:Number(transform.rotation||0),opacity:Number(transform.opacity??1)});
+            }else{
+                node.style.transform=`translate(${x},${y}) scale(${scale})`;node.style.opacity=String(opacity);node.style.filter='';node.style.clipPath='';node.style.maskImage='';
+            }
             if(node.tagName==='VIDEO'){const expected=(Number(item.source_in_ms||0)+elapsed)/1000;if(Number.isFinite(node.duration)&&node.duration>0&&Math.abs(node.currentTime-expected)>.35)node.currentTime=expected%node.duration;node.playbackRate=video.playbackRate;if(!video.paused)node.play().catch(()=>{});else node.pause()}
         });
         // Preserve every active layer, plus at most two nearby video items.
@@ -1786,6 +1893,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 const tiny=isSourceSegment&&rawWidth<.35,isBroll=kind.includes('editor-track__broll'),isFilmstrip=(kind.includes('editor-video-clip')||isBroll)&&!tiny;
                 const decorated=clip.classList.contains('has-thumbnail')?'has-thumbnail':'';
                 clip.className=`editor-track__clip ${kind} ${tiny?'is-tiny':''} ${decorated}`;
+                const transitionEdges = Object.fromEntries(ConnectVisualTransitions.edges(item.transitions,item.end-item.start).map(([side,,length])=>[side,length]));
+                clip.classList.toggle('has-transition-in', Boolean(item.transitions===undefined?item.legacyIn:transitionEdges.in));
+                clip.classList.toggle('has-transition-out', Boolean(item.transitions===undefined?item.legacyOut:transitionEdges.out));
                 clip.style.left=`${Math.max(0,item.start/duration*100)}%`;clip.style.width=`${Math.max(.02,rawWidth)}%`;
                 const assetSource=isFilmstrip?(isBroll?item.assetUrl:asset(item.assetId)?.url):'';
                 const usingMaster=isFilmstrip&&!isBroll&&!assetSource&&Boolean(timeline.review_master_url);
@@ -1831,6 +1941,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 if(isCaption)clip.ondblclick=event=>{event.preventDefault();event.stopPropagation();const cue=timeline.captions.find(value=>value.id===item.id);if(cue)openSubtitleEditor(cue)};
                 if(isSourceSegment)clip.title+=' · arraste para mover vídeo e áudio juntos';
                 if(created){if(isSourceSegment)makeSourceTakeDraggable(clip);else if(selectKind==='music')makeMusicTimelineItemDraggable(clip,lane,item,duration);else makeTimelineItemDraggable(clip,lane,item,selectKind,duration)}
+                if(isMobileEditor())clip.removeAttribute('title');
                 return clip;
             });
             reconcileChildren(lane,nextClips);
@@ -1854,13 +1965,19 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             return layers;
         };
         // The order mirrors the compositor: top-most graphics first, audio last.
-        if(timeline.overlays?.length)makeTrack('Textos',timeline.overlays.map(item=>({start:item.start_ms,end:item.end_ms,label:item.purpose||item.type,id:item.id})),'editor-track__overlay',false,false,'overlay',true);
+        if(timeline.overlays?.length){
+            const items=timeline.overlays.map(item=>({
+                start:item.start_ms,end:item.end_ms,label:item.purpose||item.type,id:item.id,
+                transitions:item.transitions,legacyIn:item.animation?.type&&item.animation.type!=='NONE',
+            }));
+            stackElementLayers(items).forEach((layer,index)=>makeTrack('Textos',layer,'editor-track__overlay',false,false,'overlay',true,`overlay:${index}`));
+        }
         addCaptionTrack('Legenda','pt','editor-track__caption editor-track__caption--pt');
         addCaptionTrack('Legenda EN','en','editor-track__caption editor-track__caption--en');
         const otherLanguages=[...new Set(captions.filter(item=>!usedCaptions.has(item)).map(item=>String(item.language||'').toLowerCase()))];
         otherLanguages.forEach(language=>addCaptionTrack(`Legenda ${language.toUpperCase()}`,language,'editor-track__caption'));
         if(timeline.brolls?.length){
-            const elements=timeline.brolls.map(item=>{const media=asset(`broll-asset-${item.asset_id}`);return {start:item.start_ms,end:item.end_ms,label:media?.name||item.media_type,id:item.id,assetUrl:media?.url,mediaType:item.media_type,sourceTimeMs:item.source_in_ms,layer:item.layer}});
+            const elements=timeline.brolls.map(item=>{const media=asset(`broll-asset-${item.asset_id}`);return {start:item.start_ms,end:item.end_ms,label:media?.name||item.media_type,id:item.id,assetUrl:media?.url,mediaType:item.media_type,sourceTimeMs:item.source_in_ms,layer:item.layer,transitions:item.transitions,legacyIn:item.entry?.type&&item.entry.type!=='NONE',legacyOut:item.exit?.type&&item.exit.type!=='NONE'}});
             const automatic=stackElementLayers(elements),automaticLayer=new Map();automatic.forEach((items,index)=>items.forEach(item=>automaticLayer.set(item.id,index)));
             const byLayer=new Map();elements.forEach(item=>{const hasManualLayer=item.layer!==null&&item.layer!==undefined&&item.layer!==''&&Number.isFinite(Number(item.layer));const layer=hasManualLayer?Number(item.layer):automaticLayer.get(item.id)||0;item.layer=layer;if(!byLayer.has(layer))byLayer.set(layer,[]);byLayer.get(layer).push(item)});
             [...byLayer.keys()].sort((a,b)=>a-b).forEach(layer=>{makeTrack('Elementos',byLayer.get(layer),'editor-track__broll',false,false,'broll',true,`broll:${layer}`);lastRenderedTrack.querySelector('.editor-track__lane').dataset.brollLayer=String(layer)})
@@ -1952,7 +2069,15 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     // virtual 'project-master' timeline; the backend resolves which real take
     // produced each one into related_source_id so clicking a take can filter them.
     function decisionSourceId(item){return item.related_source_id||item.source_id}
-    function selectInspector(kind,id,label,segment=null,options={}){if(!['video','audio'].includes(kind))selectedSegment=null;if(kind==='caption')selectedCaptionIds=new Set([String(id)]);else selectedCaptionIds.clear();inspectorSelection={kind,id:id??null,label:label||'',masterStartMs:segment?.masterStartMs,masterEndMs:segment?.masterEndMs,cameraSegmentId:segment?.cameraSegmentId||null,noiseDecisionId:options.noiseDecisionId||null};if(kind==='video'&&segment&&(globalMs<segment.start||globalMs>=segment.end))seek(segment.start,!video.paused);if(!isMobileEditor()&&!options.keepPanel)setReviewPanel(!(['video','audio','music','caption'].includes(kind)&&window.matchMedia('(min-width:900px)').matches));renderList();renderDirectTransformControl();updateEditControls()}
+    function selectInspector(kind,id,label,segment=null,options={}){
+        if(!['video','audio'].includes(kind))selectedSegment=null;
+        if(kind==='caption')selectedCaptionIds=new Set([String(id)]);else selectedCaptionIds.clear();
+        inspectorSelection={kind,id:id??null,label:label||'',masterStartMs:segment?.masterStartMs,masterEndMs:segment?.masterEndMs,cameraSegmentId:segment?.cameraSegmentId||null,noiseDecisionId:options.noiseDecisionId||null};
+        if(kind==='video'&&segment&&(globalMs<segment.start||globalMs>=segment.end))seek(segment.start,!video.paused);
+        if(kind==='broll')setReviewPanel(false);
+        else if(!isMobileEditor()&&!options.keepPanel)setReviewPanel(!(['video','audio','music','caption'].includes(kind)&&window.matchMedia('(min-width:900px)').matches));
+        renderList();renderDirectTransformControl();updateEditControls()
+    }
     function toggleCaptionSelection(cue){
         const id=String(cue.id);
         if(selectedCaptionIds.has(id))selectedCaptionIds.delete(id);else selectedCaptionIds.add(id);
@@ -1987,36 +2112,146 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const labels={video:inspectorSelection.cameraSegmentId?'Câmera extra selecionada':'Vídeo selecionado',audio:'Áudio selecionado',broll:'Elemento selecionado',overlay:'Texto selecionado',music:'Trilha sonora',caption:'Transcrição sincronizada'};
         title.textContent=labels[inspectorSelection.kind]||'Ajustes';subtitle.textContent=inspectorSelection.label||'';
     }
-    function compactBrollInspector(card){
-        if(card.classList.contains('broll-inspector'))return;
-        const header=card.firstElementChild,startField=card.querySelector('[data-broll-number="start_ms"]');
-        if(!header||!startField)return;
-        const actions=card.querySelector('.broll-card-actions'),jump=header.querySelector('[data-jump]');
-        const assetField=card.querySelector('[data-broll-asset]')?.closest('label');
-        const timingGrid=startField.closest('.grid');
-        const modeField=card.querySelector('[data-broll-mode]'),modeLabel=modeField?.closest('label');
-        const motionLabel=card.querySelector('[data-broll-motion]')?.closest('label');
-        const entryExit=card.querySelector('[data-broll-entry]')?.closest('.grid');
-        const transforms=card.querySelector('[data-broll-transform="x"]')?.closest('.grid');
-        const createSection=(title,meta='',open=false)=>{
-            const section=document.createElement('details');section.className='broll-effect';section.open=open;
-            const summary=document.createElement('summary');summary.innerHTML=`<span>${title}</span><small>${meta}</small>`;
-            const body=document.createElement('div');body.className='broll-effect__body';section.append(summary,body);
-            return {section,body,summary};
+    function renderBrollInspector(item){
+        const media=asset(`broll-asset-${item.asset_id}`)||{};
+        const tx=item.transform||{};
+        const isVideo=item.media_type==='VIDEO';
+        const fullscreen=item.display_mode!=='OVERLAY';
+        const card=document.createElement('article');
+        card.className='preview-decision broll-inspector';
+        card.dataset.start=item.start_ms;
+        card.dataset.end=item.end_ms;
+        const timeField=(label,key,ms)=>`<label class="broll-field">${label}
+            <input data-broll-number="${key}" type="number" min="0" step=".001" value="${secondsFromMs(ms)}"></label>`;
+        const transformField=(label,key,min,max,value)=>{
+            const percent=Number((Number(value)*100).toFixed(4));
+            const bounds=`min="${min}" max="${max}" step="any" value="${percent}"`;
+            return `<div class="broll-field"><span data-broll-transform-label="${key}">${label}</span>
+                <div class="broll-field__controls">
+                    <input data-broll-transform-range="${key}" type="range" ${bounds} aria-label="${label} (%)">
+                    <label class="broll-value"><input data-broll-transform="${key}" type="number" ${bounds} aria-label="${label} em porcentagem"><span aria-hidden="true">%</span></label>
+                </div></div>`;
         };
-        card.classList.add('broll-inspector');header.classList.add('broll-inspector__header');
-        const tools=document.createElement('div');tools.className='broll-inspector__tools';
-        if(jump)tools.append(jump);if(actions)tools.append(actions);header.append(tools);
-        const time=createSection('Tempo',`${fmt(Number(card.dataset.start||0))} — ${fmt(Number(card.dataset.end||0))}`,true);
-        if(timingGrid)time.body.append(timingGrid);
-        const transform=createSection('Transformar','Salvo',true);
-        const saved=transform.summary.querySelector('small');saved.dataset.saved='';
-        if(modeLabel)transform.body.append(modeLabel);
-        if(motionLabel)transform.body.append(motionLabel);
-        if(entryExit)transform.body.append(entryExit);
-        if(transforms)transform.body.append(transforms);
-        const source=createSection('Fonte','',false);if(assetField)source.body.append(assetField);
-        card.append(time.section,transform.section,source.section);
+        const fileName=esc(media.name||'Arquivo visual');
+        const choices=(timeline.assets||[]).filter(value=>value.asset_id).map(value=>
+            `<option value="${esc(value.asset_id)}">${esc(value.name)}</option>`).join('');
+        card.innerHTML=`
+            <div class="broll-inspector__header">
+                <div class="broll-inspector__identity">
+                    <span class="broll-inspector__icon"><i class="fas fa-${isVideo?'video':'image'}" aria-hidden="true"></i></span>
+                    <div class="min-w-0"><small>${isVideo?'Vídeo':'Imagem'}${item.source==='AI'?' · Posicionado pela IA':''}</small>
+                        <strong title="${fileName}">${fileName}</strong></div>
+                </div>
+                <button type="button" class="broll-action broll-action--jump" data-jump><i class="fas fa-location-crosshairs" aria-hidden="true"></i>Ir ao trecho</button>
+            </div>
+            <details class="broll-effect" open>
+                <summary>Enquadramento</summary>
+                <div class="broll-effect__body">
+                    <div class="${isVideo?'':'broll-fields'}">
+                        <label class="broll-field">Exibição
+                            <select data-broll-mode aria-label="Exibição"><option value="FULLSCREEN">Tela cheia</option><option value="OVERLAY">Sobre o vídeo</option></select>
+                        </label>
+                        ${isVideo?'':`<label class="broll-field">Movimento da imagem
+                            <select data-broll-motion>
+                                <option value="NONE">Sem movimento</option><option value="ZOOM_IN">Aproximar</option>
+                                <option value="ZOOM_OUT">Afastar</option><option value="PAN_LEFT">Mover à esquerda</option>
+                                <option value="PAN_RIGHT">Mover à direita</option>
+                            </select></label>`}
+                    </div>
+                    <p class="broll-hint" data-broll-framing-hint></p>
+                    ${transformField('Horizontal','x',0,100,tx.x??(fullscreen ? .5 : .82))}
+                    ${transformField('Vertical','y',0,100,tx.y??(fullscreen ? .5 : .78))}
+                    ${transformField('Tamanho','scale',fullscreen?100:8,fullscreen?200:90,tx.scale??(fullscreen ? 1 : .28))}
+                </div>
+            </details>
+            <details class="broll-effect">
+                <summary>Arquivo de origem</summary>
+                <div class="broll-effect__body">
+                    <label class="broll-field">Trocar arquivo<select data-broll-asset>${choices}</select></label>
+                    ${isVideo?`<div class="broll-fields">
+                        ${timeField('Início do trecho (s)','source_in_ms',item.source_in_ms)}
+                        ${timeField('Fim do trecho (s)','source_out_ms',item.source_out_ms)}
+                    </div>`:''}
+                </div>
+            </details>
+            <div class="broll-inspector__footer">
+                <small data-saved role="status">Salvo</small>
+                <div class="broll-card-actions">
+                    <button type="button" class="broll-action" data-copy-broll-settings><i class="fas fa-copy" aria-hidden="true"></i>Copiar ajustes</button>
+                    <button type="button" class="broll-action ${brollSettingsClipboard?'':'hidden'}" data-paste-broll-settings ${brollSettingsClipboard?'':'disabled'}>Colar ajustes</button>
+                    ${item.auto?'<button type="button" class="broll-action" data-restore-broll>Restaurar ajustes iniciais</button>':''}
+                    <button type="button" class="broll-action broll-action--danger" data-delete-broll><i class="fas fa-trash" aria-hidden="true"></i>Remover</button>
+                </div>
+            </div>`;
+        const mode=card.querySelector('[data-broll-mode]');
+        const motion=card.querySelector('[data-broll-motion]');
+        const source=card.querySelector('[data-broll-asset]');
+        const status=card.querySelector('[data-saved]');
+        mode.value=item.display_mode||'FULLSCREEN';
+        source.value=String(item.asset_id);
+        if(motion)motion.value=item.motion?.type||'NONE';
+        const refreshFramingLabels=()=>{
+            const full=mode.value==='FULLSCREEN';
+            card.querySelector('[data-broll-framing-hint]').textContent=full
+                ? 'Escolha qual parte da mídia fica visível em tela cheia.'
+                : 'Posicione e redimensione o elemento sobre o vídeo.';
+            const labels={x:full?'Recorte horizontal':'Posição horizontal',y:full?'Recorte vertical':'Posição vertical',scale:full?'Ampliação':'Largura no quadro'};
+            Object.entries(labels).forEach(([key,label])=>{
+                card.querySelector(`[data-broll-transform-label="${key}"]`).textContent=label;
+                card.querySelector(`[data-broll-transform-range="${key}"]`).setAttribute('aria-label',`${label} (%)`);
+                card.querySelector(`[data-broll-transform="${key}"]`).setAttribute('aria-label',`${label} em porcentagem`);
+            });
+        };
+        const queue=field=>{
+            status.textContent='Salvando…';
+            queueBrollSave(item,card,field);
+        };
+        const scaleField=card.querySelector('[data-broll-transform="scale"]');
+        const scaleRange=card.querySelector('[data-broll-transform-range="scale"]');
+        const refreshScale=()=>{
+            const full=mode.value==='FULLSCREEN';
+            const current=(timeline.brolls||[]).find(value=>value.id===item.id);
+            const savedScale=Number(current?.transform?.scale??(full ? 1 : .28))*100;
+            const percent=Math.max(full?100:8,Math.min(full?200:90,Number(savedScale.toFixed(4))));
+            for(const field of [scaleField,scaleRange]){
+                field.min=full?100:8;
+                field.max=full?200:90;
+                field.value=percent;
+            }
+        };
+        mode.onchange=()=>{
+            refreshScale();
+            refreshFramingLabels();
+            status.textContent='Salvando…';
+            queuePropertySave('broll',item,card,{display_mode:mode.value});
+        };
+        card.querySelectorAll('[data-broll-transform-range]').forEach(range=>{
+            const number=card.querySelector(`[data-broll-transform="${range.dataset.brollTransformRange}"]`);
+            range.oninput=()=>{number.value=range.value;queue(range)};
+            number.onchange=()=>{
+                if(!Number.isFinite(number.valueAsNumber)){number.value=range.value;return}
+                const value=Math.max(Number(range.min),Math.min(Number(range.max),number.valueAsNumber));
+                range.value=number.value=value;
+                queue(number);
+            };
+        });
+        card.querySelectorAll('[data-broll-number]').forEach(field=>{
+            field.onchange=()=>{
+                if(Number.isFinite(field.valueAsNumber)&&field.validity.valid)queue(field);
+                else field.reportValidity();
+            };
+        });
+        source.onchange=()=>queue(source);
+        if(motion)motion.onchange=()=>queue(motion);
+        card.querySelector('[data-jump]').onclick=()=>seek(Number(card.dataset.start));
+        card.querySelector('[data-copy-broll-settings]').onclick=()=>copyBrollSettings(card);
+        card.querySelector('[data-paste-broll-settings]').onclick=()=>pasteBrollSettings(item.id,card);
+        card.querySelector('[data-delete-broll]').onclick=()=>deleteBroll(item.id);
+        const restore=card.querySelector('[data-restore-broll]');
+        if(restore)restore.onclick=()=>restoreBroll(item.id);
+        refreshScale();
+        refreshFramingLabels();
+        list.append(card);
     }
     function renderCaptionTranscript(){
         const selected=(timeline.captions||[]).find(item=>String(item.id)===String(inspectorSelection?.id));
@@ -2092,12 +2327,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const visibleNoiseDecisions=inspectorSelection?.noiseDecisionId?noiseDecisions.filter(item=>String(item.id)===String(inspectorSelection.noiseDecisionId)):noiseDecisions;
         visibleNoiseDecisions.forEach(item=>{const restored=item.enabled===false,start=Number(item.source_in_ms||0),end=Number(item.source_out_ms||start),card=document.createElement('article');card.className=`preview-decision ${restored?'is-restored':''}`;card.dataset.noiseDecisionId=String(item.id);card.dataset.start=start;card.dataset.end=end;card.innerHTML=`<button type="button" class="w-full text-left" data-jump><div class="flex items-start justify-between gap-2"><div><span class="preview-pill">Ruído</span><strong class="block mt-2">${item.metadata?.label||item.reason||'Ruído detectado'}</strong><small class="text-gray-500">${fmt(start)} — ${fmt(end)}</small></div><i class="fas fa-wave-square text-red-600 mt-1"></i></div></button><div class="flex gap-2 mt-3"><button type="button" class="media-btn media-muted !py-2 flex-1" data-play="original"><i class="fas fa-play"></i> Original</button><button type="button" class="media-btn media-muted !py-2 flex-1" data-play="treated"><i class="fas fa-play"></i> Tratado</button></div><div class="flex gap-2 mt-2"><button class="media-btn media-muted !py-2 flex-1" data-decision="false">Usar original</button><button class="media-btn media-primary !py-2 flex-1" data-decision="true">${restored?'Aplicar redução':'Redução aplicada'}</button></div><audio class="hidden" preload="none"></audio>`;card.querySelector('[data-jump]').onclick=()=>seek(start);card.querySelectorAll('[data-play]').forEach(btn=>btn.onclick=()=>playNoiseComparison(card,item,btn));card.querySelectorAll('[data-decision]').forEach(btn=>btn.onclick=()=>mutateDecision(item.id,btn.dataset.decision==='true'));list.append(card)});
         const brollItems=inspectorSelection?.kind==='broll'?(timeline.brolls||[]).filter(item=>item.id===inspectorSelection.id):[];
-        brollItems.forEach(item=>{const media=asset(`broll-asset-${item.asset_id}`)||{},tx=item.transform||{},card=document.createElement('article');card.className='preview-decision';card.dataset.start=item.start_ms;card.dataset.end=item.end_ms;const transformField=(label,key,min,max,step,value)=>`<label class="text-xs font-bold text-gray-500">${label}<span class="flex items-center gap-2 mt-1"><input data-broll-transform-range="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${value}" class="preview-range flex-1"><input data-broll-transform="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${value}" class="w-16 shrink-0 rounded-lg border px-2 py-1 text-xs tabular-nums"></span></label>`;card.innerHTML=`<div class="flex items-center justify-between gap-2"><div class="min-w-0"><span class="preview-pill">B-roll · ${esc(item.media_type)}</span><strong class="block mt-2 truncate">${esc(media.name||'Asset visual')}</strong><small class="text-gray-500">${item.source==='AI'?'Posicionado pela IA':'Ajustado pelo usuário'}${item.confidence!=null?` · ${Math.round(Number(item.confidence)*100)}%`:''}</small></div><button data-jump class="text-violet-700"><i class="fas fa-eye"></i></button></div><div class="grid grid-cols-2 gap-2 mt-3"><label class="text-xs font-bold text-gray-500">Início (min)<input data-broll-number="start_ms" type="number" min="0" step="0.001" value="${minFromMs(item.start_ms)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label><label class="text-xs font-bold text-gray-500">Fim (min)<input data-broll-number="end_ms" type="number" min="0.001" step="0.001" value="${minFromMs(item.end_ms)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label>${item.media_type==='VIDEO'?`<label class="text-xs font-bold text-gray-500">Trecho inicial (min)<input data-broll-number="source_in_ms" type="number" min="0" step="0.001" value="${minFromMs(item.source_in_ms||0)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label><label class="text-xs font-bold text-gray-500">Trecho final (min)<input data-broll-number="source_out_ms" type="number" min="0.001" step="0.001" value="${minFromMs(item.source_out_ms||0)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label>`:''}</div><label class="block text-xs font-bold text-gray-500 mt-2">Exibição<select data-broll-mode class="mt-1 w-full rounded-lg border px-2 py-1"><option>FULLSCREEN</option><option>OVERLAY</option></select></label>${item.media_type==='IMAGE'?`<label class="block text-xs font-bold text-gray-500 mt-2">Movimento<select data-broll-motion class="mt-1 w-full rounded-lg border px-2 py-1"><option>NONE</option><option>ZOOM_IN</option><option>ZOOM_OUT</option><option>PAN_LEFT</option><option>PAN_RIGHT</option></select></label>`:''}<div class="grid grid-cols-1 gap-2 mt-2">${transformField('X','x',0,1,'0.01',tx.x??.5)}${transformField('Y','y',0,1,'0.01',tx.y??.5)}${transformField('Escala','scale',0.08,1,'0.01',tx.scale??1)}</div><div class="flex items-center justify-between gap-2 mt-3"><small class="text-gray-400" data-saved>Salvo</small><div class="flex flex-wrap justify-end gap-x-3 gap-y-1"><button type="button" class="text-xs font-bold text-violet-700" data-copy-broll-settings title="Copiar exibição, posição, animações e trecho"><i class="fas fa-copy"></i> Copiar</button><button type="button" class="text-xs font-bold text-violet-700 ${brollSettingsClipboard?'':'hidden'}" data-paste-broll-settings ${brollSettingsClipboard?'':'disabled'} title="Colar ajustes copiados de outro B-roll"><i class="fas fa-paste"></i> Colar</button><button type="button" class="text-xs font-bold text-gray-600" data-restore-broll>Restaurar IA</button><button type="button" class="text-xs font-bold text-red-600" data-delete-broll>Remover</button></div></div>`;const assetField=document.createElement('label');assetField.className='block text-xs font-bold text-gray-500 mt-2';assetField.innerHTML=`Asset<select data-broll-asset class="mt-1 w-full rounded-lg border px-2 py-1">${(timeline.assets||[]).filter(value=>value.asset_id).map(value=>`<option value="${esc(value.asset_id)}">${esc(value.name)}</option>`).join('')}</select>`;card.firstElementChild.after(assetField);card.querySelector('[data-broll-asset]').value=String(item.asset_id);card.querySelector('[data-jump]').onclick=()=>seek(item.start_ms);card.querySelector('[data-broll-mode]').value=item.display_mode||'FULLSCREEN';if(card.querySelector('[data-broll-motion]'))card.querySelector('[data-broll-motion]').value=item.motion?.type||'NONE';const queue=event=>{card.querySelector('[data-saved]').textContent='Salvando…';queueBrollSave(item,card,event?.target||event)};card.querySelectorAll('[data-broll-transform-range]').forEach(range=>{const num=card.querySelector(`[data-broll-transform="${range.dataset.brollTransformRange}"]`);if(!num)return;range.oninput=()=>{num.value=range.value;queue(range)};num.oninput=()=>{const lo=Number(range.min),hi=Number(range.max),v=Math.max(lo,Math.min(hi,Number(num.value)||lo));num.value=String(v);range.value=v;queue(num)}});card.querySelectorAll('[data-broll-number], select, [data-broll-asset]').forEach(field=>field.oninput=queue);card.querySelector('[data-copy-broll-settings]').onclick=()=>copyBrollSettings(card);card.querySelector('[data-paste-broll-settings]').onclick=()=>pasteBrollSettings(item.id,card);card.querySelector('[data-delete-broll]').onclick=()=>deleteBroll(item.id);card.querySelector('[data-restore-broll]').onclick=()=>restoreBroll(item.id);list.append(card)});
-        list.querySelectorAll('[data-copy-broll-settings]').forEach(button=>{const actions=button.parentElement,card=button.closest('article');if(!actions||!card)return;actions.classList.add('broll-card-actions');card.firstElementChild.after(actions);card.querySelector('[data-saved]')?.remove()});
-        [...list.querySelectorAll('[data-broll-mode]')].forEach((modeField,index)=>{const item=brollItems[index],card=modeField.closest('article');if(!item||!card)return;modeField.closest('label').insertAdjacentHTML('afterend',`<div class="grid grid-cols-2 gap-2 mt-2"><label class="text-xs font-bold text-gray-500">Entrada<select data-broll-entry class="mt-1 w-full rounded-lg border px-2 py-1"><option>NONE</option><option>FADE</option><option>SLIDE</option><option>SCALE</option></select></label><label class="text-xs font-bold text-gray-500">Saída<select data-broll-exit class="mt-1 w-full rounded-lg border px-2 py-1"><option>NONE</option><option>FADE</option><option>SLIDE</option><option>SCALE</option></select></label></div>`);const entry=card.querySelector('[data-broll-entry]'),exit=card.querySelector('[data-broll-exit]');entry.value=item.entry?.type||'NONE';exit.value=item.exit?.type||'NONE';entry.oninput=modeField.oninput;exit.oninput=modeField.oninput;compactBrollInspector(card)});
-        list.querySelectorAll('[data-broll-mode]').forEach(modeField=>{const card=modeField.closest('article'),fullscreen=modeField.value!=='OVERLAY',scale=card?.querySelector('[data-broll-transform="scale"]'),range=card?.querySelector('[data-broll-transform-range="scale"]');if(scale)scale.max=fullscreen?'2':'.9';if(range)range.max=fullscreen?'2':'.9'});
+        brollItems.forEach(renderBrollInspector);
         const overlayItems=inspectorSelection?.kind==='overlay'?(timeline.overlays||[]).filter(item=>item.id===inspectorSelection.id):[];
-        overlayItems.forEach(item=>{const card=document.createElement('article');card.className='preview-decision';card.dataset.start=item.start_ms;card.dataset.end=item.end_ms;const contentFields=Object.entries(item.content_schema||{});const fields=(contentFields.length?contentFields:Object.entries(item.content||{}).map(([key])=>[key,{label:key}])).map(([key,options])=>`<label class="block text-xs font-bold text-gray-500 mt-2">${esc(options.label||key)}<input data-overlay-content="${esc(key)}" value="${esc(item.content?.[key]||'')}" maxlength="${Number(options.max_length||2048)}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-normal"></label>`).join('');card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">${item.type==='TEXT'?'Texto':'QR Code'}</span><strong class="block mt-2">${esc(item.purpose||item.preset||'Elemento visual')}</strong></div><button data-jump class="text-red-600"><i class="fas fa-eye"></i></button></div>${fields}<div class="grid grid-cols-2 gap-2 mt-3"><label class="text-xs font-bold text-gray-500">Início (s)<input data-overlay-number="start_ms" type="number" min="0" step=".1" value="${item.start_ms/1000}" class="mt-1 w-full rounded-lg border px-2 py-1"></label><label class="text-xs font-bold text-gray-500">Fim (s)<input data-overlay-number="end_ms" type="number" min=".1" step=".1" value="${item.end_ms/1000}" class="mt-1 w-full rounded-lg border px-2 py-1"></label><label class="text-xs font-bold text-gray-500">Horizontal<input data-overlay-position="x" type="range" min="0" max="1" step=".01" value="${item.position?.x??.5}" class="preview-range"></label><label class="text-xs font-bold text-gray-500">Vertical<input data-overlay-position="y" type="range" min="0" max="1" step=".01" value="${item.position?.y??.82}" class="preview-range"></label></div><label class="block text-xs font-bold text-gray-500 mt-2">Animação<select data-overlay-animation class="mt-1 w-full rounded-lg border px-2 py-1"><option>NONE</option><option>FADE</option><option>SLIDE_UP</option><option>SLIDE_DOWN</option><option>SLIDE_LEFT</option><option>SLIDE_RIGHT</option><option>POP</option></select></label><div class="flex items-center justify-between mt-3"><small class="text-gray-400" data-saved>Salvo</small>${item.source==='MANUAL'?'<button class="text-xs font-bold text-red-600" data-delete-overlay>Remover</button>':''}</div>`;card.querySelector('[data-jump]').onclick=()=>seek(item.start_ms);card.querySelector('[data-overlay-animation]').value=item.animation?.type||'NONE';const queue=event=>{card.querySelector('[data-saved]').textContent='Salvando…';queueOverlaySave(item,card,event.target)};card.querySelectorAll('input,select').forEach(field=>field.oninput=queue);card.querySelector('[data-delete-overlay]')?.addEventListener('click',()=>deleteOverlay(item.id));list.append(card)});
+        overlayItems.forEach(item=>{const card=document.createElement('article');card.className='preview-decision';card.dataset.start=item.start_ms;card.dataset.end=item.end_ms;const contentFields=Object.entries(item.content_schema||{});const fields=(contentFields.length?contentFields:Object.entries(item.content||{}).map(([key])=>[key,{label:key}])).map(([key,options])=>`<label class="block text-xs font-bold text-gray-500 mt-2">${esc(options.label||key)}<input data-overlay-content="${esc(key)}" value="${esc(item.content?.[key]||'')}" maxlength="${Number(options.max_length||2048)}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-normal"></label>`).join('');card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">${item.type==='TEXT'?'Texto':'QR Code'}</span><strong class="block mt-2">${esc(item.purpose||item.preset||'Elemento visual')}</strong></div><button data-jump class="text-red-600"><i class="fas fa-eye"></i></button></div>${fields}<div class="grid grid-cols-2 gap-2 mt-3"><label class="text-xs font-bold text-gray-500">Início (s)<input data-overlay-number="start_ms" type="number" min="0" step=".1" value="${item.start_ms/1000}" class="mt-1 w-full rounded-lg border px-2 py-1"></label><label class="text-xs font-bold text-gray-500">Fim (s)<input data-overlay-number="end_ms" type="number" min=".1" step=".1" value="${item.end_ms/1000}" class="mt-1 w-full rounded-lg border px-2 py-1"></label><label class="text-xs font-bold text-gray-500">Horizontal<input data-overlay-position="x" type="range" min="0" max="1" step=".01" value="${item.position?.x??.5}" class="preview-range"></label><label class="text-xs font-bold text-gray-500">Vertical<input data-overlay-position="y" type="range" min="0" max="1" step=".01" value="${item.position?.y??.82}" class="preview-range"></label></div><label class="block text-xs font-bold text-gray-500 mt-2">Animação<select data-overlay-animation class="mt-1 w-full rounded-lg border px-2 py-1"><option>NONE</option><option>FADE</option><option>SLIDE_UP</option><option>SLIDE_DOWN</option><option>SLIDE_LEFT</option><option>SLIDE_RIGHT</option><option>POP</option></select></label><div class="flex items-center justify-between mt-3"><small class="text-gray-400" data-saved>Salvo</small>${item.source==='MANUAL'?'<button class="text-xs font-bold text-red-600" data-delete-overlay>Remover</button>':''}</div>`;card.querySelector('[data-jump]').onclick=()=>seek(item.start_ms);const animationField=card.querySelector('[data-overlay-animation]');if(canEditTextTransitions(item))animationField.closest('label').remove();else animationField.value=item.animation?.type||'NONE';const queue=event=>{card.querySelector('[data-saved]').textContent='Salvando…';queueOverlaySave(item,card,event.target)};card.querySelectorAll('input,select').forEach(field=>field.oninput=queue);card.querySelector('[data-delete-overlay]')?.addEventListener('click',()=>deleteOverlay(item.id));list.append(card)});
         if(inspectorSelection?.kind==='music'&&timeline.music){
             const config=timeline.music,card=document.createElement('article');
             const selectedMusicClip=(config.tracks||[]).find(track=>String(`music-${track.clip_id||track.id}`)===String(inspectorSelection.id));
@@ -2164,6 +2396,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         }
         if(inspectorSelection?.kind==='caption')renderCaptionTranscript();
         if(!list.children.length){const empty=document.createElement('p');empty.className='text-sm text-gray-400 text-center py-10 px-4';empty.textContent=inspectorSelection?'Nenhum ajuste disponível para este item.':'Nenhuma pendência no momento. Clique em um item da timeline para ver seus ajustes.';list.append(empty)}
+        if (brollItems[0]) renderTransitionInspector('broll', brollItems[0]);
+        if (canEditTextTransitions(overlayItems[0])) renderTransitionInspector('overlay', overlayItems[0]);
         renderAdjustmentTabs();
     }
     async function playNoiseComparison(card,item,button){
@@ -2181,10 +2415,209 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         }catch(error){if(error.name!=='AbortError')alert(error.message||'Não foi possível reproduzir esta comparação de áudio.')}
         finally{button.disabled=false;button.innerHTML=label}
     }
+    function canEditTextTransitions(item){
+        return item?.type==='TEXT'&&(['USER','MANUAL'].includes(item.source)||item.allowed_overrides?.includes('animation'));
+    }
+    function editableTransitions(kind,item) {
+        const state = structuredClone(item.transitions || {});
+        if (item.transitions === undefined) {
+            const legacy = kind === 'broll' ? {in:item.entry,out:item.exit} : {
+                in:{...item.animation,duration_ms:Number(item.animation?.duration||.35)*1000},
+            };
+            for (const [side, edge] of Object.entries(legacy)) {
+                const effect = edge?.type === 'FADE' ? {type:'blur_fade',blur:0}
+                    : ['SCALE','POP'].includes(edge?.type) ? {type:'zoom',scale:.82}
+                    : edge?.type?.startsWith('SLIDE') ? {type:'slide',mode:'smooth',distance:100,
+                        direction:({SLIDE_UP:'bottom',SLIDE_DOWN:'top',SLIDE_LEFT:'right',SLIDE_RIGHT:'left'})[edge.type] || (side==='in'?'left':'right')} : null;
+                if (effect) state[side] = {duration_ms:edge.duration_ms||800,easing:'linear',effects:[effect]};
+            }
+        }
+        return state;
+    }
+    let transitionInspectorSelection = {};
+    function renderTransitionInspector(kind, item) {
+        const card = document.createElement('article');
+        card.className = 'preview-decision transition-inspector';
+        const state = editableTransitions(kind, item);
+        const itemKey = `${kind}:${item.id}`;
+        if (transitionInspectorSelection.key !== itemKey) {
+            transitionInspectorSelection = {key: itemKey, side: state.in || !state.out ? 'in' : 'out'};
+        }
+        const labels = {blur_fade:'Blur + Fade',slide:'Slide',zoom:'Zoom',wipe:'Wipe'};
+        const icons = {blur_fade:'droplet',slide:'arrows-left-right',zoom:'magnifying-glass-plus',wipe:'grip-lines-vertical'};
+        const directions = {left:['←','Esquerda'],right:['→','Direita'],top:['↑','Topo'],bottom:['↓','Base']};
+        const curves = {linear:'Linear',ease_in:'Acelera',ease_out:'Desacelera',ease_in_out:'Acelera e desacelera'};
+        const defaults = {blur_fade:{blur:18},slide:{direction:'left',mode:'outside',distance:20},zoom:{scale:.8},wipe:{direction:'left',softness:0}};
+        const presets = [300, 600, 800, 1200];
+        const durationLabel = ms => `${(ms/1000).toLocaleString('pt-BR',{maximumFractionDigits:3})} s`;
+        const options = (names, current) => Object.entries(names).map(([key, label]) =>
+            `<option value="${key}" ${key === current ? 'selected' : ''}>${label}</option>`).join('');
+        const slider = (label, name, min, max, value, suffix='') =>
+            `<label><span class="transition-row">${label}<output data-slider-value="${name}"></output></span>
+                <input name="${name}" type="range" min="${min}" max="${max}" step="any" value="${value}" data-suffix="${suffix}"></label>`;
+        card.innerHTML = `<div class="transition-phases" role="tablist" aria-label="Etapa da transição">
+            <button type="button" role="tab" class="transition-phase" id="transition-tab-in" aria-controls="transition-panel-in" data-phase="in">Entrada <small data-count></small></button>
+            <button type="button" role="tab" class="transition-phase" id="transition-tab-out" aria-controls="transition-panel-out" data-phase="out">Saída <small data-count></small></button>
+        </div><div data-transition-panels></div>
+        <div class="transition-footer">
+            <small data-saved aria-live="polite">Salvo</small>
+            <button type="button" class="transition-link" data-duplicate-transition-item><i class="fas fa-copy" aria-hidden="true"></i>Duplicar elemento</button>
+        </div>`;
+        const tabs = [...card.querySelectorAll('[data-phase]')];
+        const panels = card.querySelector('[data-transition-panels]');
+        const refreshPanels = [];
+        function selectSide(side, focus=false) {
+            transitionInspectorSelection.side = side;
+            tabs.forEach(tab => {
+                const selected = tab.dataset.phase === side;
+                tab.setAttribute('aria-selected', String(selected));
+                tab.tabIndex = selected ? 0 : -1;
+                if (selected && focus) tab.focus();
+            });
+            for (const panel of panels.children) panel.hidden = panel.dataset.side !== side;
+        }
+        function save() {
+            card.querySelector('[data-saved]').textContent = 'Salvando…';
+            const transitions = Object.fromEntries(Object.entries(state).filter(([, edge]) => edge.effects.length));
+            queuePropertySave(kind, item, card, {transitions:structuredClone(transitions)});
+            requestTimelineRender();
+        }
+        for (const tab of tabs) {
+            tab.onclick = () => selectSide(tab.dataset.phase);
+            tab.onkeydown = event => {
+                if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+                event.preventDefault();
+                const side = event.key==='Home'?'in':event.key==='End'?'out':tab.dataset.phase==='in'?'out':'in';
+                selectSide(side,true);
+            };
+        }
+        for (const side of ['in','out']) {
+            const edge = state[side] ||= {duration_ms:800,easing:side==='in'?'ease_out':'ease_in',effects:[]};
+            const panel = document.createElement('section');
+            panel.id = `transition-panel-${side}`;
+            panel.dataset.side = side;
+            panel.className = 'transition-panel';
+            panel.setAttribute('role','tabpanel');
+            panel.setAttribute('aria-labelledby',`transition-tab-${side}`);
+            const initial = type => edge.effects.find(effect => effect.type===type) || defaults[type];
+            const choices = Object.entries(labels).map(([type,label]) =>
+                `<label class="transition-effect"><input type="checkbox" value="${type}" aria-label="${label}" ${edge.effects.some(effect=>effect.type===type)?'checked':''}><i class="fas fa-${icons[type]}" aria-hidden="true"></i><span>${label}</span></label>`).join('');
+            const configs = Object.fromEntries(Object.entries(labels).map(([type,label]) => {
+                const effect = initial(type);
+                const directionLabel = side==='in'?(type==='wipe'?'Revela a partir de':'Entra de'):(type==='wipe'?'Oculta em direção a':'Sai para');
+                const direction = effect.direction ? `<div role="group" aria-label="Direção de ${label}">
+                    <span class="transition-hint">${directionLabel}</span>
+                    <div class="transition-directions">${Object.entries(directions).map(([key,[arrow,name]]) =>
+                        `<button type="button" class="transition-choice" data-direction="${key}" aria-pressed="${effect.direction===key}"><span aria-hidden="true">${arrow}</span>${name}</button>`).join('')}</div>
+                    </div>` : '';
+                return [type,`<div class="transition-config" data-config="${type}"><strong>${label}</strong>${direction}
+                    ${type==='blur_fade'?slider('Intensidade do desfoque','blur',0,32,effect.blur):''}
+                    ${type==='slide'?`<label>Movimento<select name="mode">${options({outside:'Fora da tela',smooth:'Deslocamento curto'},effect.mode)}</select></label>
+                        <div data-distance>${slider('Distância no quadro','distance',0,100,effect.distance,'%')}</div>`:''}
+                    ${type==='zoom'?slider(side==='in'?'Tamanho inicial':'Tamanho final','scale',25,200,effect.scale*100,'%'):''}
+                    ${type==='wipe'?slider('Suavização da borda','softness',0,20,effect.softness??0,'%'):''}</div>`];
+            }));
+            panel.innerHTML = `<div class="transition-row"><strong>Efeitos</strong>
+                <button type="button" class="transition-link" data-clear-transition aria-label="Limpar ${side==='in'?'entrada':'saída'}">Limpar</button>
+            </div><div class="transition-effects" role="group" aria-label="Efeitos combináveis">${choices}</div>
+            <small class="transition-hint" data-empty-transition>Selecione um ou mais efeitos.</small>
+            ${configs.blur_fade}
+            <div data-timing class="transition-duration">
+                <label><span class="transition-row"><strong>Duração</strong><output data-duration-label></output></span>
+                    <input type="range" name="duration-range" aria-label="Duração da transição" min="1" max="5000" step="1" value="${edge.duration_ms}"></label>
+                <div class="transition-durations">${presets.map(ms=>`<button type="button" class="transition-chip" data-duration="${ms}" aria-pressed="false">${durationLabel(ms)}</button>`).join('')}</div>
+                <small class="transition-hint" data-effective-duration hidden></small>
+            </div>
+            <section class="transition-settings">
+                <h3>Ajustes finos</h3>
+                <label>Curva<select name="easing">${options(curves,edge.easing)}</select></label>
+                ${configs.slide}${configs.zoom}${configs.wipe}
+            </section>`;
+            const checkboxes = [...panel.querySelectorAll('input[type=checkbox]')];
+            const configGroups = [...panel.querySelectorAll('[data-config]')];
+            const durationRange = panel.querySelector('[name=duration-range]');
+            const clear = panel.querySelector('[data-clear-transition]');
+            const refresh = () => {
+                const count = checkboxes.filter(field=>field.checked).length;
+                tabs.find(tab=>tab.dataset.phase===side).querySelector('[data-count]').textContent = count || '';
+                panel.querySelector('[data-empty-transition]').hidden = count > 0;
+                panel.querySelector('[data-timing]').hidden = !count;
+                clear.hidden = !count;
+                panel.querySelector('[data-duration-label]').textContent = durationLabel(Number(durationRange.value));
+                const delay = kind==='overlay'?Math.max(0, Number(item.animation?.delay||0)*1000):0;
+                const effective = ConnectVisualTransitions.edges(state,item.end_ms-item.start_ms-delay).find(([key])=>key===side)?.[2];
+                const timingHint = panel.querySelector('[data-effective-duration]');
+                timingHint.hidden = !(effective < edge.duration_ms);
+                if (!timingHint.hidden) timingHint.textContent = `Neste clipe: ${durationLabel(effective)}`;
+                panel.querySelectorAll('[data-duration]').forEach(btn=>btn.setAttribute('aria-pressed',String(Number(btn.dataset.duration)===Number(durationRange.value))));
+                for (const group of configGroups) {
+                    group.hidden = !checkboxes.find(field=>field.value===group.dataset.config).checked;
+                    const mode = group.querySelector('[name=mode]');
+                    if (mode) group.querySelector('[data-distance]').hidden = mode.value!=='smooth';
+                    group.querySelectorAll('input[type=range]').forEach(field=>{
+                        group.querySelector(`[data-slider-value="${field.name}"]`).textContent =
+                            `${Number(field.value).toLocaleString('pt-BR',{maximumFractionDigits:1})}${field.dataset.suffix}`;
+                    });
+                }
+            };
+            const update = () => {
+                edge.duration_ms = Number(durationRange.value);
+                edge.easing = panel.querySelector('[name=easing]').value;
+                edge.effects = configGroups.filter(group=>checkboxes.some(field=>field.checked&&field.value===group.dataset.config)).map(group=>{
+                    const effect = {type:group.dataset.config};
+                    const direction = group.querySelector('[data-direction][aria-pressed=true]');
+                    if (direction) effect.direction = direction.dataset.direction;
+                    group.querySelectorAll('input,select').forEach(field=>{
+                        effect[field.name] = field.type==='range'?Number(field.value)/(field.name==='scale'?100:1):field.value;
+                    });
+                    return effect;
+                });
+                refreshPanels.forEach(refreshPanel=>refreshPanel());
+                save();
+            };
+            panel.addEventListener('input', event => {
+                if (event.target.type==='range') refresh();
+            });
+            panel.addEventListener('change', update);
+            panel.querySelectorAll('[data-duration]').forEach(btn=>btn.onclick=()=>{
+                durationRange.value=btn.dataset.duration;
+                update();
+            });
+            for (const group of configGroups) {
+                const buttons = [...group.querySelectorAll('[data-direction]')];
+                buttons.forEach(btn=>btn.onclick=()=>{
+                    buttons.forEach(option=>option.setAttribute('aria-pressed',String(option===btn)));
+                    update();
+                });
+            }
+            clear.onclick = () => {
+                checkboxes.forEach(field=>{field.checked=false;});
+                update();
+                checkboxes[0].focus();
+            };
+            refreshPanels.push(refresh);
+            panels.append(panel);
+        }
+        refreshPanels.forEach(refreshPanel=>refreshPanel());
+        selectSide(transitionInspectorSelection.side);
+        card.querySelector('[data-duplicate-transition-item]').onclick = async event => {
+            const button = event.currentTarget;
+            button.disabled = true;
+            try {
+                await editorPersistence.flush();
+                const base = '{% url "external_media_project_preview" project.public_id %}';
+                const data = await api(`${base}${kind==='broll'?'brolls':'overlays'}/${encodeURIComponent(item.id)}/`, {duplicate:true});
+                applyTimeline(data);
+            } catch (error) {
+                card.querySelector('[data-saved]').textContent = error.message;
+            } finally { button.disabled = false; }
+        };
+        list.append(card);
+    }
     function renderAdjustmentTabs(){
         list.querySelector('.adjustment-tabs')?.remove();
-        const labels={camera:'Alternância',framing:'Enquadramento',color:'Cor',cuts:'Cortes',audio:'Áudio',elements:'Elementos',captions:'Legendas',details:'Detalhes'};
-        const categoryFor=card=>['audio','music'].includes(inspectorSelection?.kind)?'audio':card.classList.contains('preview-camera-info')?'camera':card.querySelector('[data-transform]')?'framing':card.querySelector('[data-color]')?'color':card.querySelector('[data-decision]')?'cuts':card.querySelector('[data-music-volume],audio,[data-play]')?'audio':card.querySelector('[data-broll-transform],[data-overlay-content]')?'elements':card.classList.contains('transcript-card')?'captions':'details';
+        const labels={camera:'Alternância',framing:'Enquadramento',color:'Cor',cuts:'Cortes',audio:'Áudio',elements:'Elementos',captions:'Legendas',details:'Detalhes',transitions:'Transições'};
+        const categoryFor=card=>card.classList.contains('transition-inspector')?'transitions':['audio','music'].includes(inspectorSelection?.kind)?'audio':card.classList.contains('preview-camera-info')?'camera':card.querySelector('[data-transform]')?'framing':card.querySelector('[data-color]')?'color':card.querySelector('[data-decision]')?'cuts':card.querySelector('[data-music-volume],audio,[data-play]')?'audio':card.querySelector('[data-broll-transform],[data-overlay-content]')?'elements':card.classList.contains('transcript-card')?'captions':'details';
         const cards=[...list.querySelectorAll('.preview-decision')];
         if(!cards.length)return;
         const categories=[];
@@ -2210,7 +2643,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     async function saveTransform(id,values,card,version=null,frozenScope=null){try{const wasUsingReviewMaster=useReviewMaster(),showChangedTake=Boolean(values.restore_original||values.restore_auto),changedTakeStart=showChangedTake?selectedSegment?.start:null,scope=frozenScope||(inspectorSelection?.kind==='video'?activeTransformScope():{}),data=await api(`{% url 'external_media_project_preview' project.public_id %}transforms/${id}/`,{...values,...scope});if(version!==null&&card._transformSaveVersion!==version)return;card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,false,wasUsingReviewMaster!==Boolean(data.timeline.review_master_url));if(Number.isFinite(changedTakeStart))seek(changedTakeStart,!video.paused)}catch(error){if(version!==null&&card._transformSaveVersion!==version)return;card.querySelector('[data-saved]').textContent=error.message}}
     const pendingPropertyEdits=new Map();
     function mergePropertyPatch(target,patch){
-        for(const [key,value] of Object.entries(patch))target[key]=value&&typeof value==='object'&&!Array.isArray(value)?{...(target[key]||{}),...value}:value;
+        for(const [key,value] of Object.entries(patch))target[key]=key!=='transitions'&&value&&typeof value==='object'&&!Array.isArray(value)?{...(target[key]||{}),...value}:value;
         return target;
     }
     function editableLocalPreview(){
@@ -2234,10 +2667,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(!field)return;
         let patch={};
         const transform=field.dataset.brollTransformRange||field.dataset.brollTransform;
-        if(transform)patch={transform:{[transform]:Number(field.value)}};
-        else if(field.dataset.brollNumber)patch={[field.dataset.brollNumber]:msFromMin(field.value)};
+        if(transform)patch={transform:{[transform]:Number(field.value)/100}};
+        else if(field.dataset.brollNumber)patch={[field.dataset.brollNumber]:msFromSeconds(field.value)};
         else if(field.hasAttribute('data-broll-asset'))patch={asset_id:field.value};
-        else if(field.hasAttribute('data-broll-mode'))patch={display_mode:field.value};
         else if(field.hasAttribute('data-broll-motion'))patch={motion:{type:field.value}};
         queuePropertySave('broll',item,card,patch);
     }
@@ -2251,11 +2683,11 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     }
     async function saveOverlay(id,card,payload){try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`,payload);card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,false,false)}catch(error){card.querySelector('[data-saved]').textContent=error.message}}
     async function deleteOverlay(id){if(!confirm('Remover este elemento deste projeto?'))return;applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`,{delete:true}),true,false)}
-    function readBrollStyleFromCard(card){const transform=Object.fromEntries([...card.querySelectorAll('[data-broll-transform]')].map(field=>[field.dataset.brollTransform,Number(field.value)])),motion=card.querySelector('[data-broll-motion]')?.value,payload={display_mode:card.querySelector('[data-broll-mode]').value,transform,entry:{type:card.querySelector('[data-broll-entry]')?.value||'NONE',duration_ms:300,easing:'ease-out'},exit:{type:card.querySelector('[data-broll-exit]')?.value||'NONE',duration_ms:250,easing:'ease-in'}};if(motion)payload.motion={type:motion,from_scale:1,to_scale:1.06,easing:'EASE_IN_OUT'};const sourceIn=card.querySelector('[data-broll-number="source_in_ms"]'),sourceOut=card.querySelector('[data-broll-number="source_out_ms"]');if(sourceIn)payload.source_in_ms=msFromMin(sourceIn.value);if(sourceOut)payload.source_out_ms=msFromMin(sourceOut.value);return payload}
+    function readBrollStyleFromCard(card){const transform=Object.fromEntries([...card.querySelectorAll('[data-broll-transform]')].map(field=>[field.dataset.brollTransform,Number(field.value)/100])),motion=card.querySelector('[data-broll-motion]')?.value,payload={display_mode:card.querySelector('[data-broll-mode]').value,transform};if(motion)payload.motion={type:motion,from_scale:1,to_scale:1.06,easing:'EASE_IN_OUT'};const sourceIn=card.querySelector('[data-broll-number="source_in_ms"]'),sourceOut=card.querySelector('[data-broll-number="source_out_ms"]');if(sourceIn)payload.source_in_ms=msFromSeconds(sourceIn.value);if(sourceOut)payload.source_out_ms=msFromSeconds(sourceOut.value);return payload}
     function updateBrollPasteButtons(){document.querySelectorAll('[data-paste-broll-settings]').forEach(btn=>{btn.classList.toggle('hidden',!brollSettingsClipboard);btn.disabled=!brollSettingsClipboard})}
-    function copyBrollSettings(card){brollSettingsClipboard=readBrollStyleFromCard(card);try{sessionStorage.setItem(BROLL_CLIPBOARD_KEY,JSON.stringify(brollSettingsClipboard))}catch(_){}updateBrollPasteButtons();const saved=card.querySelector('[data-saved]');if(saved)saved.textContent='Ajustes copiados'}
+    function copyBrollSettings(card){brollSettingsClipboard=readBrollStyleFromCard(card);const item=timeline.brolls.find(value=>value.id===inspectorSelection?.id);if(item)brollSettingsClipboard.transitions=editableTransitions('broll',item);try{sessionStorage.setItem(BROLL_CLIPBOARD_KEY,JSON.stringify(brollSettingsClipboard))}catch(_){}updateBrollPasteButtons();const saved=card.querySelector('[data-saved]');if(saved)saved.textContent='Ajustes copiados'}
     async function pasteBrollSettings(targetId,card){if(!brollSettingsClipboard)return;const saved=card.querySelector('[data-saved]');if(saved)saved.textContent='Colando…';try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}brolls/${targetId}/`,{...brollSettingsClipboard});if(saved)saved.textContent='Ajustes colados';applyTimeline(data,true,false)}catch(error){if(saved)saved.textContent=error.message;alert(error.message)}}
-    async function saveBroll(id,card,payload){try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`,payload);card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,false,false)}catch(error){card.querySelector('[data-saved]').textContent=error.message}}
+    async function saveBroll(id,card,payload){try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`,payload);card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,'asset_id' in payload,false)}catch(error){card.querySelector('[data-saved]').textContent=error.message}}
     async function deleteBroll(id){if(!confirm('Remover este B-roll da edição?'))return;applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`,{delete:true}),true,false)}
     async function restoreBroll(id){applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`,{restore:true}),true,false)}
     function selectedTimelineItemForDeletion(){
@@ -2274,13 +2706,14 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function syncAdjustmentControls(){
         const bar=document.querySelector('.editor-mobile-actions');if(!bar)return;
         const kind=inspectorSelection?.kind;
-        const hasContext=(kind==='video'&&Boolean(selectedSegment))||kind==='audio'||(kind==='music'&&inspectorSelection.id!=null)||(kind==='caption'&&inspectorSelection.id!=null);
+        const hasContext=['broll','overlay'].includes(kind)||(kind==='video'&&Boolean(selectedSegment))||kind==='audio'||(kind==='music'&&inspectorSelection.id!=null)||(kind==='caption'&&inspectorSelection.id!=null);
         const categories=new Set([...list.querySelectorAll('.preview-decision[data-adjustment-category]')].map(card=>card.dataset.adjustmentCategory));
-        const direct=new Set(['framing','color','audio','captions']);
+        const direct=new Set(['framing','color','audio','captions','transitions']);
+        if(kind==='broll')direct.add('elements');
         bar.classList.toggle('has-item-context',hasContext);
         bar.querySelectorAll('[data-mobile-adjustment]').forEach(button=>{
             const category=button.dataset.mobileAdjustment;
-            button.hidden=!hasContext||!categories.has(category);
+            button.hidden=!hasContext||!categories.has(category)||(category==='elements'&&kind!=='broll');
             button.classList.toggle('is-active',!button.hidden&&reviewPanel.classList.contains('is-open')&&activeAdjustmentTab===category);
         });
         const tools=document.querySelector('.editor-preview-tools');
@@ -2486,10 +2919,10 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     });
     updateTimelineZoomControls();
     function openDirectAdjustment(category){
-        if(!['video','audio','music','caption'].includes(inspectorSelection?.kind))return;
+        if(!['video','audio','music','caption','broll','overlay'].includes(inspectorSelection?.kind))return;
         activeAdjustmentTab=category;
         reviewPanel.classList.add('is-direct-adjustment');
-        const labels={framing:'Enquadramento',color:'Cor',camera:'Alternância de câmera',cuts:'Cortes',audio:'Áudio',elements:'Elementos',captions:'Legendas',details:'Detalhes'};
+        const labels={framing:'Enquadramento',color:'Cor',camera:'Alternância de câmera',cuts:'Cortes',audio:'Áudio',elements:'Elementos',captions:'Legendas',details:'Detalhes',transitions:'Transições'};
         reviewPanel.querySelector('.preview-adjustments__head strong').textContent=labels[category]||'Ajustes';
         reviewPanel.querySelector('.preview-adjustments__head small').textContent=inspectorSelection.label||'Item selecionado';
         setReviewPanel(true);renderList();syncAdjustmentControls();
@@ -2629,7 +3062,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         },
         onTap:(target,event)=>{
             const clip=target.closest('[data-clip-key]');
-            if(clip){delete clip.dataset.timelineDrag;clip.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:event.clientX,clientY:event.clientY}))}
+            const targetNode=clip||(editTool==='blade'?target.closest('.editor-track--video .editor-track__lane'):null);
+            if(clip)delete clip.dataset.timelineDrag;
+            targetNode?.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:event.clientX,clientY:event.clientY}));
         },
     });
     let stableMobileViewportHeight=0,stableMobileViewportWidth=0;

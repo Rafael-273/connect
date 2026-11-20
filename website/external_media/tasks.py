@@ -230,12 +230,15 @@ def create_project_broll_preview(self, asset_id):
             estimated_bytes=media_input.workspace_estimate(needs_proxy=True),
         ) as workspace:
             preview = workspace.file('proxy', 'preview.mp4')
-            VideoAssemblyService().create_proxy(media_input.get_ffmpeg_input(), preview)
+            source = media_input.get_ffmpeg_input()
+            assembly = VideoAssemblyService()
+            asset.duration_ms = assembly._duration_ms(source)
+            assembly.create_proxy(source, preview)
             with preview.open('rb') as handle:
                 asset.preview_file.save('preview.mp4', File(handle), save=False)
         asset.preview_status = ProjectBrollAsset.PreviewStatus.READY
         asset.preview_error = ''
-        asset.save(update_fields=['preview_file', 'preview_status', 'preview_error', 'update_at'])
+        asset.save(update_fields=['preview_file', 'preview_status', 'preview_error', 'duration_ms', 'update_at'])
     except Exception as exc:
         asset.preview_status = ProjectBrollAsset.PreviewStatus.ERROR
         asset.preview_error = str(exc)[:255]

@@ -17,6 +17,15 @@ logger = logging.getLogger(__name__)
 
 class FFmpegRunner:
     @staticmethod
+    def filter_graph_args(filters, script_path):
+        graph = ';'.join(filters)
+        # Keep large graphs below the process argument size limit.
+        if len(graph.encode()) > 60_000:
+            script_path.write_text(graph, encoding='utf-8')
+            return ['-filter_complex_script', str(script_path)]
+        return ['-filter_complex', graph]
+
+    @staticmethod
     def input_arg(value):
         """Keep remote-input metadata while preserving legacy local command strings."""
         return value if isinstance(value, RemoteMediaSource) else str(value)

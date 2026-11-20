@@ -1,0 +1,13 @@
+<div class="overlay-builder" data-template-brolls>
+    {{ broll_form.brolls_raw }}
+    <div class="overlay-builder-header">
+        <div class="overlay-builder-heading">
+            <span class="overlay-builder-icon" aria-hidden="true"><ion-icon name="videocam-outline"></ion-icon></span>
+            <div><strong class="text-sm text-gray-900">B-rolls padrões</strong><p class="text-xs text-gray-500 mt-1">Vídeos e imagens complementares para esta cena.</p></div>
+        </div>
+        <button type="button" class="overlay-add" data-broll-add><ion-icon name="add-outline" aria-hidden="true"></ion-icon>Adicionar arquivos</button>
+    </div>
+    <div data-broll-list></div>
+    <p class="overlay-empty" data-broll-empty>Nenhum B-roll padrão nesta cena.</p>
+    {% if broll_form.brolls_raw.errors %}<p class="text-xs text-red-600 mt-2">{{ broll_form.brolls_raw.errors.0 }}</p>{% endif %}
+</div>

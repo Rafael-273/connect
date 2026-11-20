@@ -288,6 +288,9 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
                     saved_version.save()
                     block_formset.instance = saved_version
                     block_formset.save()
+                    for block_form in block_formset.forms:
+                        if block_form.instance.pk and not block_form.cleaned_data.get('DELETE') and block_form.cleaned_data.get('name'):
+                            block_form.save_brolls()
                     form.sync_advanced_plugins(saved_version)
             except ProtectedError:
                 # The formset's own validation already blocks deleting a block that is

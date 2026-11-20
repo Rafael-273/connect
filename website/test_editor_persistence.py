@@ -13,7 +13,7 @@ from website.external_media.preview import TimelineRevisionService
 from website.models import MinistryMembership
 from website.models.external_media import (
     ExternalMediaProject, MediaTemplate, MediaTemplateBlock, MediaTemplateVersion,
-    PreviewOperation, ProjectBlockMedia, SubtitleCue, SubtitleTrack,
+    PreviewOperation, ProjectBlockMedia, ProjectBrollAsset, SubtitleCue, SubtitleTrack,
 )
 from website.test_external_media import ExternalMediaFixtureMixin
 from website.views.external_media import ExternalMediaProjectPreviewSubtitleView
@@ -335,6 +335,52 @@ class EditorPersistenceTests(EditorFixture, TestCase):
         overlay = next(item for item in updated.timeline['overlays'] if item['id'] == 'text-1')
         self.assertEqual(overlay['position'], {'x': .8, 'y': .7, 'width': .4})
         self.assertEqual((overlay['start_ms'], overlay['end_ms']), (1000, 2000))
+
+    def test_transition_json_survives_revisions_and_only_outer_edges_survive_split(self):
+        transitions = {
+            'in': {'duration_ms': 800, 'effects': [{'type': 'wipe', 'direction': 'right'}]},
+            'out': {'duration_ms': 600, 'effects': [{'type': 'zoom', 'scale': 1.3}]},
+        }
+        revision = TimelineRevisionService.mutate_overlay(self.project, self.member, 'text-1', {
+            'type': 'TEXT', 'start_ms': 1000, 'end_ms': 3000, 'content': {'text': 'Texto'},
+            'position': {'x': .7, 'y': .65}, 'transitions': transitions,
+        }, create=True)
+        duplicate = TimelineRevisionService.mutate_overlay(self.project, self.member, 'text-1', {'duplicate': True})
+        self.assertEqual(duplicate.timeline['overlays'][1]['transitions'], revision.timeline['overlays'][0]['transitions'])
+        split = TimelineRevisionService.mutate_overlay(self.project, self.member, 'text-1', {'split_at_ms': 2000})
+        left, right = (next(item for item in split.timeline['overlays'] if item['id'].startswith(prefix))
+                       for prefix in ('text-1', 'text-1-split'))
+        self.assertEqual(set(left['transitions']), {'in'})
+        self.assertEqual(set(right['transitions']), {'out'})
+        self.assertEqual(left['position'], right['position'])
+        removed = TimelineRevisionService.mutate_overlay(self.project, self.member, 'text-1', {'transitions': {}})
+        self.assertEqual(removed.timeline['overlays'][0]['transitions'], {})
+        undone = TimelineRevisionService.navigate_history(self.project, self.member, 'undo')
+        self.assertEqual(undone.timeline['overlays'][0]['transitions'], left['transitions'])
+        redone = TimelineRevisionService.navigate_history(self.project, self.member, 'redo')
+        self.assertEqual(redone.timeline['overlays'][0]['transitions'], {})
+
+    def test_broll_transition_follows_move_trim_and_duplication(self):
+        asset = ProjectBrollAsset.objects.create(
+            project=self.project, file='broll-test.mp4', original_filename='broll-test.mp4',
+            media_type=ProjectBrollAsset.MediaType.VIDEO, duration_ms=2000,
+        )
+        created = TimelineRevisionService.add_broll(self.project, self.member, asset, 1000)
+        clip_id = created.timeline['brolls'][0]['id']
+        updated = TimelineRevisionService.mutate_broll(self.project, self.member, clip_id, {'transitions': {
+            'in': {'duration_ms': 800, 'effects': [{'type': 'zoom', 'scale': .8}]},
+            'out': {'duration_ms': 500, 'effects': [{'type': 'slide', 'direction': 'bottom'}]},
+        }})
+        moved = TimelineRevisionService.mutate_broll(self.project, self.member, clip_id, {
+            'start_ms': 3000, 'end_ms': 3500, 'layer': 1,
+        })
+        self.assertEqual(moved.timeline['brolls'][0]['transitions'], updated.timeline['brolls'][0]['transitions'])
+        self.assertEqual(moved.timeline['brolls'][0]['transform'], updated.timeline['brolls'][0]['transform'])
+        copied = TimelineRevisionService.mutate_broll(self.project, self.member, clip_id, {'duplicate': True})
+        self.assertEqual(copied.timeline['brolls'][1]['transitions'], moved.timeline['brolls'][0]['transitions'])
+        self.assertEqual(copied.timeline['brolls'][1]['start_ms'], 3500)
+        deleted = TimelineRevisionService.mutate_broll(self.project, self.member, clip_id, {}, delete=True)
+        self.assertEqual(len(deleted.timeline['brolls']), 1)
 
 
 class EditorConcurrentPersistenceTests(EditorFixture, TransactionTestCase):

@@ -74,12 +74,16 @@
     .editor-track--caption.is-caption-hidden .caption-visibility:after{content:'';position:absolute;width:19px;height:2px;border-radius:2px;background:#fda4af;transform:rotate(-45deg);box-shadow:0 0 0 1px #111a26}
     .editor-track__lane,.editor-track--caption .editor-track__lane{height:48px}
     .editor-track__clip,.editor-track--caption .editor-track__clip{top:2px;bottom:2px;min-height:44px;touch-action:none}
+    .editor-track__clip,.editor-track__clip *, .editor-compact-reorder, .editor-compact-reorder *, .editor-compact-reorder__ghost,.editor-compact-reorder__ghost *{
+        -webkit-user-select:none;user-select:none;-webkit-touch-callout:none
+    }
     .editor-track__clip.is-selected:after{content:'';position:absolute;inset:0;pointer-events:none;border-left:5px solid #fbbf24;border-right:5px solid #fbbf24;border-radius:3px}
     .editor-track__clip:hover,.editor-track__clip.is-selected{transform:none}
     .editor-playhead:before{width:16px;height:16px;left:-7px}.editor-playhead{width:3px;pointer-events:none}.editor-playhead:before{pointer-events:auto}.editor-playhead:after{content:'';position:absolute;top:-36px;left:-12px;right:-12px;height:36px;pointer-events:auto}
 
     .preview-adjustments{position:fixed;z-index:70;top:calc(var(--editor-viewport-top,0px) + var(--editor-viewport-height,100dvh));left:0;right:0;bottom:auto;width:100%;height:min(65dvh,560px);max-height:calc(var(--editor-viewport-height,100dvh) - 60px);border-radius:16px 16px 0 0;transform:translateY(10%);padding-bottom:env(safe-area-inset-bottom);visibility:hidden}
     .preview-adjustments.is-open{transform:translateY(-100%);visibility:visible;animation:none}
+    .preview-adjustments:has(.transition-inspector:not([hidden])){height:min(48dvh,460px)}
     .preview-adjustments__head{padding:8px 12px;min-height:56px}.preview-adjustments__close{width:44px;height:44px;flex:none}.preview-adjustments>.p-4{padding:8px 12px;flex:none}
     .preview-adjustments .preview-list{min-height:0;overflow:auto;overscroll-behavior:contain}
     .preview-adjustments input:not([type=checkbox]):not([type=range]),.preview-adjustments select,.preview-adjustments textarea,.preview-modal input,.preview-modal textarea{font-size:16px!important;min-height:44px!important;min-width:0;max-width:100%}

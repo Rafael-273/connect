@@ -60,6 +60,11 @@ def relocate_item(item, mapping):
             continue
         part = deepcopy(item)
         part['start_ms'], part['end_ms'] = left + offset, right + offset
+        if 'transitions' in part:
+            if left > item['start_ms']:
+                part['transitions'].pop('in', None)
+            if right < item['end_ms']:
+                part['transitions'].pop('out', None)
         if 'source_in_ms' in part:
             part['source_in_ms'] += left - item['start_ms']
         parts.append(part)

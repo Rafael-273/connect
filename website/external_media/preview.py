@@ -31,6 +31,7 @@ from .exceptions import ExternalMediaError
 from .services import ExternalMediaProjectPipeline, MusicService, StorageService, VideoAssemblyService
 from .quality_control import MediaQualityService
 from .overlays import OverlayTimelineService
+from .transitions import normalize_transitions
 from .broll import BrollTimelineService
 from .workspace import JobWorkspace
 from .video_order import clip_range, order_clips, timeline_mapping, relocate_item
@@ -1995,9 +1996,25 @@ class TimelineRevisionService:
             # A blade cut is instantaneous; do not replay the original entry
             # animation in the middle of an otherwise continuous overlay.
             right['animation'] = {**(right.get('animation') or {}), 'type': 'NONE'}
+            if 'transitions' in target:
+                target['transitions'].pop('out', None)
+                right['transitions'].pop('in', None)
             right['source'] = 'USER'
             overlays.append(right)
             reason, operation = 'Overlay dividido', 'SPLIT_OVERLAY'
+        elif payload.get('duplicate') and not delete:
+            if not target or target.get('type') != 'TEXT':
+                raise ValueError('Este item não pode ser duplicado.')
+            target = deepcopy(target)
+            target['id'] = f'{overlay_id}-copy-{uuid.uuid4().hex[:8]}'
+            target['source'] = 'MANUAL'
+            # Put the copy next to the original when the sequence has room.
+            length = target['end_ms'] - target['start_ms']
+            if target['end_ms'] + length <= current.timeline['sequence']['duration_ms']:
+                target['start_ms'] += length
+                target['end_ms'] += length
+            overlays.append(target)
+            reason, operation = 'Elemento duplicado', 'DUPLICATE_OVERLAY'
         elif delete:
             if not target:
                 raise ValueError('Overlay não encontrado nesta timeline.')
@@ -2040,6 +2057,12 @@ class TimelineRevisionService:
                     target['end_ms'] = max(target['start_ms'] + 1, int(payload['end_ms']))
             target['end_ms'] = min(target['end_ms'], current.timeline['sequence']['duration_ms'])
             reason, operation = 'Overlay atualizado', 'UPDATE_OVERLAY'
+        if not delete and 'transitions' in payload:
+            if target.get('type') != 'TEXT' or (
+                target.get('source') not in {'USER', 'MANUAL'} and 'animation' not in (target.get('allowed_overrides') or [])
+            ):
+                raise ValueError('Este elemento não aceita transições.')
+            target['transitions'] = normalize_transitions(payload['transitions'])
         revision = cls._create(
             locked, current.source_manifest, current.edit_decision_set, reason, member, current,
             overlays=overlays,
@@ -2075,9 +2098,27 @@ class TimelineRevisionService:
             # A video B-roll must continue from the matching source frame.
             if str(right.get('media_type') or '').upper() == ProjectBrollAsset.MediaType.VIDEO:
                 right['source_in_ms'] = int(right.get('source_in_ms') or 0) + (point - start)
+            if 'transitions' in target:
+                target['transitions'].pop('out', None)
+                right['transitions'].pop('in', None)
             right['source'] = 'USER'
             brolls.append(right)
             reason, operation = 'B-roll dividido', 'SPLIT_BROLL'
+        elif payload.get('duplicate') and not delete:
+            target = deepcopy(target)
+            target['id'] = f'{broll_id}-copy-{uuid.uuid4().hex[:8]}'
+            target['source'] = 'USER'
+            # Put the copy next to the original when the sequence has room.
+            length = target['end_ms'] - target['start_ms']
+            if target['end_ms'] + length <= current.timeline['sequence']['duration_ms']:
+                target['start_ms'] += length
+                target['end_ms'] += length
+            brolls.append(target)
+            occupied = {int(item.get('layer') or 0) for item in brolls if item is not target
+                        and item['start_ms'] < target['end_ms'] and item['end_ms'] > target['start_ms']}
+            if int(target.get('layer') or 0) in occupied:
+                target['layer'] = next((layer for layer in range(21) if layer not in occupied), target.get('layer', 0))
+            reason, operation = 'Elemento duplicado', 'DUPLICATE_BROLL'
         elif delete:
             brolls.remove(target)
             reason, operation = 'B-roll removido', 'DELETE_BROLL'
@@ -2118,6 +2159,8 @@ class TimelineRevisionService:
                     target[key] = {**(target.get(key) or {}), **value} if isinstance(value, dict) else value
             target['source'] = 'USER'
             reason, operation = 'B-roll ajustado', 'UPDATE_BROLL'
+        if not delete and 'transitions' in payload:
+            target['transitions'] = normalize_transitions(payload['transitions'])
         revision = cls._create(
             locked, current.source_manifest, current.edit_decision_set, reason, member, current,
             overlays=deepcopy(current.timeline.get('overlays') or []), brolls=brolls,

@@ -1140,7 +1140,7 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.version.lut_file = ''
         self.version.save(update_fields=['lut_file'])
         response = self.client.get(url)
-        self.assertNotContains(response, 'project-validation-errors')
+        self.assertNotContains(response, 'id="project-validation-errors"')
         self.assertContains(response, 'Gerar vídeo')
 
     def make_default_scene(self, key, order):

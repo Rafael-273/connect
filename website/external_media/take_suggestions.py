@@ -275,8 +275,8 @@ def remap_source_transcript(items, start_ms, end_ms, offset_ms):
     return result
 
 
-def cached_project_transcript(project, language, duration_ms=None, *, source=None):
-    """Conservative reuse on the exact assembly clock; fall back for incompatible sources."""
+def cached_project_transcript(project, language, duration_ms=None, *, source=None, allow_partial=False):
+    """Reuse timestamped takes on the assembly clock, optionally skipping gaps."""
     from .canonical import ProjectProcessingState
     if not project or project.current_timeline_revision_id or project.approved_timeline_revision_id:
         return None
@@ -285,17 +285,23 @@ def cached_project_transcript(project, language, duration_ms=None, *, source=Non
     manifest = ProjectProcessingState(project).get_source_manifest() or {}
     sources = [source for source in manifest.get('sources', []) if source.get('metadata', {}).get('render_enabled', True)]
     boundaries = config.get('analysis_source_block_ranges') or []
-    if not sources or len(sources) != len(boundaries):
+    if not sources or (not allow_partial and len(sources) != len(boundaries)):
         return None
     media = {str(item.pk): item for item in project.block_media.select_related('take_analysis')}
+    boundaries_by_source = {boundary.get('label'): boundary for boundary in boundaries}
     result = []
     cursor = 0
-    for source, boundary in zip(sources, boundaries):
+    for index, source in enumerate(sources):
+        boundary = boundaries_by_source.get(source.get('id')) if allow_partial else boundaries[index]
         item = media.get(source.get('source_reference'))
         cache = item.take_analysis if item else None
-        if not cache or not cache.transcript_ready or cache.language != language or cache.version != 1:
-            return None
-        if source.get('storage_name') != item.file.name or source.get('metadata', {}).get('remove_background_voice'):
+        if (
+            not boundary or not cache or not cache.transcript_ready or cache.language != language
+            or cache.version != 1 or source.get('storage_name') != item.file.name
+            or source.get('metadata', {}).get('remove_background_voice')
+        ):
+            if allow_partial:
+                continue
             return None
         start = source['trim']['start_ms']
         end = source['trim']['end_ms'] or cache.duration_ms
@@ -303,13 +309,23 @@ def cached_project_transcript(project, language, duration_ms=None, *, source=Non
         # Encoder padding and legacy assembly must not introduce cumulative drift.
         if boundary.get('label') != source.get('id'):
             return None
-        if boundary.get('start_ms') != cursor or boundary.get('end_ms') != cursor + length:
+        offset = boundary.get('start_ms') if allow_partial else cursor
+        if (
+            offset is None or length <= 0
+            or boundary.get('start_ms') != offset or boundary.get('end_ms') != offset + length
+        ):
+            if allow_partial:
+                continue
             return None
-        words = remap_source_transcript(cache.transcript, start, end, cursor)
+        words = remap_source_transcript(cache.transcript, start, end, offset)
         if words is None:
+            if allow_partial:
+                continue
             return None
         result.extend(words)
         cursor += length
+    if allow_partial:
+        return sorted(result, key=lambda word: word.start_ms)
     if duration_ms is None:
         if source is None:
             return None

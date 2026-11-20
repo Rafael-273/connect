@@ -496,6 +496,23 @@ class ExternalMediaCreateView(ExternalMediaRequiredMixin, ExternalMediaContextMi
         else:
             project.configuration = dict(project.template_version.default_settings)
         project.save()
+        if not project.is_free:
+            for block in project.template_version.blocks.prefetch_related('default_brolls'):
+                for source in block.default_brolls.all():
+                    media_type = (ProjectBrollAsset.MediaType.IMAGE
+                                  if Path(source.original_filename).suffix.lower() in IMAGE_EXTENSIONS
+                                  else ProjectBrollAsset.MediaType.VIDEO)
+                    asset = ProjectBrollAsset(
+                        project=project, block=block, media_type=media_type,
+                        original_filename=source.original_filename, description=source.description,
+                        position=source.position + 1,
+                    )
+                    with source.file.open('rb') as content:
+                        asset.file.save(source.original_filename, content, save=False)
+                    asset.file_size = source.file.size
+                    asset.save()
+                    if media_type == ProjectBrollAsset.MediaType.VIDEO:
+                        transaction.on_commit(lambda asset=asset: ExternalMediaProjectBrollUploadView._enqueue_preview(asset))
         if project.is_free:
             TimelineRevisionService.ensure_initial(project, self.member)
             return redirect('external_media_project_preview', public_id=project.public_id)
@@ -1543,7 +1560,7 @@ class ExternalMediaProjectBrollUploadPresignView(ExternalMediaRequiredMixin, Vie
             media_type = ProjectBrollAsset.MediaType.IMAGE
             limit = 20 * 1024 * 1024
         else:
-            return JsonResponse({'detail': 'Envie MP4, MOV, MKV, WEBM, AVI, M4V, PNG, JPG ou WEBP.'}, status=400)
+            return JsonResponse({'detail': 'Envie MP4, MOV, MKV, WEBM, AVI, M4V, PNG, JPG, JPEG, WEBP, GIF ou BMP.'}, status=400)
         if file_size <= 0 or file_size > limit:
             return JsonResponse({'detail': f'O arquivo excede o limite de {limit // (1024 * 1024)} MB.'}, status=400)
         config = BrollTimelineService.configuration(project)

@@ -48,6 +48,7 @@ from .external_media import (
     MasteringProfile,
     MediaTemplate,
     MediaTemplateBlock,
+    TemplateBrollAsset,
     MediaTemplatePlugin,
     MediaTemplateVersion,
     OverlayPreset,

@@ -21,7 +21,7 @@ from ..models.external_media import (
 
 
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v'}
-IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'}
 
 
 def validate_video_upload(video):
@@ -203,7 +203,7 @@ class ProjectBrollAssetForm(forms.ModelForm):
         labels = {'file': 'Foto, PNG/QR Code ou vídeo'}
         widgets = {
             'file': forms.ClearableFileInput(attrs={
-                'accept': '.mp4,.mov,.mkv,.webm,.avi,.m4v,.png,.jpg,.jpeg,.webp',
+                'accept': '.mp4,.mov,.mkv,.webm,.avi,.m4v,.png,.jpg,.jpeg,.webp,.gif,.bmp',
             }),
             'description': forms.TextInput(attrs={
                 'maxlength': 500,
@@ -217,7 +217,7 @@ class ProjectBrollAssetForm(forms.ModelForm):
         if suffix in VIDEO_EXTENSIONS:
             return validate_video_upload(upload)
         if suffix not in IMAGE_EXTENSIONS:
-            raise forms.ValidationError('Envie MP4, MOV, MKV, WEBM, AVI, M4V, PNG, JPG ou WEBP.')
+            raise forms.ValidationError('Envie MP4, MOV, MKV, WEBM, AVI, M4V, PNG, JPG, JPEG, WEBP, GIF ou BMP.')
         if upload.size > 20 * 1024 * 1024:
             raise forms.ValidationError('A imagem deve ter no máximo 20 MB.')
         try:

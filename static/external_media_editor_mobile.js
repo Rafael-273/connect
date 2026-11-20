@@ -12,10 +12,20 @@
         const paint=()=>{
             frame=null;
             if(pinch&&pointers.size===2){const zoom=Math.max(1,Math.min(16,pinch.zoom*distance()/pinch.distance));setZoom(zoom);scroller.scrollLeft=pinch.content*zoom/pinch.zoom-center()}
-            else if(pan&&pointers.size===1){const point=[...pointers.values()][0];scroller.scrollLeft=pan.left+pan.x-point.x;scroller.scrollTop=pan.top+pan.y-point.y}
+            else if(pan?.moved&&pointers.size===1){
+                const point=[...pointers.values()][0];
+                if(pan.axis==='horizontal')scroller.scrollLeft=pan.left+pan.x-point.x;
+                if(pan.axis==='vertical')scroller.scrollTop=pan.top+pan.y-point.y;
+            }
         };
         const schedule=()=>{if(frame===null)frame=requestAnimationFrame(paint)};
         const intercept=event=>{event.preventDefault();event.stopImmediatePropagation()};
+        function takeOverClip(pointerId,target){
+            scroller.setPointerCapture(pointerId);
+            cancellingShared=true;
+            target.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true,pointerId,pointerType:'touch'}));
+            cancellingShared=false;
+        }
         scroller.addEventListener('pointerdown',event=>{
             if(!isMobile()||event.pointerType!=='touch')return;
             pointers.set(event.pointerId,{x:event.clientX,y:event.clientY,target:event.target});
@@ -31,17 +41,18 @@
             if(blocked||pointers.size>2){intercept(event);return}
             const direct=event.target.closest('.editor-ruler,.editor-playhead,button:not([data-clip-key]),input');
             const holdTarget=canHold?.(event.target);
-            if((isEditing()&&!holdTarget)||direct)return;
+            if(direct)return;
             if(!isEditing()&&event.target.closest('[data-clip-key]')){
+                // Keep the existing clip handler available until the swipe
+                // commits to scrolling or the long press starts reordering.
+                event.preventDefault();
                 const initial={x:event.clientX,y:event.clientY,target:event.target};
                 pan={...initial,left:scroller.scrollLeft,top:scroller.scrollTop,moved:false,shared:true};
                 if(holdTarget)holdTimer=setTimeout(()=>{
                     if(!pan||pan.moved||pointers.size!==1)return;
-                    cancellingShared=true;
-                    initial.target.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true,pointerId:event.pointerId,pointerType:'touch'}));
-                    cancellingShared=false;
+                    takeOverClip(event.pointerId,initial.target);
                     reorder=onHold(holdTarget,pointers.get(event.pointerId));
-                    if(reorder)scroller.setPointerCapture(event.pointerId);
+                    if(!reorder)pan.shared=false;
                 },holdDelay);
                 return;
             }
@@ -59,8 +70,16 @@
             pointers.set(event.pointerId,{...pointers.get(event.pointerId),x:event.clientX,y:event.clientY});
             if(!pan&&!blocked)return;
             if(reorder){intercept(event);reorder.move(event.clientX,event.clientY);return}
-            if(pan&&Math.hypot(event.clientX-pan.x,event.clientY-pan.y)>movementTolerance){
-                pan.moved=true;clearHold();
+            if(pan&&!pan.moved){
+                const dx=Math.abs(event.clientX-pan.x),dy=Math.abs(event.clientY-pan.y);
+                if(Math.hypot(dx,dy)>movementTolerance){
+                    pan.moved=true;clearHold();
+                    pan.axis=dy>=dx?'vertical':'horizontal';
+                    if(pan.shared&&pan.axis==='vertical'){
+                        takeOverClip(event.pointerId,pan.target);
+                        pan.shared=false;
+                    }
+                }
             }
             if(pan?.shared)return;
             intercept(event);schedule();
@@ -68,7 +87,7 @@
         const finish=event=>{
             if(!pointers.has(event.pointerId))return;
             // Synthetic cancellation above belongs to the shared drag handler.
-            if(cancellingShared)return;
+            if(cancellingShared||(event.type==='lostpointercapture'&&event.target!==scroller&&scroller.hasPointerCapture(event.pointerId)))return;
             clearHold();
             if((pan&&!pan.shared)||blocked||reorder){
                 intercept(event);if(frame!==null){cancelAnimationFrame(frame);paint()}
@@ -86,13 +105,21 @@
         };
         scroller.addEventListener('pointerup',finish,true);scroller.addEventListener('pointercancel',finish,true);
         scroller.addEventListener('lostpointercapture',finish,true);
-        scroller.addEventListener('contextmenu',event=>{if(pan&&canHold?.(pan.target))event.preventDefault()});
+        scroller.addEventListener('contextmenu',event=>{
+            if(isMobile()&&(event.target.closest('[data-clip-key]')||(pan&&canHold?.(pan.target))))event.preventDefault();
+        });
+        scroller.addEventListener('selectstart',event=>{
+            if(isMobile()&&event.target.closest('[data-clip-key]'))event.preventDefault();
+        });
         document.addEventListener('keydown',event=>{
             if(event.key==='Escape'&&reorder){cancelReorder();if(pan)pan.moved=true;event.preventDefault()}
         });
         // preventDefault on pointerdown suppresses compatibility mouse clicks.
         // Keep the browser-generated click from repeating a synthetic tap.
-        scroller.addEventListener('click',event=>{if(isMobile()&&event.isTrusted&&event.pointerType==='touch'&&!isEditing()&&!event.target.closest('button:not([data-clip-key])'))event.stopImmediatePropagation()},true);
+        scroller.addEventListener('click',event=>{
+            if(isMobile()&&event.isTrusted&&(event.pointerType==='touch'||event.sourceCapabilities?.firesTouchEvents)
+                &&!event.target.closest('button:not([data-clip-key]),input'))event.stopImmediatePropagation();
+        },true);
     }
     function insertionIndex(midpoints, x) {
         const index = midpoints.findIndex(midpoint => x < midpoint);

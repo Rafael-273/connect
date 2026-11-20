@@ -585,18 +585,43 @@
 </details>
 {% endif %}
 
+<div data-project-validation>
 {% if validation_errors %}
 <div id="project-validation-errors" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800" role="alert">
     <strong class="block font-bold">Confira o que falta para gerar o vídeo:</strong>
     <ul class="mt-2 list-disc pl-5 space-y-1">{% for error in validation_errors %}<li>{{ error }}</li>{% endfor %}</ul>
 </div>
 {% endif %}
-<form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}{% if project.has_manual_sequence %}<label class="flex items-center gap-2 mb-3 text-sm"><input type="checkbox" name="reset_manual_sequence" value="1" required> Substituir a sequência manual pela montagem dos blocos</label>{% endif %}<button class="media-btn media-primary w-full" {% if validation_errors %}disabled aria-describedby="project-validation-errors" style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
+</div>
+<form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}{% if project.has_manual_sequence %}<label class="flex items-center gap-2 mb-3 text-sm"><input type="checkbox" name="reset_manual_sequence" value="1" required> Substituir a sequência manual pela montagem dos blocos</label>{% endif %}<button data-generate-video class="media-btn media-primary w-full" {% if validation_errors %}disabled aria-describedby="project-validation-errors" style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
 <script src="{% static 'external_media_s3_upload.js' %}"></script>
 <script src="{% static 'external_media_take_suggestions.js' %}"></script>
 <script>
 (function(){
     const MIN_TRIM_SECONDS = 0.1;
+    let validationRequest = 0;
+    async function refreshProjectValidation() {
+        const requestId = ++validationRequest;
+        try {
+            const response = await fetch(window.location.href, {credentials: 'same-origin', cache: 'no-store'});
+            if (!response.ok) return;
+            const html = await response.text();
+            if (requestId !== validationRequest) return;
+            const updated = new DOMParser().parseFromString(html, 'text/html');
+            const sourceErrors = updated.querySelector('[data-project-validation]');
+            const sourceButton = updated.querySelector('[data-generate-video]');
+            const errors = document.querySelector('[data-project-validation]');
+            const button = document.querySelector('[data-generate-video]');
+            if (!sourceErrors || !sourceButton || !errors || !button) return;
+            errors.innerHTML = sourceErrors.innerHTML;
+            button.disabled = sourceButton.disabled;
+            button.style.opacity = sourceButton.disabled ? '.5' : '';
+            if (sourceButton.disabled) button.setAttribute('aria-describedby', 'project-validation-errors');
+            else button.removeAttribute('aria-describedby');
+        } catch (_) {
+            // A atualização será tentada após o próximo envio ou recarga da página.
+        }
+    }
     function formatFileSize(bytes) {
         if (!bytes) return '0 B';
         const units = ['B', 'KB', 'MB', 'GB'];
@@ -653,6 +678,7 @@
             state.className = 'project-media-block__state is-ready';
             state.innerHTML = '<i class="fas fa-check"></i>Vídeo adicionado';
         }
+        refreshProjectValidation();
     }
     async function updatePreviewStates() {
         const pending = document.querySelectorAll('[data-preview-pending][data-preview-status-url]');

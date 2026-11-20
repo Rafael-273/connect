@@ -1025,6 +1025,21 @@ class MediaTemplateBlock(BaseModel):
         return f'{self.version}: {self.name}'
 
 
+def template_broll_path(instance, filename):
+    return f'external_media/templates/broll/{uuid.uuid4().hex}{Path(filename).suffix.lower()}'
+
+
+class TemplateBrollAsset(BaseModel):
+    block = models.ForeignKey(MediaTemplateBlock, on_delete=models.CASCADE, related_name='default_brolls')
+    file = models.FileField(upload_to=template_broll_path, storage=get_external_media_storage, max_length=500)
+    original_filename = models.CharField(max_length=255)
+    description = models.CharField(max_length=500)
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['position', 'pk']
+
+
 class MediaTemplatePlugin(BaseModel):
     class Code(models.TextChoices):
         SILENCE_REMOVAL = 'silence_removal', 'Corte de silêncio'

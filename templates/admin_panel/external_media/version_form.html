@@ -29,6 +29,30 @@
     .drag-handle:active { cursor: grabbing; }
     .block-position-badge { min-width: 36px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: rgba(201,9,5,.08); color: var(--color-primary); font-size: .75rem; font-weight: 800; }
     .block-remove-btn { display: inline-flex; align-items: center; gap: .35rem; color: #dc2626; font-size: .9rem; font-weight: 700; }
+    .overlay-builder { border: 1px solid #e5e7eb; border-radius: 14px; background: #fff; padding: 1rem; }
+    .overlay-builder-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
+    .overlay-builder-heading { display: flex; align-items: center; gap: .75rem; }
+    .overlay-builder-icon { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 11px; background: #fef2f2; color: var(--color-primary); font-size: 1.25rem; }
+    .overlay-builder-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+    .overlay-add { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 40px; padding: .55rem .85rem; border-radius: 9px; background: var(--color-primary); color: #fff; font-size: .8rem; font-weight: 700; }
+    .overlay-empty { margin-top: 1rem; padding: 1.25rem; border: 1px dashed #cbd5e1; border-radius: 10px; text-align: center; color: #64748b; font-size: .82rem; }
+    .overlay-card { margin-top: .75rem; border: 1px solid #e5e7eb; border-radius: 11px; background: #f9fafb; padding: 1rem; }
+    .overlay-card-header { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin-bottom: .9rem; }
+    .overlay-card-title { display: flex; align-items: center; gap: .55rem; color: #1f2937; font-size: .85rem; font-weight: 700; }
+    .overlay-card-number { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: #fff; border: 1px solid #e5e7eb; color: #64748b; font-size: .7rem; }
+    .overlay-remove { display: inline-flex; align-items: center; gap: .3rem; color: #b91c1c; font-size: .8rem; font-weight: 600; }
+    .overlay-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+    .overlay-field { display: block; min-width: 0; color: #374151; font-size: .75rem; font-weight: 700; }
+    .overlay-field select { display: block; width: 100%; min-height: 42px; margin-top: .35rem; padding: .5rem .65rem; border: 1px solid #d1d5db; border-radius: 8px; background-color: #fff; color: #1f2937; font-size: .875rem; font-weight: 400; }
+    .overlay-field select:focus-visible, .overlay-add:focus-visible, .overlay-remove:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+    .overlay-help { display: flex; align-items: flex-start; gap: .5rem; margin-top: .85rem; color: #64748b; font-size: .78rem; line-height: 1.45; }
+    .overlay-help ion-icon { flex: none; font-size: 1rem; margin-top: .05rem; color: #94a3b8; }
+    .template-broll-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: .85rem; align-items: start; margin-top: .75rem; padding: .85rem; border: 1px solid #e5e7eb; border-radius: 10px; background: #f9fafb; }
+    .template-broll-preview { width: 120px; aspect-ratio: 16 / 9; object-fit: cover; background: #111827; border-radius: 8px; }
+    .template-broll-actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; font-size: .8rem; font-weight: 700; }
+    .template-broll-actions .text-red-600 { display: inline-flex; align-items: center; gap: .3rem; }
+    @media (max-width: 600px) { .template-broll-row { grid-template-columns: 88px minmax(0, 1fr); } .template-broll-preview { width: 88px; } .template-broll-actions { grid-column: 2; } }
+    @media (max-width: 600px) { .overlay-fields { grid-template-columns: 1fr; } .overlay-builder-actions { width: 100%; justify-content: space-between; } }
     .media-modal-panel.media-modal-panel-wide { width: min(1480px, 100%); }
     .style-preview-shell { border: 1px solid #e5e7eb; border-radius: 18px; padding: 18px; background: #000; transition: background .2s ease; }
     .style-preview-shell[data-backdrop="dark"] { background: #000; }
@@ -548,12 +572,16 @@
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.is_required }} {{ block_form.is_required.label }}</label>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.skip_extra_processing }} {{ block_form.skip_extra_processing.label }}</label>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.remove_background_voice }} {{ block_form.remove_background_voice.label }}</label>
+                                <div class="md:col-span-3">{% include 'admin_panel/external_media/template_brolls.html' with broll_form=block_form %}</div>
                                 <div class="md:col-span-3">
                                     {{ block_form.overlay_definitions_raw }}
-                                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4" data-overlay-builder>
-                                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><div><strong class="text-sm text-gray-900">Elementos visuais</strong><p class="text-xs text-gray-500 mt-1">Data, texto, QR Code, chamada ou imagem nesta cena.</p></div><div class="flex items-center gap-2"><a href="{% url 'admin_external_media_overlay_presets' %}" target="_blank" class="text-xs font-bold text-gray-600 hover:text-[var(--color-primary)]">Gerenciar presets visuais</a><button type="button" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold" data-add-overlay><ion-icon name="add-outline"></ion-icon>Adicionar elemento</button></div></div>
-                                        <div class="space-y-3" data-overlay-items></div>
-                                        <p class="text-sm text-gray-500" data-overlay-empty>Nenhum elemento visual configurado.</p>
+                                    <div class="overlay-builder" data-overlay-builder>
+                                        <div class="overlay-builder-header">
+                                            <div class="overlay-builder-heading"><span class="overlay-builder-icon" aria-hidden="true"><ion-icon name="layers-outline"></ion-icon></span><div><strong class="text-sm text-gray-900">Elementos visuais</strong><p class="text-xs text-gray-500 mt-1">Texto, data, QR Code ou imagem nesta cena.</p></div></div>
+                                            <div class="overlay-builder-actions"><a href="{% url 'admin_external_media_overlay_presets' %}" target="_blank" rel="noopener" class="text-xs font-bold text-gray-600 hover:text-[var(--color-primary)]">Gerenciar presets <span aria-hidden="true">↗</span></a><button type="button" class="overlay-add" data-add-overlay><ion-icon name="add-outline" aria-hidden="true"></ion-icon>Adicionar elemento</button></div>
+                                        </div>
+                                        <div data-overlay-items></div>
+                                        <p class="overlay-empty" data-overlay-empty>Nenhum elemento visual nesta cena.</p>
                                     </div>
                                     {% if block_form.overlay_definitions_raw.errors %}<p class="text-xs text-red-600 mt-1">{{ block_form.overlay_definitions_raw.errors.0 }}</p>{% endif %}
                                 </div>
@@ -585,12 +613,16 @@
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.is_required }} {{ block_formset.empty_form.is_required.label }}</label>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.skip_extra_processing }} {{ block_formset.empty_form.skip_extra_processing.label }}</label>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.remove_background_voice }} {{ block_formset.empty_form.remove_background_voice.label }}</label>
+                                <div class="md:col-span-3">{% include 'admin_panel/external_media/template_brolls.html' with broll_form=block_formset.empty_form %}</div>
                                 <div class="md:col-span-3">
                                     {{ block_formset.empty_form.overlay_definitions_raw }}
-                                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4" data-overlay-builder>
-                                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><div><strong class="text-sm text-gray-900">Elementos visuais</strong><p class="text-xs text-gray-500 mt-1">Data, texto, QR Code, chamada ou imagem nesta cena.</p></div><div class="flex items-center gap-2"><a href="{% url 'admin_external_media_overlay_presets' %}" target="_blank" class="text-xs font-bold text-gray-600 hover:text-[var(--color-primary)]">Gerenciar presets visuais</a><button type="button" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold" data-add-overlay><ion-icon name="add-outline"></ion-icon>Adicionar elemento</button></div></div>
-                                        <div class="space-y-3" data-overlay-items></div>
-                                        <p class="text-sm text-gray-500" data-overlay-empty>Nenhum elemento visual configurado.</p>
+                                    <div class="overlay-builder" data-overlay-builder>
+                                        <div class="overlay-builder-header">
+                                            <div class="overlay-builder-heading"><span class="overlay-builder-icon" aria-hidden="true"><ion-icon name="layers-outline"></ion-icon></span><div><strong class="text-sm text-gray-900">Elementos visuais</strong><p class="text-xs text-gray-500 mt-1">Texto, data, QR Code ou imagem nesta cena.</p></div></div>
+                                            <div class="overlay-builder-actions"><a href="{% url 'admin_external_media_overlay_presets' %}" target="_blank" rel="noopener" class="text-xs font-bold text-gray-600 hover:text-[var(--color-primary)]">Gerenciar presets <span aria-hidden="true">↗</span></a><button type="button" class="overlay-add" data-add-overlay><ion-icon name="add-outline" aria-hidden="true"></ion-icon>Adicionar elemento</button></div>
+                                        </div>
+                                        <div data-overlay-items></div>
+                                        <p class="overlay-empty" data-overlay-empty>Nenhum elemento visual nesta cena.</p>
                                     </div>
                                 </div>
                                 {{ block_formset.empty_form.min_occurrences }}
@@ -2391,9 +2423,11 @@
         if (type === 'QR_CODE_CARD') return 'O membro informará a URL do QR Code e, se quiser, o texto da chamada.';
         return 'O membro enviará a imagem ao criar o projeto.';
     }
-    function defaultOverlayDefinition(index) {
+    function defaultOverlayDefinition(definitions) {
+        let index = 1;
+        while (definitions.some((item) => item.key === `elemento-${index}`)) index += 1;
         return {
-            key: `elemento-${index + 1}`, type: 'TEXT', preset: 'event-date-filadelfia',
+            key: `elemento-${index}`, type: 'TEXT', preset: overlayPresets.find((item) => item.overlay_type === 'TEXT')?.code,
             fields: schemaForOverlay('TEXT'),
         };
     }
@@ -2407,8 +2441,6 @@
             item.type = card.querySelector('[data-overlay-type]').value;
             item.preset = card.querySelector('[data-overlay-preset]').value || undefined;
             item.key = item.key || `elemento-${Number(card.dataset.overlayIndex) + 1}`;
-            item.fields = schemaForOverlay(item.type);
-            ['timing', 'duration_ms', 'position', 'animation', 'style'].forEach((key) => delete item[key]);
         });
         raw.value = JSON.stringify(definitions);
         builder.querySelector('[data-overlay-empty]').classList.toggle('hidden', definitions.length > 0);
@@ -2419,14 +2451,16 @@
         items.innerHTML = definitions.map((item, index) => {
             const compatiblePresets = overlayPresets.filter((preset) => preset.overlay_type === item.type);
             const typeOptions = Object.entries(overlayTypeLabels).map(([value, label]) => `<option value="${value}" ${item.type === value ? 'selected' : ''}>${label}</option>`).join('');
-            const presetOptions = [`<option value="">Selecione um preset visual</option>`, ...compatiblePresets.map((preset) => `<option value="${escapeOverlay(preset.code)}" ${item.preset === preset.code ? 'selected' : ''}>${escapeOverlay(preset.name)}</option>`)].join('');
-            return `<article class="rounded-xl border border-gray-200 bg-white p-4" data-overlay-card data-overlay-index="${index}">
-                <div class="flex items-center justify-between gap-3 mb-3"><strong class="text-sm text-gray-900">Elemento ${index + 1}</strong><button type="button" class="text-sm font-bold text-red-600" data-remove-overlay>Remover</button></div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <label class="text-xs font-bold text-gray-600">Tipo<select data-overlay-type class="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm font-normal">${typeOptions}</select></label>
-                    <label class="text-xs font-bold text-gray-600">Preset visual<select required data-overlay-preset class="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm font-normal">${presetOptions}</select><span class="block mt-1 text-xs font-normal text-gray-500">Define posição, momento, duração e animação.</span></label>
+            const unavailable = item.preset && !compatiblePresets.some((preset) => preset.code === item.preset)
+                ? `<option value="${escapeOverlay(item.preset)}" selected>${escapeOverlay(item.preset)} (indisponível)</option>` : '';
+            const presetOptions = [`<option value="">Selecione um preset visual</option>`, unavailable, ...compatiblePresets.map((preset) => `<option value="${escapeOverlay(preset.code)}" ${item.preset === preset.code ? 'selected' : ''}>${escapeOverlay(preset.name)}</option>`)].join('');
+            return `<article class="overlay-card" data-overlay-card data-overlay-index="${index}">
+                <div class="overlay-card-header"><div class="overlay-card-title"><span class="overlay-card-number">${index + 1}</span><span>${escapeOverlay(overlayTypeLabels[item.type] || 'Elemento visual')}</span></div><button type="button" class="overlay-remove" data-remove-overlay aria-label="Remover elemento ${index + 1}"><ion-icon name="trash-outline" aria-hidden="true"></ion-icon>Remover</button></div>
+                <div class="overlay-fields">
+                    <label class="overlay-field">Tipo de elemento<select data-overlay-type>${typeOptions}</select></label>
+                    <label class="overlay-field">Preset visual<select required data-overlay-preset>${presetOptions}</select><span class="block mt-1 text-xs font-normal text-gray-500">Define posição, momento, duração e animação.</span></label>
                 </div>
-                <div class="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3"><p class="text-xs font-black uppercase tracking-wide text-gray-500">O que será solicitado ao membro</p><p class="mt-1 text-sm text-gray-700">${memberDataSummary(item.type)}</p></div>
+                <div class="overlay-help"><ion-icon name="person-outline" aria-hidden="true"></ion-icon><span>${memberDataSummary(item.type)}</span></div>
             </article>`;
         }).join('');
         syncOverlayBuilder(builder);
@@ -2442,8 +2476,9 @@
             builder._overlayDefinitions = [];
         }
         builder.querySelector('[data-add-overlay]').addEventListener('click', () => {
-            builder._overlayDefinitions.push(defaultOverlayDefinition(builder._overlayDefinitions.length));
+            builder._overlayDefinitions.push(defaultOverlayDefinition(builder._overlayDefinitions));
             renderOverlayBuilder(builder);
+            builder.querySelector('[data-overlay-card]:last-child [data-overlay-type]')?.focus();
         });
         builder.addEventListener('input', (event) => {
             if (!event.target.closest('[data-overlay-card]')) return;
@@ -2474,6 +2509,100 @@
         });
         renderOverlayBuilder(builder);
     }
+    function bindTemplateBrolls(builder) {
+        if (builder.dataset.bound) return;
+        builder.dataset.bound = 'true';
+        const raw = builder.querySelector('input[type="hidden"]');
+        const list = builder.querySelector('[data-broll-list]');
+        let entries = [];
+        try { entries = JSON.parse(raw.value || '[]'); } catch (_) { entries = []; }
+        if (!Array.isArray(entries)) entries = [];
+        function sync() {
+            raw.value = JSON.stringify(Array.from(list.children).map((row) => ({
+                ...row._entry, description: row.querySelector('textarea').value,
+            })));
+            builder.querySelector('[data-broll-empty]').hidden = list.children.length > 0;
+        }
+        function addRow(entry, file) {
+            const row = document.createElement('div');
+            row.className = 'template-broll-row';
+            row._entry = entry;
+            const isImage = /\.(png|jpe?g|webp|gif|bmp)$/i.test(entry.name || '');
+            let preview = document.createElement(isImage ? 'img' : 'video');
+            preview.className = 'template-broll-preview';
+            if (isImage) preview.alt = `Miniatura de ${entry.name}`;
+            else { preview.preload = 'metadata'; preview.muted = true; preview.playsInline = true; }
+            if (entry.url) preview.src = entry.url;
+            const details = document.createElement('div');
+            details.className = 'min-w-0';
+            const name = document.createElement('p');
+            name.className = 'text-sm font-semibold text-gray-800 break-all'; name.textContent = entry.name;
+            const label = document.createElement('label');
+            label.className = 'block mt-2 text-xs font-bold text-gray-600'; label.textContent = 'Descrição para posicionamento';
+            const description = document.createElement('textarea');
+            description.className = 'mt-1 w-full rounded-lg border border-gray-300 bg-white p-2 text-sm font-normal';
+            description.rows = 2; description.maxLength = 500; description.required = true;
+            description.value = entry.description || ''; description.placeholder = 'Ex.: Pessoas adorando durante o culto';
+            label.appendChild(description); details.append(name, label);
+            const actions = document.createElement('div'); actions.className = 'template-broll-actions';
+            [['↑', 'Mover para cima', -1], ['↓', 'Mover para baixo', 1]].forEach(([text, title, direction]) => {
+                const button = document.createElement('button'); button.type = 'button'; button.textContent = text;
+                button.title = title; button.setAttribute('aria-label', `${title}: ${entry.name}`);
+                button.onclick = () => { const sibling = direction < 0 ? row.previousElementSibling : row.nextElementSibling;
+                    if (sibling) { if (direction < 0) list.insertBefore(row, sibling); else list.insertBefore(sibling, row); sync(); } };
+                actions.appendChild(button);
+            });
+            const remove = document.createElement('button'); remove.type = 'button';
+            remove.innerHTML = '<ion-icon name="trash-outline" aria-hidden="true"></ion-icon><span>Remover</span>';
+            remove.setAttribute('aria-label', `Remover ${entry.name}`);
+            remove.className = 'text-red-600'; remove.onclick = () => { if (preview.src.startsWith('blob:')) URL.revokeObjectURL(preview.src); row.remove(); sync(); };
+            actions.appendChild(remove); row.append(preview, details, actions);
+            if (file) { row.appendChild(file); preview.src = URL.createObjectURL(file.files[0]); }
+            else if (entry.upload && !entry.id) {
+                const notice = document.createElement('label');
+                notice.className = 'block mt-2 text-xs font-semibold text-red-700';
+                notice.textContent = 'Selecione novamente este arquivo para salvar.';
+                const replacement = document.createElement('input');
+                replacement.type = 'file'; replacement.required = true;
+                replacement.accept = '.mp4,.mov,.mkv,.webm,.avi,.m4v,.png,.jpg,.jpeg,.webp,.gif,.bmp';
+                replacement.name = `${raw.name.replace(/brolls_raw$/, '')}broll-${entry.upload}`;
+                replacement.className = 'block mt-1 text-xs font-normal';
+                replacement.addEventListener('change', () => {
+                    if (!replacement.files.length) return;
+                    const chosen = replacement.files[0];
+                    const image = /\.(png|jpe?g|webp|gif|bmp)$/i.test(chosen.name);
+                    const nextPreview = document.createElement(image ? 'img' : 'video');
+                    nextPreview.className = 'template-broll-preview';
+                    if (image) nextPreview.alt = `Miniatura de ${chosen.name}`;
+                    else { nextPreview.preload = 'metadata'; nextPreview.muted = true; nextPreview.playsInline = true; }
+                    if (preview.src.startsWith('blob:')) URL.revokeObjectURL(preview.src);
+                    nextPreview.src = URL.createObjectURL(chosen);
+                    preview.replaceWith(nextPreview); preview = nextPreview;
+                    row._entry.name = chosen.name; name.textContent = chosen.name;
+                    notice.firstChild.textContent = 'Arquivo selecionado.';
+                    sync();
+                });
+                notice.appendChild(replacement); details.appendChild(notice);
+            }
+            description.addEventListener('input', sync); list.appendChild(row);
+        }
+        entries.forEach((entry) => addRow(entry));
+        builder.querySelector('[data-broll-add]').addEventListener('click', () => {
+            const picker = document.createElement('input'); picker.type = 'file'; picker.accept = '.mp4,.mov,.mkv,.webm,.avi,.m4v,.png,.jpg,.jpeg,.webp,.gif,.bmp'; picker.multiple = true;
+            picker.onchange = () => {
+                Array.from(picker.files).forEach((selected) => {
+                    const key = crypto.randomUUID().replaceAll('-', '');
+                    const input = document.createElement('input'); input.type = 'file'; input.hidden = true;
+                    input.name = `${raw.name.replace(/brolls_raw$/, '')}broll-${key}`;
+                    const transfer = new DataTransfer(); transfer.items.add(selected); input.files = transfer.files;
+                    addRow({upload: key, name: selected.name, description: ''}, input);
+                });
+                sync();
+            };
+            picker.click();
+        });
+        sync();
+    }
     function visibleBlockCards() {
         return Array.from(document.querySelectorAll('#blocks-container [data-block-form]'))
             .filter((card) => card.style.display !== 'none');
@@ -2497,10 +2626,12 @@
         card.querySelector('[data-remove-block]')?.addEventListener('click', () => {
             const deleteInput = card.querySelector('input[name$="-DELETE"]');
             if (deleteInput) deleteInput.checked = true;
+            card.querySelectorAll('[data-template-brolls] textarea, [data-overlay-builder] select').forEach((input) => { input.required = false; });
             card.style.display = 'none';
             updateBlockOrder();
         });
         card.querySelectorAll('[data-overlay-builder]').forEach(bindOverlayBuilder);
+        card.querySelectorAll('[data-template-brolls]').forEach(bindTemplateBrolls);
     }
     function bindBlockDragAndDrop() {
         const container = byId('blocks-container');

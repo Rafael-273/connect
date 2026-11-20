@@ -143,10 +143,10 @@ test('actual applyTimeline preserves pending local edits and keeps only the newe
     assert.equal(context.observed,1500);assert.equal(context.pendingVersion,6);
 });
 
-test('minute conversion preserves 1000ms rather than rounding to 1020ms',()=>{
-    const expression=template.match(/const minFromMs = ms => (.*);/)[1];
+test('B-roll timing in seconds preserves milliseconds',()=>{
+    const expression=template.match(/const secondsFromMs = ms => (.*);/)[1];
     const convert=vm.runInNewContext(`ms=>${expression}`);
-    for(const ms of [33,1000,2000,1234567])assert.equal(Math.round(convert(ms)*60000),ms);
+    for(const ms of [33,1000,2000,1234567])assert.equal(Math.round(convert(ms)*1000),ms);
 });
 
 

@@ -3,9 +3,11 @@ import os
 import subprocess
 from pathlib import Path
 from unittest import skipUnless
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
+from django.test import override_settings
 from django.urls import reverse
 
 from website.test_editor_persistence import EditorFixture
@@ -106,6 +108,23 @@ class EditorBrowserTests(EditorFixture, StaticLiveServerTestCase):
 
     def test_mobile_touch_editing_and_responsive_workspace(self):
         self.browser_check('editor_mobile.browser.cjs')
+
+    def test_visual_transition_toolbar_saves_on_mobile_and_desktop(self):
+        from website.models.external_media import ProjectBrollAsset
+
+        storages = {**settings.STORAGES, 'staticfiles': {
+            'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+        }}
+        with override_settings(STORAGES=storages), patch.object(TimelineRevisionService, '_enqueue_timeline_review_proxy'):
+            broll = ProjectBrollAsset.objects.create(
+                project=self.project, file='fixture-broll.png', media_type=ProjectBrollAsset.MediaType.IMAGE,
+                original_filename='fixture-broll.png',
+            )
+            TimelineRevisionService.add_broll(self.project, self.member, broll, 1000)
+            TimelineRevisionService.mutate_overlay(self.project, self.member, 'text-transition', {
+                'type': 'TEXT', 'start_ms': 1000, 'end_ms': 4500, 'content': {'text': 'Texto de teste'},
+            }, create=True)
+            self.browser_check('visual_transitions.browser.cjs')
 
     def test_transform_handles_on_desktop_and_mobile(self):
         self.browser_check('editor_transform_handles.browser.cjs')
