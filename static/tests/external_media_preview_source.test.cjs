@@ -8,16 +8,18 @@ class Video extends EventTarget {
     play(){this.paused=false;return Promise.resolve()}
     pause(){this.paused=true}
     load(){this.loads++}
+    removeAttribute(name){delete this[name]}
     metadata(){this.readyState=1;this.dispatchEvent(new Event('loadedmetadata'))}
     frame(){this.readyState=2;this.seeking=false;this.dispatchEvent(new Event('seeked'));this.dispatchEvent(new Event('loadeddata'))}
 }
 function harness(options={}){
     const frames=[],loading=[],errors=[],timers=new Map();let plays=0,releases=0,clock=0,timerId=0;
     const window={},video=new Video();
-    const context={window,document:{createElement:()=>new Video()},HTMLMediaElement:{HAVE_METADATA:1,HAVE_CURRENT_DATA:2},AbortController,requestAnimationFrame:callback=>frames.push(callback)};
+    const document={hidden:false,createElement:()=>new Video()};
+    const context={window,document,HTMLMediaElement:{HAVE_METADATA:1,HAVE_CURRENT_DATA:2},AbortController,requestAnimationFrame:callback=>frames.push(callback)};
     vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../external_media_preview_source.js'),'utf8'),context);
     const player=new window.ConnectPreviewSource(video,{onLoading:value=>loading.push(value),onError:value=>errors.push(value),releaseFrame:()=>releases++,play:()=>{plays++;player.video.play()},now:()=>clock,setTimer:(callback,delay)=>{const id=++timerId;timers.set(id,{callback,at:clock+delay});return id},clearTimer:id=>timers.delete(id),...options});
-    return {player,video,loading,errors,timers,advance(ms){const end=clock+ms;while(true){const next=[...timers.entries()].filter(([,entry])=>entry.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;clock=next[1].at;timers.delete(next[0]);next[1].callback()}clock=end},flush(){frames.splice(0).forEach(callback=>callback())},get plays(){return plays},get releases(){return releases}};
+    return {player,video,document,loading,errors,timers,advance(ms){const end=clock+ms;while(true){const next=[...timers.entries()].filter(([,entry])=>entry.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;clock=next[1].at;timers.delete(next[0]);next[1].callback()}clock=end},flush(){frames.splice(0).forEach(callback=>callback())},get plays(){return plays},get releases(){return releases}};
 }
 test('metadata arriving after repeated same-source scrubs uses the latest time and playback intent',()=>{
     const h=harness();h.player.seek('a.mp4',1,{autoplay:true});h.player.seek('a.mp4',4,{autoplay:false});
@@ -236,6 +238,7 @@ test('a stalled warm decoder falls back to the current decoder and preserves pla
     h.player.warm('b.mp4',2);const incoming=h.player.preloader;
     h.player.seek('b.mp4',2,{autoplay:true});h.advance(5000);
     assert.equal(h.player.failure,null);assert.equal(h.player.video,h.video);assert.equal(h.video.src,'b.mp4');
+    assert.equal(incoming.src,undefined);
     incoming.metadata();incoming.frame();h.flush();assert.equal(h.plays,0);
     h.video.metadata();h.video.frame();h.flush();assert.equal(h.plays,1);assert.equal(h.loading.at(-1),false);
 });
@@ -257,4 +260,27 @@ test('already-current nonzero frame can finish without a seeked event',()=>{
     const h=harness();h.video._time=3;h.player.seek('a.mp4',3,{autoplay:true});
     h.video.metadata();h.video.readyState=2;h.video.dispatchEvent(new Event('loadeddata'));h.flush();
     assert.equal(h.plays,1);assert.equal(h.loading.at(-1),false);
+});
+
+test('canplay completes the current target without loadeddata or seeked',()=>{
+    const h=harness();h.player.seek('a.mp4',3);h.video.metadata();
+    h.video.readyState=3;h.video.dispatchEvent(new Event('canplay'));h.flush();
+    assert.equal(h.loading.at(-1),true);
+    h.video.seeking=false;h.video.dispatchEvent(new Event('canplay'));h.flush();
+    assert.equal(h.loading.at(-1),false);assert.equal(h.timers.size,0);
+});
+
+test('playback started by a tap can finish a pending load without a second play request',()=>{
+    const h=harness();h.player.seek('a.mp4',0,{autoplay:true});h.video.play();h.video.metadata();
+    h.video.readyState=3;h.video.dispatchEvent(new Event('playing'));
+    assert.equal(h.loading.at(-1),false);assert.equal(h.plays,0);assert.equal(h.timers.size,0);
+});
+
+test('an in-progress load rechecks readiness when the installed app returns to the foreground',()=>{
+    const h=harness();h.player.seek('a.mp4',0);h.video.metadata();
+    h.document.hidden=true;h.advance(60000);
+    assert.equal(h.player.failure,null);
+    h.video.readyState=2;h.document.hidden=false;
+    h.player.resumeLoad();h.flush();
+    assert.equal(h.loading.at(-1),false);assert.equal(h.timers.size,0);
 });

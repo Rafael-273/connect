@@ -6,14 +6,23 @@
         let holdTimer=null,reorder=null;
         const clearHold=()=>{clearTimeout(holdTimer);holdTimer=null};
         const cancelReorder=()=>{clearHold();if(reorder){reorder.finish(false);reorder=null}};
-        const holdDelay=420, movementTolerance=8;
+        const holdDelay=420, movementTolerance=8, pinchTolerance=14;
         const distance=()=>{const [a,b]=[...pointers.values()];return Math.hypot(a.x-b.x,a.y-b.y)};
-        const center=()=>{const [a,b]=[...pointers.values()];return (a.x+b.x)/2-scroller.getBoundingClientRect().left};
+        const center=()=>{const [a,b]=[...pointers.values()];return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}};
         const paint=()=>{
             frame=null;
-            if(pinch&&pointers.size===2){const zoom=Math.max(1,Math.min(16,pinch.zoom*distance()/pinch.distance));setZoom(zoom);scroller.scrollLeft=pinch.content*zoom/pinch.zoom-center()}
-            else if(pan?.moved&&pointers.size===1){
-                const point=[...pointers.values()][0];
+            if(pinch&&pointers.size===2){
+                const span=distance(),middle=center(),change=Math.abs(span-pinch.distance);
+                if(!pinch.active){
+                    const drift=Math.hypot(middle.x-pinch.center.x,middle.y-pinch.center.y);
+                    if(change<Math.max(pinchTolerance,pinch.distance*.08)||change<=drift*1.5)return;
+                    pinch.active=true;
+                }
+                const zoom=Math.max(1,Math.min(16,pinch.zoom*span/pinch.distance));
+                if(zoom!==getZoom())setZoom(zoom);
+                scroller.scrollLeft=pinch.content*zoom/pinch.zoom-(middle.x-scroller.getBoundingClientRect().left);
+            }else if(pan?.moved){
+                const point=pointers.get(pan.pointerId);
                 if(pan.axis==='horizontal')scroller.scrollLeft=pan.left+pan.x-point.x;
                 if(pan.axis==='vertical')scroller.scrollTop=pan.top+pan.y-point.y;
             }
@@ -29,16 +38,19 @@
         scroller.addEventListener('pointerdown',event=>{
             if(!isMobile()||event.pointerType!=='touch')return;
             pointers.set(event.pointerId,{x:event.clientX,y:event.clientY,target:event.target});
+            // Keep a committed scroll with the finger that started it.
+            if(blocked||pointers.size>2||(pan?.moved&&!pan.shared&&!reorder)){
+                intercept(event);scroller.setPointerCapture(event.pointerId);return;
+            }
             if(pointers.size===2){
                 cancelReorder();
                 // Discard a provisional clip/needle drag before zooming. Its
                 // normal cancellation path releases the persistence barrier.
-                cancellingShared=true;
-                for(const [id,point] of pointers)if(id!==event.pointerId)point.target.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true,pointerId:id,pointerType:'touch'}));
-                cancellingShared=false;
-                pinch={zoom:getZoom(),distance:Math.max(1,distance()),content:scroller.scrollLeft+center()};pan=null;blocked=true;intercept(event);scroller.setPointerCapture(event.pointerId);return;
+                for(const [id,point] of pointers)if(id!==event.pointerId)takeOverClip(id,point.target);
+                const middle=center(),offset=middle.x-scroller.getBoundingClientRect().left;
+                pinch={zoom:getZoom(),distance:Math.max(1,distance()),center:middle,content:scroller.scrollLeft+offset,active:false};
+                pan=null;blocked=true;intercept(event);scroller.setPointerCapture(event.pointerId);return;
             }
-            if(blocked||pointers.size>2){intercept(event);return}
             const direct=event.target.closest('.editor-ruler,.editor-playhead,button:not([data-clip-key]),input');
             const holdTarget=canHold?.(event.target);
             if(direct)return;
@@ -47,7 +59,7 @@
                 // commits to scrolling or the long press starts reordering.
                 event.preventDefault();
                 const initial={x:event.clientX,y:event.clientY,target:event.target};
-                pan={...initial,left:scroller.scrollLeft,top:scroller.scrollTop,moved:false,shared:true};
+                pan={...initial,pointerId:event.pointerId,left:scroller.scrollLeft,top:scroller.scrollTop,moved:false,shared:true};
                 if(holdTarget)holdTimer=setTimeout(()=>{
                     if(!pan||pan.moved||pointers.size!==1)return;
                     takeOverClip(event.pointerId,initial.target);
@@ -56,7 +68,7 @@
                 },holdDelay);
                 return;
             }
-            pan={x:event.clientX,y:event.clientY,left:scroller.scrollLeft,top:scroller.scrollTop,target:event.target,moved:false};
+            pan={x:event.clientX,y:event.clientY,pointerId:event.pointerId,left:scroller.scrollLeft,top:scroller.scrollTop,target:event.target,moved:false};
             intercept(event);scroller.setPointerCapture(event.pointerId);
             if(holdTarget){
                 holdTimer=setTimeout(()=>{
@@ -69,6 +81,7 @@
             if(!pointers.has(event.pointerId))return;
             pointers.set(event.pointerId,{...pointers.get(event.pointerId),x:event.clientX,y:event.clientY});
             if(!pan&&!blocked)return;
+            if(pan&&pan.pointerId!==event.pointerId){intercept(event);return}
             if(reorder){intercept(event);reorder.move(event.clientX,event.clientY);return}
             if(pan&&!pan.moved){
                 const dx=Math.abs(event.clientX-pan.x),dy=Math.abs(event.clientY-pan.y);
@@ -88,6 +101,11 @@
             if(!pointers.has(event.pointerId))return;
             // Synthetic cancellation above belongs to the shared drag handler.
             if(cancellingShared||(event.type==='lostpointercapture'&&event.target!==scroller&&scroller.hasPointerCapture(event.pointerId)))return;
+            if(pan&&event.pointerId!==pan.pointerId){
+                intercept(event);pointers.delete(event.pointerId);
+                if(scroller.hasPointerCapture(event.pointerId))scroller.releasePointerCapture(event.pointerId);
+                return;
+            }
             clearHold();
             if((pan&&!pan.shared)||blocked||reorder){
                 intercept(event);if(frame!==null){cancelAnimationFrame(frame);paint()}
@@ -100,11 +118,15 @@
             if(pan?.shared&&!pan.moved&&!reorder&&!blocked&&event.type==='pointerup'){
                 const target=pan.target;queueMicrotask(()=>onTap(target,event));
             }
-            pointers.delete(event.pointerId);pan=null;pinch=null;if(!pointers.size)blocked=false;
+            pointers.delete(event.pointerId);pan=null;pinch=null;blocked=pointers.size>0;
             if(scroller.hasPointerCapture(event.pointerId))scroller.releasePointerCapture(event.pointerId);
         };
         scroller.addEventListener('pointerup',finish,true);scroller.addEventListener('pointercancel',finish,true);
         scroller.addEventListener('lostpointercapture',finish,true);
+        // Safari can also emit native viewport gesture events over the timeline.
+        for(const type of ['gesturestart','gesturechange']){
+            scroller.addEventListener(type,event=>{if(isMobile())event.preventDefault()},{passive:false});
+        }
         scroller.addEventListener('contextmenu',event=>{
             if(isMobile()&&(event.target.closest('[data-clip-key]')||(pan&&canHold?.(pan.target))))event.preventDefault();
         });

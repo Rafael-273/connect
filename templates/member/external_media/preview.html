@@ -448,7 +448,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 
 {% block media_content %}
 <script src="{% static 'external_media_multicam.js' %}"></script>
-<script src="{% static 'external_media_editor_mobile.js' %}?v=20261119-timeline-gestures"></script>
+<script src="{% static 'external_media_editor_mobile.js' %}?v=20261120-pinch-threshold"></script>
 <script src="{% static 'external_media_transitions.js' %}"></script>
 {{ timeline|json_script:"preview-timeline" }}
 {{ music_tracks|json_script:"music-tracks" }}
@@ -623,7 +623,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 <script src="{% static 'external_media_music_transitions.js' %}"></script>
 <script src="{% static 'external_media_preview_audio.js' %}"></script>
 <script src="{% static 'external_media_cached_media.js' %}"></script>
-<script src="{% static 'external_media_preview_source.js' %}?v=20261118-2"></script>
+<script src="{% static 'external_media_preview_source.js' %}?v=20261120-ios-preview"></script>
 <script src="{% static 'external_media_preview_metrics.js' %}"></script>
 <script src="{% static 'external_media_preview_framing.js' %}"></script>
 <script src="{% static 'external_media_caption_selection.js' %}"></script>
@@ -639,6 +639,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const list = document.getElementById('review-list'), play = document.getElementById('preview-play');
     const mobileEditorQuery=window.matchMedia('(max-width:760px)');
     const isMobileEditor=()=>mobileEditorQuery.matches;
+    const isIOSPreview=/iPhone|iPad|iPod/.test(navigator.userAgent)
+        || (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
     const reviewPanel = document.getElementById('review-panel');
     const moreActionsButton=document.getElementById('editor-more-actions'),moreActionsMenu=document.getElementById('editor-more-menu');
     function setMoreActions(open){
@@ -891,7 +893,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         image.onload=()=>finish(true);image.onerror=()=>finish(false);image.src=task.source;
     }
     function processFilmstripQueue(){
-        if(filmstripBusy||!filmstripQueue.length)return;
+        if(filmstripBusy||!filmstripQueue.length||(isIOSPreview&&loading))return;
         filmstripBusy=true;const task=filmstripQueue.shift();
         if(task.image){processPersistentFilmstrip(task);return}
         const worker=document.createElement('video');worker.muted=true;worker.playsInline=true;worker.preload='metadata';
@@ -987,10 +989,17 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         }
         lastPreviewFrame={at,time:presentedTime};
     }
-    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{soundtrackClock.setLoading(value);if(loading===value)return;loading=value;if(!value)requestPreviewRender()},onVideoChange:(next,previous,options)=>{stopPlaybackClock();video=next;soundtrackClock.setVideo(next,options);multicamEditor?.setMainVideo(next);bindVideoEvents(next)},onTransition:reportPreviewTransition,onError:failure=>{document.getElementById('preview-load-error').classList.toggle('hidden',!failure);document.getElementById('preview-load-error-message').textContent=failure?(failure.reason==='timeout'?'O carregamento está demorando. Tente novamente.':'Não foi possível carregar este trecho do vídeo.'):''},frameTolerance:1/Number(timeline.sequence.fps||30),progressTimeoutMs:12000,maxLoadMs:60000,maxTimeoutRetries:1,fallbackPreloadOnTimeout:true,play:requestVideoPlay});
-    document.getElementById('preview-load-retry').onclick=()=>sourcePlayer.retry({autoplay:true});
+    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{soundtrackClock.setLoading(value);if(loading===value)return;loading=value;if(!value){requestPreviewRender();if(isIOSPreview){processFilmstripQueue();requestWaveformPaint()}}},onVideoChange:(next,previous,options)=>{stopPlaybackClock();video=next;soundtrackClock.setVideo(next,options);multicamEditor?.setMainVideo(next);bindVideoEvents(next)},onTransition:reportPreviewTransition,onError:failure=>{document.getElementById('preview-load-error').classList.toggle('hidden',!failure);document.getElementById('preview-load-error-message').textContent=failure?(failure.reason==='timeout'?'O carregamento está demorando. Tente novamente.':'Não foi possível carregar este trecho do vídeo.'):''},frameTolerance:1/Number(timeline.sequence.fps||30),progressTimeoutMs:12000,maxLoadMs:60000,maxTimeoutRetries:1,fallbackPreloadOnTimeout:true,play:requestVideoPlay});
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)sourcePlayer.resumeLoad()});
+    window.addEventListener('pageshow',event=>{if(event.persisted)sourcePlayer.resumeLoad()});
+    function playPendingPreview(){
+        // On iOS the play request must happen inside the tap, even if the first frame is still loading.
+        if(isIOSPreview&&sourcePlayer.pendingFrameCheck&&sourcePlayer.target?.autoplay&&video.paused)requestVideoPlay();
+    }
+    function retryPreview(){sourcePlayer.retry({autoplay:true});playPendingPreview()}
+    document.getElementById('preview-load-retry').onclick=retryPreview;
     function warmNextClip(clip){
-        if(useReviewMaster())return;
+        if(!clip||useReviewMaster()||(isIOSPreview&&(loading||video.paused)))return;
         let previous=clip,next=nextClipAfter(previous);
         // Blade points within continuous media need no decoder handoff. Use
         // their playback time to prepare the next actual discontinuity.
@@ -1402,6 +1411,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             if(next)seek(next.timeline_in_ms,true);else musicController.pause();
         });
         playerVideo.addEventListener('play',()=>{if(playerVideo!==video)return;play.innerHTML='<i class="fas fa-pause"></i>';play.setAttribute('aria-label','Pausar');configureMusic();syncMusicPosition();updateMusicVolume();startPlaybackClock(playerVideo)});
+        playerVideo.addEventListener('playing',()=>{if(isIOSPreview&&playerVideo===video)warmNextClip(activeClip)});
         playerVideo.addEventListener('pause',()=>{if(playerVideo===video){play.innerHTML='<i class="fas fa-play"></i>';play.setAttribute('aria-label','Reproduzir');stopPlaybackClock();musicController.pause()}});
     }
     // Bind the initial decoder through the same guarded path used after a
@@ -1410,14 +1420,14 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     // after the next take had already become active.
     bindVideoEvents(video);
     function togglePreviewPlayback(){
-        if(sourcePlayer.failure){sourcePlayer.retry({autoplay:true});return}
+        if(sourcePlayer.failure){retryPreview();return}
         if(sourcePlayer.target?.autoplay&&(loading||sourcePlayer.waitingForPreload)){
             sourcePlayer.pause();cancelPlaybackBoundary();musicController.pause();
             play.innerHTML='<i class="fas fa-play"></i>';play.setAttribute('aria-label','Reproduzir');
         }else if(video.paused){
             const clip=clipAt(globalMs),source=useReviewMaster()?timeline.review_master_url:sourceFor(clip);
             const local=useReviewMaster()?editedToPlayback(globalMs)/1000:(playbackIn(clip)+globalMs-Number(clip?.timeline_in_ms||0))/1000;
-            if(loading||source!==video.dataset.source||Math.abs(video.currentTime-local)>frameDurationMs()/1000)seek(globalMs,true);
+            if(loading||source!==video.dataset.source||Math.abs(video.currentTime-local)>frameDurationMs()/1000){seek(globalMs,true);playPendingPreview()}
             else requestVideoPlay();
         }else sourcePlayer.pause();
     }
@@ -1812,6 +1822,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             const bounds=clip.getBoundingClientRect(),view=window.ConnectEditorView.waveformWindow(bounds,viewport);
             if(!view)continue;
             if(!item.audio){
+                if(isIOSPreview&&loading)continue;
                 if(!item.pending){item.pending=true;item.attempts++;loadMusicWaveform(item.source).then(audio=>{item.pending=false;if(clip._waveform!==item||!clip.isConnected)return;item.audio=audio;item.peaks=waveformRange(audio,item.start,item.end,720,item.loop);clip.classList.add('has-real-waveform');requestWaveformPaint()}).catch(()=>{if(clip._waveform!==item||!clip.isConnected)return;if(item.attempts<2){setTimeout(()=>{if(clip._waveform!==item||!clip.isConnected)return;item.pending=false;requestWaveformPaint()},1000)}else{item.pending=false;item.failed=true;clip.classList.remove('has-real-waveform')}})}
                 continue;
             }
@@ -2821,7 +2832,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         },
     });
     editorScroller.addEventListener('scroll',()=>requestWaveformPaint(),{passive:true});
-    editorScroller.title='Use a roda do mouse ou o trackpad para navegar; arraste em um espaço vazio para selecionar legendas';
+    if(isMobileEditor())editorScroller.removeAttribute('title');
+    else editorScroller.title='Use a roda do mouse ou o trackpad para navegar; arraste em um espaço vazio para selecionar legendas';
     const timelineZoomLimits={min:1,max:16};
     const clampTimelineValue=(value,min,max)=>Math.max(min,Math.min(max,value));
     function timelineViewportWidth(){
@@ -3322,7 +3334,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     historyContainer.setAttribute('aria-label','Histórico de alterações e zoom da timeline');
     historyContainer.prepend(...historyButtons);
     multicamEditor=ConnectMulticam.create({panel:document.getElementById('multicam-panel'),stage:document.querySelector('.preview-stage'),mainVideo:video,getTimeline:()=>timeline,getTime:()=>globalMs,seek,editor:true,newOnly:true,save:async payload=>applyTimeline(await api('{% url "external_media_project_preview_camera" project.public_id %}',payload))});
-    configureMusic();renderEditorTimeline();renderReviewProxyStatus();renameVisualMedia();updateEditControls();seek(globalMs);scheduleRevisionProxyPoll();
+    configureMusic();seek(globalMs);renderEditorTimeline();renderReviewProxyStatus();renameVisualMedia();updateEditControls();scheduleRevisionProxyPoll();
     requestAnimationFrame(()=>{renderList();enhanceReframeClipboard();renderEditorTimeline()});
 })();
 </script>

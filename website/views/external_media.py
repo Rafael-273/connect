@@ -2155,6 +2155,7 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
             project.final_render_outdated = False
             configuration = dict(project.configuration or {})
             configuration.pop('_reopened_for_review', None)
+            configuration.pop('broll_decisions', None)
             project.configuration = configuration
             project.save(update_fields=[
                 'status', 'progress', 'current_step', 'error_message', 'started_at', 'finished_at',

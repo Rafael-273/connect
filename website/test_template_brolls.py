@@ -1,7 +1,7 @@
 import json
 import io
 import tempfile
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.files.storage import FileSystemStorage
@@ -10,7 +10,11 @@ from django.urls import reverse
 from PIL import Image
 
 from website.forms.admin_external_media import AdminMediaTemplateBlockForm
-from website.models.external_media import MediaTemplate, MediaTemplateBlock, MediaTemplateVersion, ProjectBrollAsset, TemplateBrollAsset
+from website.external_media.services import ExternalMediaProjectPipeline
+from website.models.external_media import (
+    ExternalMediaProject, MediaTemplate, MediaTemplateBlock, MediaTemplateVersion,
+    ProjectBlockMedia, ProjectBrollAsset, TemplateBrollAsset,
+)
 from website.models.ministry_membership import MinistryMembership
 from website.test_external_media import ExternalMediaFixtureMixin
 
@@ -103,3 +107,42 @@ class TemplateBrollTests(ExternalMediaFixtureMixin, TestCase):
         form = AdminMediaTemplateBlockForm(data, instance=self.block)
         self.assertFalse(form.is_valid())
         self.assertIn('Selecione novamente', str(form.errors['brolls_raw']))
+
+    def test_direct_render_receives_brolls_in_their_blocks_without_transcription(self):
+        self.version.interactive_preview_enabled = False
+        self.version.subtitles_enabled = False
+        self.version.translated_subtitles_enabled = False
+        self.version.save(update_fields=['interactive_preview_enabled', 'subtitles_enabled', 'translated_subtitles_enabled'])
+        other = MediaTemplateBlock.objects.create(version=self.version, key='final', name='Final', order=2)
+        job = self.make_job()
+        project = ExternalMediaProject.objects.create(
+            name='Projeto sem revisão', template_version=self.version, created_by=self.member, render_job=job,
+        )
+        ranges = []
+        for index, block in enumerate([self.block, other]):
+            ProjectBlockMedia.objects.create(
+                project=project, block=block, duration_ms=5000, original_filename='take.mp4',
+                file=SimpleUploadedFile('take.mp4', b'video'),
+            )
+            ProjectBrollAsset.objects.create(
+                project=project, block=block, media_type=ProjectBrollAsset.MediaType.IMAGE,
+                original_filename='foto.png', file=SimpleUploadedFile('foto.png', b'image'),
+            )
+            ranges.append({'block_key': block.key, 'start_ms': index * 5000, 'end_ms': (index + 1) * 5000})
+
+        pipeline = ExternalMediaProjectPipeline()
+        pipeline.assembly.assemble = Mock(return_value=False)
+        pipeline.assembly._duration_ms = Mock(return_value=10000)
+        pipeline.assembly.last_block_ranges = ranges
+        pipeline._materialize = Mock(return_value=([], None, None))
+        pipeline._create_render_job = Mock(return_value=job)
+        pipeline.render = Mock()
+        with patch('website.external_media.broll.get_ai_service') as ai:
+            pipeline.run(project.pk)
+        ai.assert_not_called()
+        pipeline.render.assert_called_once_with(project.pk)
+        project.refresh_from_db()
+        self.assertEqual([
+            (item['block_key'], item['start_ms'], item['end_ms'])
+            for item in project.current_timeline_revision.timeline['brolls']
+        ], [('convite', 0, 3000), ('final', 5000, 8000)])

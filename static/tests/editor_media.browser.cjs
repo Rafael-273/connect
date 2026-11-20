@@ -6,7 +6,9 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-c
  const address=new URL(url); const seed={url:address.pathname,cookie:session};
  const browser=await chromium.launch({headless:true,executablePath:process.env.FILADELFIA_CHROME_PATH||undefined,args:['--autoplay-policy=no-user-gesture-required']});
  try{
- const context=await browser.newContext(process.env.FILADELFIA_QA_MOBILE?{viewport:{width:390,height:844},isMobile:true,hasTouch:true}:{viewport:{width:1600,height:1000}});await context.addCookies([{name:'sessionid',value:seed.cookie,domain:address.hostname,path:'/'}]);
+ const mobile=Boolean(process.env.FILADELFIA_QA_MOBILE);
+ const device=mobile?{viewport:{width:390,height:844},isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'}:{viewport:{width:1600,height:1000}};
+ const context=await browser.newContext({...device,serviceWorkers:'block'});await context.addCookies([{name:'sessionid',value:seed.cookie,domain:address.hostname,path:'/'}]);
  const recorder=await context.newPage();await recorder.goto(url);
  let bytes;
  {
@@ -20,13 +22,19 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-c
   });bytes=Buffer.from(encoded,'base64');
  }
  await recorder.close();const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
- await page.addInitScript(()=>{window.qaAudio=[];const NativeAudio=window.Audio;window.Audio=class extends NativeAudio{constructor(...args){super(...args);window.qaAudio.push(this)}}});
+ await page.addInitScript(()=>{
+  window.qaAudio=[];const NativeAudio=window.Audio;window.Audio=class extends NativeAudio{constructor(...args){super(...args);window.qaAudio.push(this)}};
+  window.qaVideoPlays=[];const nativePlay=HTMLVideoElement.prototype.play;
+  HTMLVideoElement.prototype.play=function(){window.qaVideoPlays.push(this.dataset.source);return nativePlay.call(this)};
+ });
+ let secondRequests=0;
  let releaseVideo;const videoGate=new Promise(resolve=>releaseVideo=resolve);
  let releaseSecond;const secondGate=new Promise(resolve=>releaseSecond=resolve);
  await page.route('**/qa-p1-media.webm*',async route=>{
   // The cached-waveform API returns JSON, independently of the media bytes.
   // Serving WebM here left every canvas at its default 300px allocation.
   if(new URL(route.request().url()).searchParams.has('waveform'))return route.fulfill({json:{schema:'connect.waveform.v1',durationMs:6200,peaks:Array.from({length:720},(_,i)=>.25+.5*Math.abs(Math.sin(i*.17)))}});
+  if(route.request().url().includes('take=2'))secondRequests++;
   if(route.request().url().includes('take='))await videoGate;
   if(route.request().url().includes('take=2'))await secondGate;
   const range=route.request().headers().range;if(range){const match=/bytes=(\d+)-(\d*)/.exec(range),start=Number(match[1]),end=match[2]?Math.min(bytes.length-1,Number(match[2])):bytes.length-1;return route.fulfill({status:206,headers:{'Content-Type':'video/webm','Accept-Ranges':'bytes','Content-Range':`bytes ${start}-${end}/${bytes.length}`},body:bytes.subarray(start,end+1)})}
@@ -44,6 +52,10 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-c
  await page.waitForFunction(()=>window.qaAudio.some(audio=>audio.dataset.source?.includes('music=1')&&audio.readyState>=2),null,{timeout:5000}).catch(async error=>{throw new Error(error.message+JSON.stringify({errors,audio:await page.evaluate(()=>window.qaAudio.map(audio=>({src:audio.src,dataset:audio.dataset,ready:audio.readyState,error:audio.error?.message})))}))});
  await page.locator('#preview-play').click();await page.waitForTimeout(250);
  assert.equal(await page.evaluate(()=>window.qaAudio.find(audio=>audio.dataset.source?.includes('music=1')).paused),true,'music must wait while video bytes are blocked');
+ if(mobile){
+  assert.equal(secondRequests,0,'the next take should not compete with iPhone startup');
+  assert.equal(await page.evaluate(()=>window.qaVideoPlays.some(source=>source?.includes('take=1'))),true,'the iPhone tap must request playback before media is ready');
+ }
  releaseVideo();await page.waitForFunction(()=>window.qaAudio.some(audio=>audio.dataset.source?.includes('music=1')&&!audio.paused));
  await page.evaluate(()=>{const video=[...document.querySelectorAll('video.preview-source-buffer')].find(video=>!video.paused&&getComputedStyle(video).opacity==='1');window.qaActiveVideo=video;video.dispatchEvent(new Event('waiting'))});
  await page.waitForTimeout(200);assert.equal(await page.evaluate(()=>window.qaAudio.find(audio=>audio.dataset.source?.includes('music=1')).paused),true,'waiting must pause soundtrack even if paused property remains false');

@@ -2945,13 +2945,16 @@ class ExternalMediaProjectPipeline:
                     MulticamService.prepare(project, self.storage, self.assembly.runner, workspace.path)
                 MulticamService.review_candidates(project)
                 self._persist_canonical_state(project, job.pk)
-            BrollTimelineService.ensure_auto_decisions(project)
+            broll_decisions = BrollTimelineService.ensure_auto_decisions(project)
             if MediaTemplatePlugin.Code.BROLL in plugin_codes:
                 self._step(project, MediaTemplatePlugin.Code.BROLL, ProjectPipelineStep.Status.FINISHED)
+            from .preview import ProjectProxyService, TimelineRevisionService
+
             if not version.interactive_preview_enabled and not (project.configuration or {}).get('multicam_alignments'):
+                if broll_decisions:
+                    TimelineRevisionService.ensure_initial(project)
                 self.render(project_id)
                 return
-            from .preview import ProjectProxyService, TimelineRevisionService
 
             self._update(project, ExternalMediaProject.Status.PROCESSING, 64, 'Preparando a revisão')
             ProjectProxyService.prepare(project)

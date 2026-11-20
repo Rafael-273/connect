@@ -106,7 +106,9 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             this.watchLoad(this.preloader, () => {
                 if (!this.fallbackPreloadOnTimeout) return this.failLoad(source, 'timeout');
                 this.onTransition({phase:'recovering', source, time, reason:'preload-timeout'});
-                this.warmController?.abort();this.preloader.pause();this.preloader.dataset.source='';this.preloadedSource='';
+                this.warmController?.abort();this.preloader.pause();
+                this.preloader.removeAttribute('src');this.preloader.load();
+                this.preloader.dataset.source='';this.preloadedSource='';
                 this.seek(source, time, {autoplay:this.target?.autoplay, freeze, recovery:true});
             });
             // Readiness may have changed while the listeners were installed.
@@ -167,7 +169,6 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             // The metadata callback below reads this.target, never its old time.
             if (this.video.readyState >= HTMLMediaElement.HAVE_METADATA) {
                 this.video.currentTime = time;
-                if(this.pendingFrameCheck)this.video.addEventListener('seeked',this.pendingFrameCheck,{once:true,signal:this.loadController.signal});
             }
             if (autoplay && this.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) this.play();
             if (this.pendingFrameCheck) this.watchLoad(this.video, () => this.handleLoadTimeout(source, freeze));
@@ -177,17 +178,17 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         const loadId = ++this.loadId;
         this.loadController?.abort();
         this.loadController = new AbortController();
-        const options = {once:true, signal:this.loadController.signal};
+        const options = {signal:this.loadController.signal};
         const decoder = this.video;
         this.onTransition({phase:'cold', source, time});
         if (freeze) this.holdFrame();
         this.onLoading(true);
         this.video.dataset.source = source;
-        this.video.src = source;
-        let completed = false;
+        let completed = false, paintPending = false;
         const complete = () => {
+            paintPending = false;
             if (loadId !== this.loadId || completed) return;
-            if (decoder.seeking || Math.abs(decoder.currentTime-this.target.time) > .06) return;
+            if (!hasTargetFrame()) return;
             completed = true;
             this.stopLoadWatch();
             this.cancelFrameCallback();
@@ -195,15 +196,23 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             this.loadController.abort();
             this.onLoading(false);
             if (freeze) this.releaseFrame();
-            if (this.target.autoplay) this.play();
+            if (this.target.autoplay && decoder.paused) this.play();
             this.flushWarm();
         };
         const fail = () => {
             if (loadId !== this.loadId) return;
             this.failLoad(source, 'media');
         };
+        const hasTargetFrame = () => !decoder.seeking
+            && decoder.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+            && Math.abs(decoder.currentTime-this.target.time) <= .06;
         const completeWhenFramePaints = () => {
-            if (loadId !== this.loadId || completed) return;
+            if (loadId !== this.loadId || completed || paintPending || !hasTargetFrame()) return;
+            if (!decoder.paused && this.target.autoplay) {
+                complete();
+                return;
+            }
+            paintPending = true;
             // `canplay` is not sufficient on all browsers: it may precede the
             // first composited frame after a source switch. Keep the outgoing
             // frame frozen until the incoming image is actually decoded.
@@ -221,24 +230,18 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
                 requestAnimationFrame(complete);
             }
         };
-        const waitForTargetFrame = () => {
-            if (loadId !== this.loadId) return;
-            if (this.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-                completeWhenFramePaints();
-            } else {
-                this.video.addEventListener('loadeddata', completeWhenFramePaints, options);
-            }
-        };
-        this.pendingFrameCheck=waitForTargetFrame;
-        this.video.addEventListener('loadedmetadata', () => {
+        this.pendingFrameCheck=completeWhenFramePaints;
+        decoder.addEventListener('loadedmetadata', () => {
             if (loadId !== this.loadId) return;
             if (Math.abs(decoder.currentTime-this.target.time) > .001) decoder.currentTime = this.target.time;
-            this.video.addEventListener('seeked', waitForTargetFrame, options);
-            // Safari may omit seeked when the requested frame is already current.
-            this.video.addEventListener('loadeddata', waitForTargetFrame, options);
-            if (!decoder.seeking && Math.abs(decoder.currentTime-this.target.time) <= .001) waitForTargetFrame();
-        }, options);
-        this.video.addEventListener('error', fail, options);
+            completeWhenFramePaints();
+        }, {...options, once:true});
+        // WebKit can reach the requested frame without emitting loadeddata or seeked.
+        for (const event of ['seeked', 'loadeddata', 'canplay', 'playing', 'progress']) {
+            decoder.addEventListener(event, completeWhenFramePaints, options);
+        }
+        decoder.addEventListener('error', fail, {...options, once:true});
+        decoder.src = source;
         this.watchLoad(decoder, () => this.handleLoadTimeout(source, freeze));
     }
 
@@ -268,6 +271,13 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         const check = () => {
             if (this.loadWatch !== watch) return;
             const at = this.now();
+            if (document.hidden) {
+                watch.started = watch.progressed = at;
+                watch.timer = this.setTimer(check, 250);
+                return;
+            }
+            if (decoder === this.video) this.pendingFrameCheck?.();
+            if (this.loadWatch !== watch) return;
             // Events such as progress/canplay can repeat without useful data.
             const ranges=decoder.buffered;let buffered=0;
             for(let i=0;i<(ranges?.length||0);i++)buffered+=Math.max(0,ranges.end(i)-ranges.start(i));
@@ -281,6 +291,13 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             watch.timer = this.setTimer(check, Math.min(250, this.progressTimeoutMs));
         };
         check();
+    }
+
+    resumeLoad() {
+        if (!this.loadWatch) return;
+        this.loadWatch.started = this.loadWatch.progressed = this.now();
+        this.pendingFrameCheck?.();
+        this.resumePreload?.();
     }
 
     failLoad(source, reason) {

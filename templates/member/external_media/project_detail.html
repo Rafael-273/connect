@@ -1888,7 +1888,7 @@
                         headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest'},
                         body: JSON.stringify({
                             filename: file.name, size: file.size, content_type: file.type,
-                            description: form.querySelector('[name=description]').value,
+                            description: formData.get('description') || '',
                             duration_seconds: form.querySelector('[name=duration_seconds]').value,
                         }),
                     });

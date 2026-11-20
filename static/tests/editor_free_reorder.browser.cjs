@@ -79,6 +79,8 @@ const assert = require('node:assert/strict');
         let [, y] = await startHold();
         assert.equal(await page.locator('.editor-compact-reorder__guide').isVisible(), true);
         assert.equal(await page.locator('.editor-compact-reorder__ghost').isVisible(), true);
+        assert.equal(await page.evaluate(() => window.getSelection().toString()), '');
+        assert.equal(await page.locator('.editor-compact-reorder__ghost span').evaluate(node => getComputedStyle(node).userSelect), 'none');
         assert.equal(await page.locator('.editor-compact-reorder__take.is-selected').count(), 1);
         await touch('touchMove', [[right, y]]);
         await page.waitForFunction(() => document.querySelector('.editor-compact-reorder__scroll').scrollLeft > 100);

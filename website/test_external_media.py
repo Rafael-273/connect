@@ -7355,24 +7355,23 @@ class BrollUnitTests(SimpleTestCase):
         self.assertEqual(PreviewCompositionService._source_to_timeline(5000, cuts), 4000)
         self.assertEqual(PreviewCompositionService._source_to_timeline(8000, cuts), 6500)
 
-    def test_fallback_uses_semantic_cue_and_qr_as_overlay(self):
+    def test_semantic_candidate_can_keep_qr_as_overlay(self):
         asset = SimpleNamespace(
             public_id='00000000-0000-0000-0000-000000000010',
-            media_type='IMAGE', description='QR inscrição conferência',
-            original_filename='inscricao.png', duration_ms=4000,
-            defaults={}, custom_block_id=None,
+            media_type='IMAGE', description='QR inscrição conferência', duration_ms=4000,
+            defaults={}, custom_block_id=None, block_id=1, trim_start_ms=0, trim_end_ms=None,
             block=SimpleNamespace(key='cta'),
         )
-        decision = BrollTimelineService._fallback_decision(
-            asset, {'cta': (10000, 30000)}, [
-                {'start_ms': 11000, 'end_ms': 13000, 'text': 'Bem-vindos ao evento'},
-                {'start_ms': 21000, 'end_ms': 23000, 'text': 'Faça sua inscrição na conferência'},
-            ], {**BrollTimelineService.DEFAULTS}, 0,
+        ranges = {'cta': (10000, 30000)}
+        decisions = BrollTimelineService._select_candidates(
+            [asset], [{'asset_id': asset.public_id, 'allowed_range_ms': ranges['cta']}],
+            [{'start_ms': 21000, 'end_ms': 23000, 'text': 'Faça sua inscrição na conferência'}],
+            {'placements': [{'asset_id': asset.public_id, 'start_ms': 21000, 'end_ms': 25000,
+                             'display_mode': 'OVERLAY', 'confidence': .9}]},
+            ranges, BrollTimelineService.DEFAULTS, [],
         )
-        self.assertEqual(decision['display_mode'], 'OVERLAY')
-        self.assertEqual(decision['start_ms'], 21000)
-        self.assertLessEqual(decision['end_ms'], 30000)
-        self.assertEqual(decision['type'], 'BROLL')
+        self.assertEqual([(item['display_mode'], item['start_ms'], item['end_ms']) for item in decisions],
+                         [('OVERLAY', 21000, 25000)])
 
     def test_renderer_builds_approved_image_overlay_command(self):
         asset = SimpleNamespace(
