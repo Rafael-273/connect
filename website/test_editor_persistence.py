@@ -2,6 +2,7 @@ import json
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import close_old_connections, connection
@@ -56,6 +57,39 @@ class EditorFixture(ExternalMediaFixtureMixin):
 
 
 class EditorPersistenceTests(EditorFixture, TestCase):
+    def test_finished_template_project_can_render_its_approved_revision_again(self):
+        revision = TimelineRevisionService.approve(self.project, self.member)
+        self.project.refresh_from_db()
+        self.project.status = self.project.Status.FINISHED
+        self.project.final_render_outdated = False
+        self.project.save(update_fields=['status', 'final_render_outdated'])
+        with patch('website.views.external_media.ExternalMediaProjectRenderView._enqueue') as enqueue:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    reverse('external_media_project_preview_approve', args=[self.project.public_id]),
+                    '{}', content_type='application/json',
+                    HTTP_X_EDITOR_VERSION=str(self.project.editorial_version),
+                    HTTP_X_EDITOR_OPERATION=str(uuid.uuid4()),
+                )
+        self.assertEqual(response.status_code, 200)
+        enqueue.assert_called_once_with(self.project.pk)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.status, self.project.Status.PENDING)
+        self.assertEqual(self.project.approved_timeline_revision_id, revision.pk)
+
+    def test_rejected_cut_returns_the_last_saved_timeline(self):
+        revision = self.project.current_timeline_revision
+        response = self.client.post(
+            reverse('external_media_project_preview_cut_create', args=[self.project.public_id]),
+            json.dumps({'start_ms': 1200, 'end_ms': 1201}), content_type='application/json',
+            HTTP_X_EDITOR_VERSION=str(self.base), HTTP_X_EDITOR_OPERATION=str(uuid.uuid4()),
+        )
+        self.assertEqual(response.status_code, 400)
+        result = response.json()
+        self.assertEqual(result['revision'], revision.revision)
+        self.assertEqual(result['editorial_version'], self.base)
+        self.assertEqual(result['timeline']['clips'], revision.timeline['clips'])
+
     def test_legacy_history_response_restores_font_metrics_from_render_job(self):
         from website.views.external_media import preview_revision_response
 

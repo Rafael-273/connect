@@ -10,6 +10,7 @@ assert.ok(start>=0&&end>start);
  try{
   const page=await browser.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.setContent('<div id="broll"></div><div id="stage"></div><details id="panel"></details><p id="error" hidden></p>');
+  await page.addStyleTag({content:template.match(/\.preview-broll-item\.is-fullscreen\.is-buffering\{[^}]+\}/)[0]});
   for(const name of ['external_media_editor_view.js','external_media_preview_source.js','external_media_preview_metrics.js','external_media_multicam.js'])await page.addScriptTag({path:path.join(root,'static',name)});
   const encoded=await page.evaluate(async()=>{
    const canvas=document.createElement('canvas');canvas.width=160;canvas.height=90;
@@ -23,11 +24,11 @@ assert.ok(start>=0&&end>start);
   await page.addScriptTag({content:`
    const brollLayer=document.getElementById('broll'),video={paused:true,playbackRate:1};
    let globalMs=0,baked=false,items=[],indexes=null,renderQueued=false;
-   const asset=()=>({url:mediaURL}),reviewRenders=()=>baked;
-   function indexedPreview(){return indexes||=( {brolls:new ConnectEditorView.IntervalIndex(items),brollResources:new ConnectEditorView.IntervalIndex(items.filter(item=>item.enabled!==false&&item.media_type==='VIDEO'),item=>item.start_ms-3000,item=>item.end_ms+1000)} )}
+   const brollSources={},asset=id=>({url:brollSources[id]||mediaURL}),reviewRenders=()=>baked;
+   function indexedPreview(){return indexes||=( {brolls:new ConnectEditorView.IntervalIndex(items),brollResources:new ConnectEditorView.IntervalIndex(items.filter(item=>item.enabled!==false),item=>item.start_ms-5000,item=>item.end_ms+1000)} )}
    function requestPreviewRender(){if(renderQueued)return;renderQueued=true;requestAnimationFrame(()=>{renderQueued=false;renderBrolls()})}
    ${template.slice(start,end)}
-   window.qa={setItems:next=>{items=next;indexes=null},render:time=>{globalMs=time;renderBrolls()},bake:()=>{baked=true;renderBrolls()},unbake:()=>{baked=false},stats:()=>{const nodes=[...brollLayer.querySelectorAll('video')];return {total:nodes.length,loaded:nodes.filter(node=>node.hasAttribute('src')).length,visible:nodes.filter(node=>!node.hidden).length}}};
+   window.qa={setItems:next=>{items=next;indexes=null},setSource:(id,url)=>{brollSources[id]=url},setPlaying:value=>{video.paused=!value},render:time=>{globalMs=time;renderBrolls()},bake:()=>{baked=true;renderBrolls()},unbake:()=>{baked=false},stats:()=>{const nodes=[...brollLayer.querySelectorAll('video')];return {total:nodes.length,loaded:nodes.filter(node=>node.hasAttribute('src')).length,visible:nodes.filter(node=>!node.hidden).length}}};
   `});
   for(const cuts of [50,100]){
    await page.evaluate(cuts=>qa.setItems(Array.from({length:cuts},(_,i)=>({id:'clip-'+i,asset_id:i,media_type:'VIDEO',start_ms:i*2000,end_ms:i*2000+1000}))),cuts);
@@ -50,6 +51,40 @@ assert.ok(start>=0&&end>start);
   assert.equal(await page.evaluate(()=>replaced.paused&&!replaced.hasAttribute('src')&&document.querySelector('#broll img')!==null),true);
   await page.evaluate(()=>{qa.setItems([]);qa.render(0)});
   console.log('PASS simultaneous layers, paused source offset, baked cleanup and media-type replacement');
+  await page.evaluate(()=>{
+   qa.setItems([{id:'warm',asset_id:0,media_type:'VIDEO',start_ms:4000,end_ms:4400,source_in_ms:500}]);
+   qa.render(0);
+  });
+  await page.waitForFunction(()=>{
+   const node=document.querySelector('[data-broll-id="warm"]');
+   return node.hidden&&node.readyState>=2&&!node.seeking&&Math.abs(node.currentTime-.5)<=1/30;
+  });
+  assert.equal(await page.evaluate(()=>{
+   const warmed=document.querySelector('[data-broll-id="warm"]');
+   qa.setPlaying(true);
+   qa.render(4000);
+   return document.querySelector('[data-broll-id="warm"]')===warmed
+    &&!warmed.hidden&&!warmed.paused&&!warmed.classList.contains('is-buffering');
+  }),true);
+  let releaseBroll;const brollGate=new Promise(resolve=>releaseBroll=resolve);
+  await page.route('http://preview.test/broll.webm',async route=>{
+   await brollGate;await route.fulfill({contentType:'video/webm',body:Buffer.from(encoded,'base64')});
+  });
+  assert.deepEqual(await page.evaluate(()=>{
+   qa.setPlaying(false);
+   qa.setSource('broll-asset-1','http://preview.test/broll.webm');
+   qa.setItems([
+    {id:'full',asset_id:1,media_type:'VIDEO',start_ms:5000,end_ms:5500},
+    {id:'overlay',asset_id:1,media_type:'VIDEO',start_ms:5000,end_ms:5500,display_mode:'OVERLAY'},
+   ]);
+   qa.render(5000);
+   const full=document.querySelector('[data-broll-id="full"]'),overlay=document.querySelector('[data-broll-id="overlay"]');
+   return {covered:!full.hidden&&getComputedStyle(full).backgroundColor==='rgb(8, 9, 13)',overlayHidden:overlay.hidden};
+  }),{covered:true,overlayHidden:true});
+  releaseBroll();
+  await page.waitForFunction(()=>[...document.querySelectorAll('#broll video')].every(node=>!node.hidden&&!node.classList.contains('is-buffering')));
+  await page.evaluate(()=>{qa.setItems([]);qa.render(0)});
+  console.log('PASS prewarmed source offset, full-frame buffering cover and overlay readiness');
   await page.evaluate(()=>{
    window.cameraTime=0;const main=document.createElement('video');
    window.cameraTimeline={sequence:{fps:30},cameras:[{id:'side',url:mediaURL}],camera_segments:[{id:'zero',camera_source_id:'side',start_ms:0,end_ms:500,source_in_ms:0,rate:1}],decisions:[]};

@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {rectangle,select}=require('../external_media_caption_selection.js');
+const {rectangle,select}=require('../external_media_timeline_selection.js');
 const items=[
  {id:1,rect:{left:100,top:10,right:180,bottom:40}},
  {id:2,rect:{left:200,top:10,right:280,bottom:40}},

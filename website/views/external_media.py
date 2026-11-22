@@ -89,7 +89,7 @@ from ..external_media.preview import (
     PreviewCompositionService, ProjectProxyService, REVIEW_MASTER_PROXY_ID, TimelineRevisionService,
 )
 from ..external_media.overlays import OverlayAssetRenderer, OverlayTimelineService
-from ..external_media.broll import BrollTimelineService
+from ..external_media.broll import BrollTimelineService, copy_template_brolls
 from ..external_media.render_workflow import enqueue_project as enqueue_render_project, enqueue_video_work
 from ..external_media.services import StorageService
 from ..external_media.subtitle_reviews import SubtitleReviewService
@@ -498,21 +498,8 @@ class ExternalMediaCreateView(ExternalMediaRequiredMixin, ExternalMediaContextMi
         project.save()
         if not project.is_free:
             for block in project.template_version.blocks.prefetch_related('default_brolls'):
-                for source in block.default_brolls.all():
-                    media_type = (ProjectBrollAsset.MediaType.IMAGE
-                                  if Path(source.original_filename).suffix.lower() in IMAGE_EXTENSIONS
-                                  else ProjectBrollAsset.MediaType.VIDEO)
-                    asset = ProjectBrollAsset(
-                        project=project, block=block, media_type=media_type,
-                        original_filename=source.original_filename, description=source.description,
-                        position=source.position + 1,
-                    )
-                    with source.file.open('rb') as content:
-                        asset.file.save(source.original_filename, content, save=False)
-                    asset.file_size = source.file.size
-                    asset.save()
-                    if media_type == ProjectBrollAsset.MediaType.VIDEO:
-                        transaction.on_commit(lambda asset=asset: ExternalMediaProjectBrollUploadView._enqueue_preview(asset))
+                for asset in copy_template_brolls(project, block):
+                    transaction.on_commit(lambda asset=asset: ExternalMediaProjectBrollUploadView._enqueue_preview(asset))
         if project.is_free:
             TimelineRevisionService.ensure_initial(project, self.member)
             return redirect('external_media_project_preview', public_id=project.public_id)
@@ -1807,21 +1794,8 @@ class ExternalMediaProjectBrollUploadView(ExternalMediaRequiredMixin, View):
                     return self._error_response(request, project, 'Volte aos blocos antes de importar os elementos.', status=409)
                 if project.broll_assets.filter(block=block).exists():
                     return self._error_response(request, project, 'Este bloco já possui elementos. A importação está disponível para blocos sem elementos.')
-                for source in block.default_brolls.all():
-                    media_type = (ProjectBrollAsset.MediaType.IMAGE
-                                  if Path(source.original_filename).suffix.lower() in IMAGE_EXTENSIONS
-                                  else ProjectBrollAsset.MediaType.VIDEO)
-                    asset = ProjectBrollAsset(
-                        project=project, block=block, media_type=media_type,
-                        original_filename=source.original_filename, description=source.description,
-                        position=source.position + 1,
-                    )
-                    with source.file.open('rb') as content:
-                        asset.file.save(source.original_filename, content, save=False)
-                    asset.file_size = source.file.size
-                    asset.save()
-                    if media_type == ProjectBrollAsset.MediaType.VIDEO:
-                        transaction.on_commit(lambda asset=asset: self._enqueue_preview(asset))
+                for asset in copy_template_brolls(project, block):
+                    transaction.on_commit(lambda asset=asset: self._enqueue_preview(asset))
             messages.success(request, 'B-rolls do modelo adicionados ao bloco.')
             return redirect('external_media_project_detail', public_id=public_id)
         form = ProjectBrollAssetForm(request.POST, request.FILES)
@@ -2358,7 +2332,6 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             timeline['caption_styles'] = PreviewCompositionService.caption_styles(project)
             for cue in timeline.get('captions', []):
                 cue['is_source'] = cue.get('language') == project.editor_settings.original_language
-        job = project.render_job
         has_reframe_override = any(
             item.get('type') == 'reframe'
             and (
@@ -2403,7 +2376,7 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
                     timeline['fidelity'][capability] = 'EXACT'
             if 'TRANSFORMS' in (timeline.get('fidelity') or {}):
                 timeline['fidelity']['TRANSFORMS'] = 'EXACT'
-        elif job and job.original_video and ProjectService.file_exists(job.original_video) and not use_editable_source_proxies:
+        elif not use_editable_source_proxies and ProjectService.file_exists(ProjectProxyService.original_review_master(project)):
             review_proxy = ready_proxies.get(REVIEW_MASTER_PROXY_ID)
             if review_proxy:
                 version = int(review_proxy.update_at.timestamp() * 1000)
@@ -2417,7 +2390,7 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
                 )
             if 'TRANSFORMS' in (timeline.get('fidelity') or {}):
                 timeline['fidelity']['TRANSFORMS'] = 'EXACT'
-        elif use_editable_source_proxies:
+        else:
             timeline['review_master_url'] = None
             timeline['review_proxy_status'] = 'PENDING' if timeline.get('video_reordered') and not (
                 project.is_free or has_reframe_override or any(asset.get('upload_preview') for asset in assets)
@@ -2686,7 +2659,7 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, PreviewMu
         return preview_revision_response(project, self.member, revision, music_name=track.name)
 
 
-def preview_revision_response(project, member, revision, **extra):
+def preview_revision_response(project, member, revision, *, status=200, **extra):
     """Keep preview mutations and history navigation on the same response shape."""
     timeline = preview_timeline_with_music(project, revision.timeline)
     PreviewCompositionService.hydrate_legacy_caption_clock(project, timeline)
@@ -2748,7 +2721,7 @@ def preview_revision_response(project, member, revision, **extra):
         'timeline': timeline,
         'history': TimelineRevisionService.history_state(project, member),
         **extra,
-    })
+    }, status=status)
 
 
 def preview_timeline_with_music(project, timeline):
@@ -2841,6 +2814,11 @@ class ExternalMediaProjectPreviewCutView(ExternalMediaRequiredMixin, PreviewMuta
                 project, self.member, payload.get('start_ms'), payload.get('end_ms'),
             )
         except (TypeError, ValueError) as exc:
+            if project.current_timeline_revision_id:
+                return preview_revision_response(
+                    project, self.member, project.current_timeline_revision,
+                    status=400, error=str(exc), editorial_version=project.editorial_version,
+                )
             return JsonResponse({'error': str(exc)}, status=400)
         return preview_revision_response(project, self.member, revision)
 
@@ -3281,9 +3259,7 @@ class ExternalMediaProjectPreviewApproveView(ExternalMediaRequiredMixin, Preview
             project = get_object_or_404(
                 ExternalMediaProject.objects.select_for_update(), public_id=public_id,
             )
-            if project.status != project.Status.AWAITING_REVIEW and not (
-                project.is_free and project.status == project.Status.FINISHED
-            ):
+            if project.status not in {project.Status.AWAITING_REVIEW, project.Status.FINISHED}:
                 return JsonResponse({'error': 'Este projeto não está aguardando revisão.'}, status=409)
             try:
                 revision = TimelineRevisionService.approve(project, self.member)

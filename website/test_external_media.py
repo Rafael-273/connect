@@ -4162,6 +4162,26 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertIn('concat=n=2:v=1:a=1', ';'.join(filters))
         self.assertEqual(ProjectProxyService._timeline_review_duration_ms(revision), 8000)
 
+    def test_revision_proxy_uses_analysis_offset_and_approved_transform_scope(self):
+        revision = SimpleNamespace(
+            source_manifest={'sources': [{'id': 'first', 'duration_ms': 2000}, {'id': 'second'}]},
+            timeline={'clips': [{
+                'asset_id': 'second', 'source_in_ms': 200, 'source_out_ms': 800,
+                'master_in_ms': 2200, 'master_out_ms': 2800,
+            }]},
+            edit_decision_set={'operations': [{
+                'type': 'reframe', 'source_id': 'second', 'metadata': {
+                    'segment_start_ms': 2400, 'segment_end_ms': 2800, 'manual_transform': {'scale': 1.25},
+                },
+            }]},
+        )
+        filters, count = ProjectProxyService._timeline_review_filters(
+            revision, None, analysis_ranges=[{'label': 'second', 'start_ms': 2100}],
+        )
+        self.assertEqual(count, 2)
+        self.assertIn('trim=start=2.300:end=2.500', filters[0])
+        self.assertIn('trim=start=2.500:end=2.900,crop=', filters[1])
+
     def test_preview_proxy_rejects_delayed_audio_stream(self):
         runner = Mock()
         runner.run.return_value = json.dumps({
@@ -5410,8 +5430,10 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         commands = [call.args[0] for call in runner.run.call_args_list]
         graphs = [command[command.index('-filter_complex') + 1] for command in commands]
         self.assertTrue(all(command.count('-i') <= 3 for command in commands))
-        self.assertEqual(sum(graph.count('atrim=') for graph in graphs), 10)
-        self.assertNotIn('atrim=', graphs[-1])
+        source_trims = re.findall(r'atrim=start=([\d.]+):end=([\d.]+)', ';'.join(graphs[:4]))
+        self.assertEqual(source_trims, [(f'{start / 1000:.3f}', f'{end / 1000:.3f}') for start, end in intervals])
+        batch_trims = re.findall(r'atrim=start=([\d.]+):end=([\d.]+)', graphs[-1])
+        self.assertEqual(batch_trims, [('0.000', '1.800'), ('0.000', '0.200')])
         first_pass_inputs = [command[index + 1] for command in commands[:4]
                              for index, value in enumerate(command) if value == '-i']
         self.assertEqual(first_pass_inputs, [str(path) for path in paths])
@@ -5480,11 +5502,11 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertEqual(len(unique_jobs), 2)
         self.assertEqual(len(outputs), 2)
         self.assertEqual(indexes, [0, 0, 1])
-        self.assertEqual((unique_jobs[0]['trim_start_ms'], unique_jobs[0]['trim_end_ms']), (120, 590))
-        self.assertEqual((unique_jobs[1]['trim_start_ms'], unique_jobs[1]['trim_end_ms']), (40, 100))
+        self.assertEqual((unique_jobs[0]['trim_start_ms'], unique_jobs[0]['trim_end_ms']), (100, 590))
+        self.assertEqual((unique_jobs[1]['trim_start_ms'], unique_jobs[1]['trim_end_ms']), (0, 100))
         self.assertEqual(
             [(item['source_index'], item['start_ms'], item['end_ms']) for item in translated],
-            [(0, 0, 60), (0, 410, 470), (1, 0, 60)],
+            [(0, 20, 80), (0, 430, 490), (1, 40, 100)],
         )
 
     def test_bounded_normalization_shifts_saved_reframe_plan_to_the_new_clock(self):

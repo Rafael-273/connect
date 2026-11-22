@@ -145,9 +145,9 @@ class TemplateBrollTests(ExternalMediaFixtureMixin, TestCase):
                 project=project, block=block, duration_ms=5000, original_filename='take.mp4',
                 file=SimpleUploadedFile('take.mp4', b'video'),
             )
-            ProjectBrollAsset.objects.create(
-                project=project, block=block, media_type=ProjectBrollAsset.MediaType.IMAGE,
-                original_filename='foto.png', file=SimpleUploadedFile('foto.png', b'image'),
+            TemplateBrollAsset.objects.create(
+                block=block, original_filename='foto.png',
+                file=SimpleUploadedFile('foto.png', b'image'),
             )
             ranges.append({'block_key': block.key, 'start_ms': index * 5000, 'end_ms': (index + 1) * 5000})
 
@@ -163,6 +163,7 @@ class TemplateBrollTests(ExternalMediaFixtureMixin, TestCase):
         ai.assert_not_called()
         pipeline.render.assert_called_once_with(project.pk)
         project.refresh_from_db()
+        self.assertEqual(project.broll_assets.count(), 2)
         self.assertEqual([
             (item['block_key'], item['start_ms'], item['end_ms'])
             for item in project.current_timeline_revision.timeline['brolls']

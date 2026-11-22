@@ -395,11 +395,17 @@ class FreeProjectTests(ExternalMediaFixtureMixin, TestCase):
         item = self.upload('silencioso.mp4', video, ready=False)
         create_project_preview.run(item.pk)
         self.insert(item)
+        cut = self.edit('cut_create', {'start_ms': 200, 'end_ms': 500})
+        self.assertEqual(cut.status_code, 200, cut.content)
         with patch('website.views.external_media.ExternalMediaProjectRenderView._enqueue'):
             self.assertEqual(self.edit('approve', {}).status_code, 200)
+        self.project.refresh_from_db()
+        self.project.configuration.pop('proxy_pipeline', None)
+        self.project.save(update_fields=['configuration'])
         ExternalMediaProjectPipeline().render(self.project.pk)
         self.project.refresh_from_db()
         self.assertEqual(self.project.status, self.project.Status.FINISHED)
+        self.assertEqual(self.project.configuration['render_contract']['expected_duration_ms'], 700)
         self.assertTrue(self.project.configuration['quality_report']['metrics']['audio']['silent'])
         self.assertFalse(self.project.render_job.assets.filter(kind=MediaAsset.Kind.SRT).exists())
 

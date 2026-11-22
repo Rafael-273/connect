@@ -3,6 +3,7 @@ import json
 import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -11,7 +12,7 @@ from django.core.files.storage import storages
 from django.test import SimpleTestCase, override_settings
 
 from website.external_media.ffmpeg_runner import FFmpegRunner
-from website.external_media.services import VideoAssemblyService
+from website.external_media.services import AssemblySource, VideoAssemblyService
 from website.external_media.render_cache import RenderCheckpointCache, PREFIX
 from website.external_media.audio_noise import (
     AudioCleanupService, NoiseReductionDecision, ReductionMode, ReductionStrength,
@@ -48,8 +49,8 @@ class RenderPerformanceTests(SimpleTestCase):
                          '-f', 'lavfi', '-i', 'sine=frequency=440:duration=8', '-c:v', 'libx264',
                          '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-shortest', str(self.source)])
 
-    def decode(self, path, audio=False):
-        args = ['-vn', '-f', 'f32le', '-acodec', 'pcm_f32le'] if audio else ['-an', '-f', 'rawvideo', '-pix_fmt', 'rgb24']
+    def decode(self, path, audio=False, pixel_format='rgb24'):
+        args = ['-vn', '-f', 'f32le', '-acodec', 'pcm_f32le'] if audio else ['-an', '-f', 'rawvideo', '-pix_fmt', pixel_format]
         return subprocess.run([settings.FFMPEG_BINARY, '-v', 'error', '-i', str(path), *args, '-'],
                               capture_output=True, check=True).stdout
 
@@ -64,6 +65,47 @@ class RenderPerformanceTests(SimpleTestCase):
         self.assertEqual(len(left), len(right))
         np.testing.assert_allclose(left, right, atol=1e-6)
         self.assertTrue(any('-accurate_seek' in command for command in self.runner.commands))
+
+    @override_settings(EXTERNAL_MEDIA_CONCAT_BATCH_SIZE=3)
+    def test_approved_cuts_keep_preview_audio_samples_with_delayed_source_and_batches(self):
+        self.runner.run([
+            settings.FFMPEG_BINARY, '-y', '-f', 'lavfi', '-i', 'testsrc2=s=160x120:r=25:d=6',
+            '-itsoffset', '0.320', '-f', 'lavfi', '-i',
+            'aevalsrc=0.3*sin(2*PI*(220*t+190*t*t)):s=48000:d=5.68',
+            '-c:v', 'libx264', '-c:a', 'aac', str(self.source),
+        ])
+        service = VideoAssemblyService(runner=self.runner)
+        preview, delivery = self.root / 'preview.mp4', self.root / 'delivery.mp4'
+        service.create_proxy(self.source, preview)
+        intervals = [
+            {'source_index': 0, 'start_ms': start, 'end_ms': start + duration}
+            for start, duration in [(425, 317), (950, 414), (1583, 323), (2217, 416),
+                                    (2808, 422), (3475, 351), (4016, 417), (4780, 391)]
+        ]
+        service.assemble(
+            [AssemblySource(self.source)], delivery, SimpleNamespace(width=160, height=120),
+            self.root, source_intervals=intervals,
+        )
+        preview_audio = np.frombuffer(self.decode(preview, True), '<f4').reshape(-1, 2)[:, 0]
+        rendered_audio = np.frombuffer(self.decode(delivery, True), '<f4').reshape(-1, 2)[:, 0]
+        preview_frames = np.frombuffer(self.decode(preview, pixel_format='gray'), 'u1').reshape(-1, 120, 160)
+        rendered_frames = np.frombuffer(self.decode(delivery, pixel_format='gray'), 'u1').reshape(-1, 120, 160)
+        cursor = 0
+        for interval in intervals:
+            start, end = interval['start_ms'], interval['end_ms']
+            for offset in (25, end - start - 50):
+                source_sample = (start + offset) * 48
+                render_sample = (cursor + offset) * 48
+                expected = preview_audio[source_sample:source_sample + 960]
+                actual = rendered_audio[render_sample:render_sample + 960]
+                self.assertGreater(np.corrcoef(expected, actual)[0, 1], 0.95, (cursor, offset))
+            preview_frame = round((start + 70) * 30 / 1000)
+            rendered_frame = round((cursor + 70) * 30 / 1000)
+            # A millisecond boundary is sampled again when the batches join.
+            candidates = preview_frames[preview_frame - 2:preview_frame + 3].astype('int16')
+            error = np.abs(candidates - rendered_frames[rendered_frame]).mean(axis=(1, 2))
+            self.assertLess(error.min(), 6, cursor)
+            cursor += end - start
 
     def test_normalization_checkpoint_skips_encoding_and_rejects_corruption(self):
         service = VideoAssemblyService(runner=self.runner)

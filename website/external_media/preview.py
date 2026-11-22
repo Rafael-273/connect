@@ -56,6 +56,7 @@ MIN_MANUAL_CUT_MS = 33
 SOURCE_PROXY_GEOMETRY_VERSION = 5
 REVIEW_MASTER_PROXY_ID = '__review-master__'
 TIMELINE_REVIEW_PROXY_PREFIX = '__timeline-review-r'
+TIMELINE_REVIEW_TIMING_VERSION = 2
 TIMELINE_REVIEW_PROXY_LEASE = timedelta(minutes=15)
 
 
@@ -69,7 +70,7 @@ class ProjectProxyService:
             return proxy.proxy_file
         job = project.render_job
         # Delivery replaces this field with the edited assembly. Its clock
-        # cannot be used to seek original source ranges after a reorder.
+        # cannot be used to seek original source ranges after delivery.
         if job and not job.rendered_from_timeline_revision:
             return job.original_video
         return None
@@ -86,6 +87,7 @@ class ProjectProxyService:
             proxy
             and proxy.status == ProjectSourceProxy.Status.READY
             and proxy.proxy_file
+            and metadata.get('timing_version') == TIMELINE_REVIEW_TIMING_VERSION
             and metadata.get('timeline_revision_id') == ((revision.timeline or {}).get('review_video_revision_id') or revision.pk)
         )
 
@@ -320,17 +322,11 @@ class ProjectProxyService:
         assembly = VideoAssemblyService(storage=storage)
         quality = MediaQualityService(assembly.runner)
         try:
-            source_field = job.original_video
-            if (revision.timeline or {}).get('cameras') or (revision.timeline or {}).get('video_reordered'):
-                # Delivery replaces job.original_video with the baked final cut.
-                # The cached initial review master is the immutable, primary-only
-                # clock; using a prior delivery would bake old switches twice
-                # and make removing a camera after completion ineffective.
-                clean_master = cls.original_review_master(project)
-                if clean_master:
-                    source_field = clean_master
-                elif job.rendered_from_timeline_revision:
-                    raise ExternalMediaError('A base original do preview não está disponível. Reprocesse o projeto para revisar a edição.')
+            # Once a delivery replaces the job's video, only the original
+            # review master can be cut again using source coordinates.
+            source_field = cls.original_review_master(project)
+            if not source_field:
+                raise ExternalMediaError('A base original do preview não está disponível. Reprocesse o projeto para revisar a edição.')
             source = storage.input(source_field).get_ffmpeg_input()
             source_width, source_height = assembly._video_dimensions(source)
             # A manual crop uses even rounding. Without restoring every part
@@ -339,6 +335,7 @@ class ProjectProxyService:
             # entire review proxy.
             filters, segment_count = cls._timeline_review_filters(
                 revision, assembly, concat_width=source_width, concat_height=source_height,
+                analysis_ranges=(project.configuration or {}).get('analysis_source_block_ranges'),
             )
             if not segment_count:
                 raise ExternalMediaError('A revisão não possui trechos de vídeo para o preview contínuo.')
@@ -434,6 +431,7 @@ class ProjectProxyService:
                 locked_proxy.metadata = {
                     'kind': 'timeline_review', 'timeline_revision_id': revision.pk,
                     'timeline_revision': revision.revision, 'continuous': True,
+                    'timing_version': TIMELINE_REVIEW_TIMING_VERSION,
                     'temporal_parity': 'verified_audio_timing_duration_and_geometry',
                     'geometry': {'width': proxy_width, 'height': proxy_height},
                     'rendered_layers': rendered_layers,
@@ -464,7 +462,7 @@ class ProjectProxyService:
             raise
 
     @classmethod
-    def _timeline_review_filters(cls, revision, assembly, concat_width=None, concat_height=None):
+    def _timeline_review_filters(cls, revision, assembly, concat_width=None, concat_height=None, analysis_ranges=None):
         manifest = revision.source_manifest or {}
         timeline = revision.timeline or {}
         clip_end_by_source = {}
@@ -474,13 +472,18 @@ class ProjectProxyService:
                 clip_end_by_source.get(source_id, 0), int(clip.get('source_out_ms') or 0),
             )
         source_starts, cursor = {}, 0
+        analysis_starts = {
+            str(item['label']): int(item['start_ms'])
+            for item in analysis_ranges or [] if item.get('label')
+        }
         for source in manifest.get('sources') or []:
             if not (source.get('metadata') or {}).get('render_enabled', True):
                 continue
             trim = source.get('trim') or {}
             start = int(trim.get('start_ms') or 0)
             end = int(trim.get('end_ms') or source.get('duration_ms') or clip_end_by_source.get(str(source.get('id'))) or start)
-            source_starts[str(source.get('id'))] = (cursor, start)
+            source_id = str(source.get('id'))
+            source_starts[source_id] = (analysis_starts.get(source_id, cursor), start)
             cursor += max(1, end - start)
         reframe_operations = [
             item for item in (revision.edit_decision_set.get('operations') or [])
@@ -504,11 +507,12 @@ class ProjectProxyService:
             if source_id not in source_starts:
                 continue
             master_start, trim_start = source_starts[source_id]
-            start = (master_start + int(clip.get('source_in_ms') or 0) - trim_start) / 1000
-            end = (master_start + int(clip.get('source_out_ms') or 0) - trim_start) / 1000
-            if end <= start:
+            source_start = master_start + int(clip.get('source_in_ms') or 0) - trim_start
+            duration = int(clip.get('source_out_ms') or 0) - int(clip.get('source_in_ms') or 0)
+            if duration <= 0:
                 continue
-            clip_start_ms, clip_end_ms = round(start * 1000), round(end * 1000)
+            clip_start_ms = int(clip.get('master_in_ms', source_start))
+            clip_end_ms = clip_start_ms + duration
             scoped = sorted(
                 (item for item in reframe_operations if (
                     str(item.get('source_id')) == source_id
@@ -569,8 +573,12 @@ class ProjectProxyService:
                     f',scale={int(concat_width)}:{int(concat_height)}:flags=fast_bilinear,setsar=1'
                     if concat_width and concat_height else ''
                 )
-                video_filters.append(f'[0:v]trim=start={part_start_ms / 1000:.3f}:end={part_end_ms / 1000:.3f},setpts=PTS-STARTPTS{crop}{normalize}{grade}[v{count}]')
-                audio_filters.append(f'[0:a]atrim=start={part_start_ms / 1000:.3f}:end={part_end_ms / 1000:.3f},asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{count}]')
+                start = (source_start + part_start_ms - clip_start_ms) / 1000
+                end = (source_start + part_end_ms - clip_start_ms) / 1000
+                bounds = f'start={start:.3f}:end={end:.3f}'
+                video_clock, audio_clock = VideoAssemblyService._concat_clip_clocks(part_end_ms - part_start_ms)
+                video_filters.append(f'[0:v]trim={bounds}{crop}{normalize}{grade},{video_clock}[v{count}]')
+                audio_filters.append(f'[0:a]atrim={bounds},{audio_clock}[a{count}]')
                 count += 1
         if count:
             joined = ''.join(f'[v{index}][a{index}]' for index in range(count))
@@ -2089,6 +2097,28 @@ class TimelineRevisionService:
         if not target:
             raise ValueError('B-roll não encontrado nesta timeline.')
         previous = deepcopy(target)
+        if 'move_group' in payload:
+            changes = payload['move_group']
+            if not isinstance(changes, list) or not changes:
+                raise ValueError('Selecione os elementos para mover.')
+            by_id = {str(item['id']): item for item in brolls}
+            duration = int((current.timeline.get('sequence') or {}).get('duration_ms') or 0)
+            seen = set()
+            previous_group = []
+            for change in changes:
+                key = str(change.get('id') or '')
+                item = by_id.get(key)
+                start, end = int(change.get('start_ms')), int(change.get('end_ms'))
+                if not item or key in seen or start < 0 or end > duration or end - start != int(item['end_ms']) - int(item['start_ms']):
+                    raise ValueError('Não foi possível mover os elementos selecionados.')
+                seen.add(key)
+                previous_group.append(deepcopy(item))
+                item['start_ms'], item['end_ms'] = start, end
+            revision = cls._create(locked, current.source_manifest, current.edit_decision_set,
+                                   'Elementos movidos', member, current, brolls=brolls)
+            cls._record(cls.session(locked, member, revision), current, revision, 'MOVE_BROLLS',
+                        {'items': changes}, {'items': previous_group}, member)
+            return revision
         split_at = payload.get('split_at_ms')
         if split_at is not None and not delete and not restore:
             point = int(split_at)

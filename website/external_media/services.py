@@ -56,7 +56,7 @@ from .audio_noise import (
 from .audio_validation import AudioValidationService
 from .auto_reframe import AUTO_REFRAME_PLAN_VERSION, AutoReframePlan, AutoReframeService, ReframeKeyframe
 from .background_voice import BackgroundVoiceRemovalService
-from .broll import BrollRenderService, BrollTimelineService
+from .broll import BrollRenderService, BrollTimelineService, import_missing_template_brolls
 from .canonical import (
     EditDecisionSetBuilder,
     EffectiveCapabilities,
@@ -77,7 +77,7 @@ logger = logging.getLogger(__name__)
 # Persist the timing implementation independently of framing/geometry. Existing
 # review assets keep their original clock until explicitly rebuilt; a new final
 # render must not be mistaken for proof that those old assets were regenerated.
-ASSEMBLY_TIMING_VERSION = 3
+ASSEMBLY_TIMING_VERSION = 4
 
 
 @dataclass(frozen=True)
@@ -1991,6 +1991,7 @@ class VideoAssemblyService:
                 'trim_end_ms': source_item.trim_end_ms,
                 'preserve_framing': source_item.skip_extra_processing,
                 'color_adjustment': source_color_adjustments.get(source_item.label),
+                'preserve_source_frame_grid': source_intervals is not None,
             })
             if index in manual_source_indexes:
                 # The browser positions the entire source before clipping it to
@@ -2224,6 +2225,10 @@ class VideoAssemblyService:
             # normally arrive here with a saved plan.
             if job['auto_reframe_config'] and job['reframe_plan_data'] is None:
                 continue
+            # A 100 ms boundary is exact in both integer milliseconds and
+            # the 30 fps grid. Keep that phase when encoding only an envelope.
+            start_ms = start_ms // 100 * 100
+            interval_bounds[job_index][0] = start_ms
             job['trim_start_ms'] = start_ms
             job['trim_end_ms'] = end_ms
             job['reframe_plan_data'] = cls._shift_reframe_plan_time(
@@ -2310,18 +2315,23 @@ class VideoAssemblyService:
         try:
             while len(current) > batch_size:
                 next_paths = []
+                next_intervals = [] if current_intervals is not None else None
                 for batch_index, offset in enumerate(range(0, len(current), batch_size)):
                     destination = workdir / f'concat-{pass_index:02d}-{batch_index:03d}.mp4'
+                    batch_intervals = current_intervals[offset:offset + batch_size] if current_intervals is not None else None
                     self._concat_group(
                         current[offset:offset + batch_size], destination,
-                        intervals=current_intervals[offset:offset + batch_size] if current_intervals is not None else None,
+                        intervals=batch_intervals,
                     )
                     temporary_batches.append(destination)
                     next_paths.append(destination)
+                    if next_intervals is not None:
+                        duration = sum(end - start for start, end in map(self._concat_interval_bounds, batch_intervals))
+                        next_intervals.append({'start_ms': 0, 'end_ms': duration})
                 current = next_paths
-                # These files already contain the kept pieces. Never apply
-                # source-local trims a second time at a higher concat level.
-                current_intervals = None
+                # Each batch starts at zero and has its own planned duration.
+                # Carry it forward to discard frame rounding and AAC padding.
+                current_intervals = next_intervals
                 pass_index += 1
             self._concat_group(current, output_path, intervals=current_intervals)
         finally:
@@ -2351,7 +2361,11 @@ class VideoAssemblyService:
         expected_duration = None
         if cache.enabled:
             try:
-                expected_duration = sum(int(item['end_ms'])-int(item['start_ms']) if isinstance(item, dict) else int(item[1])-int(item[0]) for item in intervals) if intervals is not None else sum(SpeechEditService(self.runner).duration_ms(path) for path in paths)
+                expected_duration = (
+                    sum(end - start for start, end in map(self._concat_interval_bounds, intervals))
+                    if intervals is not None
+                    else sum(SpeechEditService(self.runner).duration_ms(path) for path in paths)
+                )
                 key = cache.key('concat', {'sources': [cache.identity(path) for path in paths], 'intervals': intervals})
             except Exception:
                 logger.info('render_checkpoint_identity_unavailable')
@@ -2376,25 +2390,24 @@ class VideoAssemblyService:
         command = [settings.FFMPEG_BINARY, '-y', '-threads', '1', '-filter_complex_threads', '1']
         for index, path in enumerate(paths):
             seek_ms = 0
-            if intervals is not None and seek_inputs:
+            if intervals is not None:
                 interval = intervals[index]
-                original_start = interval['start_ms'] if isinstance(interval, dict) else interval[0]
-                seek_ms = max(0, (int(original_start) // 1000 - 1) * 1000)
+                start_ms, end_ms = self._concat_interval_bounds(interval)
+            if intervals is not None and seek_inputs:
+                seek_ms = max(0, (start_ms // 1000 - 1) * 1000)
             if seek_ms:
                 command.extend(['-ss', f'{seek_ms / 1000:.3f}', '-accurate_seek'])
             command.extend(['-i', self.runner.input_arg(path)])
             video_trim = audio_trim = ''
             transform_filter = ''
+            video_clock = 'setpts=PTS-STARTPTS'
+            audio_clock = 'asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0'
             if intervals is not None:
-                interval = intervals[index]
-                start_ms, end_ms = (
-                    (interval['start_ms'], interval['end_ms'])
-                    if isinstance(interval, dict) else interval
-                )
                 if start_ms < 0 or end_ms <= start_ms:
                     raise ExternalMediaError('A revisão contém um trecho de vídeo inválido.')
                 bounds = f'start={(start_ms-seek_ms) / 1000:.3f}:end={(end_ms-seek_ms) / 1000:.3f}'
                 video_trim, audio_trim = f'trim={bounds},', f'atrim={bounds},'
+                video_clock, audio_clock = self._concat_clip_clocks(end_ms - start_ms)
                 transform = interval.get('manual_transform') if isinstance(interval, dict) else None
                 framing_width = interval.get('framing_width') if isinstance(interval, dict) else None
                 framing_height = interval.get('framing_height') if isinstance(interval, dict) else None
@@ -2428,8 +2441,8 @@ class VideoAssemblyService:
                         f'scale={target_width}:{target_height}:flags=lanczos,setsar=1,format=yuv420p,'
                     )
             concat_filters.extend([
-                f'[{index}:v:0]{video_trim}{transform_filter}setpts=PTS-STARTPTS[v{index}]',
-                f'[{index}:a:0]{audio_trim}asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{index}]',
+                f'[{index}:v:0]{video_trim}{transform_filter}{video_clock}[v{index}]',
+                f'[{index}:a:0]{audio_trim}{audio_clock}[a{index}]',
             ])
             concat_inputs.append(f'[v{index}][a{index}]')
         concat_filters.append(
@@ -2446,6 +2459,23 @@ class VideoAssemblyService:
             '-avoid_negative_ts', 'disabled', '-movflags', '+faststart', str(output_path),
         ])
         self.runner.run(command)
+
+    @staticmethod
+    def _concat_interval_bounds(interval):
+        if isinstance(interval, dict):
+            return int(interval['start_ms']), int(interval['end_ms'])
+        return int(interval[0]), int(interval[1])
+
+    @staticmethod
+    def _concat_clip_clocks(duration_ms):
+        duration = f'{duration_ms / 1000:.3f}'
+        # FFmpeg's concat advances by its longest stream. Fit any fractional
+        # video frame in the approved duration so it cannot insert silence
+        # before the next clip. The final fps filter restores the 30 fps grid.
+        max_frames = (duration_ms * 30 + 999) // 1000
+        video = f"settb=AVTB,setpts='min(PTS-STARTPTS,N*{duration}/{max_frames}/TB)'"
+        audio = f'asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0,apad,atrim=duration={duration}'
+        return video, audio
 
     def create_proxy(self, source, destination, trim_start_ms=0, trim_end_ms=None, profile=None):
         source_width, source_height = self._video_dimensions(source)
@@ -2534,18 +2564,20 @@ class VideoAssemblyService:
         self, source, destination, width, height, lut_path, lut_intensity=50, auto_reframe_config=None,
         analysis_source=None, reframe_plan_data=None, trim_start_ms=0, trim_end_ms=None,
         preserve_framing=False, source_index=None, color_adjustment=None, early_fps=True,
+        preserve_source_frame_grid=False,
     ):
         has_audio = self._has_audio(source)
         metadata = RenderService(runner=self.runner).probe_video(source)
         command = [settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(source)]
         if not has_audio:
             command.extend(['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo'])
-        # Rebase both streams after every source trim. A phone take can carry
-        # an audio PTS offset even if its video begins at zero; output-side
-        # seeking preserves that gap and it becomes audible after concat.
+        # Source offsets are measured from the normalized streams used in the
+        # editor. Reset PTS before selecting the envelope and again afterwards.
         filters = self._timeline_trim_filters(trim_start_ms, trim_end_ms, 'trim')
         static_sampling = early_fps and (not auto_reframe_config or bool((reframe_plan_data or {}).get('disabled')))
-        if static_sampling:
+        if preserve_source_frame_grid:
+            filters[1:1] = ['fps=30']
+        elif static_sampling:
             filters.append('fps=30')
         if metadata.is_hdr:
             filters.extend(RenderService.hdr_to_sdr_filters(metadata))
@@ -2600,7 +2632,7 @@ class VideoAssemblyService:
                 f'scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos',
                 f'crop={width}:{height}:(iw-ow)/2:(ih-oh)/2',
             ])
-        if not static_sampling:
+        if not static_sampling and not preserve_source_frame_grid:
             filters.append('fps=30')
         filters.append('setsar=1')
         if lut_path and int(lut_intensity or 0) > 0:
@@ -2744,7 +2776,8 @@ class VideoAssemblyService:
         """Trim a stream and reset its timestamps to the edited timeline."""
         start_ms = max(0, int(trim_start_ms or 0))
         end_ms = max(0, int(trim_end_ms or 0)) if trim_end_ms else None
-        filters = []
+        reset = 'asetpts=PTS-STARTPTS' if filter_name == 'atrim' else 'setpts=PTS-STARTPTS'
+        filters = [reset]
         if start_ms or end_ms:
             options = []
             if start_ms:
@@ -2752,7 +2785,7 @@ class VideoAssemblyService:
             if end_ms:
                 options.append(f'end={max(start_ms + 1, end_ms) / 1000:.3f}')
             filters.append(f"{filter_name}={':'.join(options)}")
-        filters.append('asetpts=PTS-STARTPTS' if filter_name == 'atrim' else 'setpts=PTS-STARTPTS')
+            filters.append(reset)
         return filters
 
     def _consistent_portrait_body_plans(self, analysis_sources, output_width, output_height, config):
@@ -2856,6 +2889,7 @@ class ExternalMediaProjectPipeline:
             raise ExternalMediaError('Projetos de edição livre são renderizados a partir da revisão aprovada.')
         version = project_editor_settings(project)
         try:
+            import_missing_template_brolls(project)
             errors = self.projects.validate_uploads(project)
             if errors:
                 raise ExternalMediaError(' '.join(errors))
@@ -2980,6 +3014,7 @@ class ExternalMediaProjectPipeline:
                 MulticamService.review_candidates(project)
                 self._persist_canonical_state(project, job.pk)
             broll_decisions = BrollTimelineService.ensure_auto_decisions(project)
+            logger.info('project_broll_placement project=%s placements=%s', project.public_id, len(broll_decisions))
             if MediaTemplatePlugin.Code.BROLL in plugin_codes:
                 self._step(project, MediaTemplatePlugin.Code.BROLL, ProjectPipelineStep.Status.FINISHED)
             from .preview import ProjectProxyService, TimelineRevisionService
@@ -3054,7 +3089,7 @@ class ExternalMediaProjectPipeline:
                     protected_ranges, subtitle_report.metrics.get('protected_subtitle_overlaps'),
                 )
             subtitle_report.require_ok()
-            if (project.configuration or {}).get('proxy_pipeline'):
+            if project.approved_timeline_revision_id or (project.configuration or {}).get('proxy_pipeline'):
                 with JobWorkspace(
                     project.public_id,
                     'project-final',
@@ -3339,6 +3374,9 @@ class ExternalMediaProjectPipeline:
         preflight_report = {}
 
         def validate_source_timeline(ranges):
+            if source_intervals is not None and not configuration.get('analysis_source_duration_ms'):
+                preflight_report.update({'ok': True, 'coordinate_space': 'source_local'})
+                return
             if getattr(project, 'is_free', False) or has_editorial_sources:
                 # Main-track edits use source-local intervals. The appended
                 # footage has never been part of the template analysis master.

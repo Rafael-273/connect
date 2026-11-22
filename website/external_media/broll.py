@@ -12,9 +12,11 @@ from pathlib import Path
 
 from django.conf import settings
 from django.urls import reverse
+from django.db import transaction
 
 from website.ai import AIServiceError, get_ai_service
-from website.models.external_media import MediaTemplatePlugin, ProjectBrollAsset, SubtitleCue
+from website.forms.external_media import IMAGE_EXTENSIONS
+from website.models.external_media import ExternalMediaProject, MediaTemplatePlugin, ProjectBrollAsset, SubtitleCue
 
 from .ffmpeg_runner import FFmpegRunner
 from .exceptions import ExternalMediaError
@@ -24,6 +26,44 @@ from .workspace import JobWorkspace
 
 
 logger = logging.getLogger(__name__)
+
+
+def copy_template_brolls(project, block):
+    for source in block.default_brolls.all():
+        is_image = Path(source.original_filename).suffix.lower() in IMAGE_EXTENSIONS
+        asset = ProjectBrollAsset(
+            project=project, block=block, original_filename=source.original_filename,
+            description=source.description, position=source.position + 1,
+            media_type=ProjectBrollAsset.MediaType.IMAGE if is_image else ProjectBrollAsset.MediaType.VIDEO,
+            preview_status=ProjectBrollAsset.PreviewStatus.READY if is_image else ProjectBrollAsset.PreviewStatus.PENDING,
+        )
+        with source.file.open('rb') as content:
+            asset.file_size = content.size
+            asset.file.save(source.original_filename, content, save=False)
+        asset.save()
+        yield asset
+
+
+@transaction.atomic
+def import_missing_template_brolls(project):
+    ExternalMediaProject.objects.select_for_update().only('pk').get(pk=project.pk)
+    # Include removed assets so a rerun respects editorial removals.
+    occupied = ProjectBrollAsset.all_objects.filter(project=project).values_list('block_id', flat=True)
+    blocks = project.template_version.blocks.exclude(pk__in=occupied.exclude(block_id__isnull=True))
+    count = 0
+    for block in blocks.prefetch_related('default_brolls'):
+        for asset in copy_template_brolls(project, block):
+            count += 1
+            if asset.media_type == ProjectBrollAsset.MediaType.VIDEO:
+                from .render_workflow import enqueue_video_work
+
+                if settings.RENDER_WORKFLOW_ENABLED:
+                    transaction.on_commit(lambda pk=asset.pk: enqueue_video_work('broll-preview', pk), robust=True)
+                else:
+                    from .tasks import create_project_broll_preview
+
+                    transaction.on_commit(lambda pk=asset.pk: create_project_broll_preview.delay(pk), robust=True)
+    logger.info('template_broll_import project=%s imported=%s', project.public_id, count)
 
 
 class BrollTimelineService:
