@@ -4137,51 +4137,6 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertIn('trim=start=1.250:end=8.250,setpts=PTS-STARTPTS', command[command.index('-vf') + 1])
         self.assertIn('atrim=start=1.250:end=8.250,asetpts=PTS-STARTPTS', command[command.index('-af') + 1])
 
-    def test_revision_proxy_filters_concatenate_cuts_and_manual_transform(self):
-        revision = SimpleNamespace(
-            source_manifest={'sources': [{
-                'id': 'take-1', 'duration_ms': 10_000, 'metadata': {'render_enabled': True},
-            }]},
-            timeline={'clips': [{
-                'asset_id': 'take-1', 'source_in_ms': 0, 'source_out_ms': 3000,
-            }, {
-                'asset_id': 'take-1', 'source_in_ms': 5000, 'source_out_ms': 10_000,
-            }]},
-            edit_decision_set={'operations': [{
-                'type': 'reframe', 'source_id': 'take-1', 'enabled': True,
-                'metadata': {'manual_transform': {'scale': 1.25, 'x': .2, 'y': -.3}},
-            }]},
-        )
-
-        filters, count = ProjectProxyService._timeline_review_filters(revision, None)
-
-        self.assertEqual(count, 2)
-        self.assertIn('trim=start=0.000:end=3.000', ';'.join(filters))
-        self.assertIn('trim=start=5.000:end=10.000', ';'.join(filters))
-        self.assertIn('crop=trunc(iw/1.25000/2)*2', ';'.join(filters))
-        self.assertIn('concat=n=2:v=1:a=1', ';'.join(filters))
-        self.assertEqual(ProjectProxyService._timeline_review_duration_ms(revision), 8000)
-
-    def test_revision_proxy_uses_analysis_offset_and_approved_transform_scope(self):
-        revision = SimpleNamespace(
-            source_manifest={'sources': [{'id': 'first', 'duration_ms': 2000}, {'id': 'second'}]},
-            timeline={'clips': [{
-                'asset_id': 'second', 'source_in_ms': 200, 'source_out_ms': 800,
-                'master_in_ms': 2200, 'master_out_ms': 2800,
-            }]},
-            edit_decision_set={'operations': [{
-                'type': 'reframe', 'source_id': 'second', 'metadata': {
-                    'segment_start_ms': 2400, 'segment_end_ms': 2800, 'manual_transform': {'scale': 1.25},
-                },
-            }]},
-        )
-        filters, count = ProjectProxyService._timeline_review_filters(
-            revision, None, analysis_ranges=[{'label': 'second', 'start_ms': 2100}],
-        )
-        self.assertEqual(count, 2)
-        self.assertIn('trim=start=2.300:end=2.500', filters[0])
-        self.assertIn('trim=start=2.500:end=2.900,crop=', filters[1])
-
     def test_preview_proxy_rejects_delayed_audio_stream(self):
         runner = Mock()
         runner.run.return_value = json.dumps({

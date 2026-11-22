@@ -56,7 +56,7 @@ MIN_MANUAL_CUT_MS = 33
 SOURCE_PROXY_GEOMETRY_VERSION = 5
 REVIEW_MASTER_PROXY_ID = '__review-master__'
 TIMELINE_REVIEW_PROXY_PREFIX = '__timeline-review-r'
-TIMELINE_REVIEW_TIMING_VERSION = 2
+TIMELINE_REVIEW_TIMING_VERSION = 3
 TIMELINE_REVIEW_PROXY_LEASE = timedelta(minutes=15)
 
 
@@ -318,56 +318,27 @@ class ProjectProxyService:
         proxy, lease = cls._claim_timeline_review_proxy(project, revision, profile)
         if lease is None:
             return proxy
-        storage = StorageService()
-        assembly = VideoAssemblyService(storage=storage)
-        quality = MediaQualityService(assembly.runner)
+        pipeline = ExternalMediaProjectPipeline()
+        storage, assembly, quality = pipeline.storage, pipeline.assembly, pipeline.quality
         try:
-            # Once a delivery replaces the job's video, only the original
-            # review master can be cut again using source coordinates.
-            source_field = cls.original_review_master(project)
-            if not source_field:
-                raise ExternalMediaError('A base original do preview não está disponível. Reprocesse o projeto para revisar a edição.')
-            source = storage.input(source_field).get_ffmpeg_input()
-            source_width, source_height = assembly._video_dimensions(source)
-            # A manual crop uses even rounding. Without restoring every part
-            # to one canvas before concat, adjacent pieces can differ by a few
-            # pixels (for example 850x262 vs 854x266) and FFmpeg rejects the
-            # entire review proxy.
-            filters, segment_count = cls._timeline_review_filters(
-                revision, assembly, concat_width=source_width, concat_height=source_height,
-                analysis_ranges=(project.configuration or {}).get('analysis_source_block_ranges'),
-            )
-            if not segment_count:
-                raise ExternalMediaError('A revisão não possui trechos de vídeo para o preview contínuo.')
-            expected_duration_ms = cls._timeline_review_duration_ms(revision)
-            # Use the delivery canvas. Rendering a smaller proxy and then
-            # asking libass/Pillow/FFmpeg to infer positions at browser size
-            # is precisely what caused the preview to drift from delivery.
-            preset = job.preset or project_editor_settings(project).preset
-            proxy_width = int(getattr(preset, 'width', 0) or source_width)
-            proxy_height = int(getattr(preset, 'height', 0) or source_height)
-            filter_graph = ';'.join(filters + [
-                f'[joinedv]scale={proxy_width}:{proxy_height}:flags=fast_bilinear,fps={int(getattr(profile, "fps", 0) or 30)},setsar=1[vout]',
-            ])
+            preset = project_editor_settings(project).preset
             with JobWorkspace(
                 project.public_id, f'timeline-review-r{revision.revision}',
-                estimated_bytes=storage.input(job.original_video).workspace_estimate(needs_proxy=True),
+                estimated_bytes=pipeline._project_workspace_estimate(project, needs_proxy=True),
             ) as workspace:
-                main_output = workspace.file('output', 'timeline-review-main.mp4')
-                command = [settings.FFMPEG_BINARY, '-y', '-i', assembly.runner.input_arg(source), '-filter_complex', filter_graph,
-                    '-map', '[vout]', '-map', '[joineda]', '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_PROXY_PRESET,
-                    '-crf', str(int(getattr(profile, 'video_crf', 0) or settings.EXTERNAL_MEDIA_PROXY_CRF)), '-pix_fmt', 'yuv420p',
-                    '-c:a', 'aac', '-b:a', f'{int(getattr(profile, "audio_bitrate_kbps", 0) or 96)}k', '-ar', '48000', '-ac', '2',
-                    '-movflags', '+faststart', str(main_output)]
-                assembly.runner.run(command)
+                main_output, _, intervals, _ = pipeline._assemble_revision_base(
+                    project, workspace.path, revision, preview=True,
+                )
+                expected_duration_ms = sum(item['end_ms'] - item['start_ms'] for item in intervals)
+                proxy_width, proxy_height = assembly._video_dimensions(main_output)
                 rendered_layers = []
                 output = main_output
-                duration_ms = cls._timeline_review_duration_ms(revision)
+                duration_ms = expected_duration_ms
                 if (revision.timeline or {}).get('camera_segments'):
                     from .multicam import MulticamRenderService
                     output = MulticamRenderService(assembly.runner, storage).apply(
                         project, revision, output, workspace.file('output', 'timeline-review-multicam.mp4'),
-                        proxy_width, proxy_height,
+                        proxy_width, proxy_height, duration_ms=duration_ms,
                     )
                     rendered_layers.append('MULTICAM')
                 brolls = list((revision.timeline or {}).get('brolls') or [])
@@ -461,146 +432,6 @@ class ProjectProxyService:
             )
             raise
 
-    @classmethod
-    def _timeline_review_filters(cls, revision, assembly, concat_width=None, concat_height=None, analysis_ranges=None):
-        manifest = revision.source_manifest or {}
-        timeline = revision.timeline or {}
-        clip_end_by_source = {}
-        for clip in timeline.get('clips') or []:
-            source_id = str(clip.get('asset_id') or '')
-            clip_end_by_source[source_id] = max(
-                clip_end_by_source.get(source_id, 0), int(clip.get('source_out_ms') or 0),
-            )
-        source_starts, cursor = {}, 0
-        analysis_starts = {
-            str(item['label']): int(item['start_ms'])
-            for item in analysis_ranges or [] if item.get('label')
-        }
-        for source in manifest.get('sources') or []:
-            if not (source.get('metadata') or {}).get('render_enabled', True):
-                continue
-            trim = source.get('trim') or {}
-            start = int(trim.get('start_ms') or 0)
-            end = int(trim.get('end_ms') or source.get('duration_ms') or clip_end_by_source.get(str(source.get('id'))) or start)
-            source_id = str(source.get('id'))
-            source_starts[source_id] = (analysis_starts.get(source_id, cursor), start)
-            cursor += max(1, end - start)
-        reframe_operations = [
-            item for item in (revision.edit_decision_set.get('operations') or [])
-            if item.get('type') == 'reframe' and item.get('enabled', True)
-        ]
-        transforms = {
-            str(item.get('source_id')): (item.get('metadata') or {}).get('manual_transform')
-            for item in reframe_operations
-            # Scoped decisions belong to a blade segment. They must not
-            # overwrite another segment simply because they occur later.
-            if 'segment_start_ms' not in (item.get('metadata') or {})
-        }
-        color_adjustments = {
-            str(item.get('source_id')): (item.get('metadata') or {}).get('adjustment')
-            for item in (revision.edit_decision_set.get('operations') or [])
-            if item.get('type') == 'color_adjustment' and item.get('enabled', True)
-        }
-        video_filters, audio_filters, count = [], [], 0
-        for clip in timeline.get('clips') or []:
-            source_id = str(clip.get('asset_id') or '')
-            if source_id not in source_starts:
-                continue
-            master_start, trim_start = source_starts[source_id]
-            source_start = master_start + int(clip.get('source_in_ms') or 0) - trim_start
-            duration = int(clip.get('source_out_ms') or 0) - int(clip.get('source_in_ms') or 0)
-            if duration <= 0:
-                continue
-            clip_start_ms = int(clip.get('master_in_ms', source_start))
-            clip_end_ms = clip_start_ms + duration
-            scoped = sorted(
-                (item for item in reframe_operations if (
-                    str(item.get('source_id')) == source_id
-                    and 'segment_start_ms' in (item.get('metadata') or {})
-                )),
-                key=lambda item: int((item.get('metadata') or {}).get('segment_start_ms') or 0),
-            )
-            boundaries = {clip_start_ms, clip_end_ms}
-            for item in scoped:
-                metadata = item.get('metadata') or {}
-                for boundary in (metadata.get('segment_start_ms'), metadata.get('segment_end_ms')):
-                    if boundary is not None and clip_start_ms < int(boundary) < clip_end_ms:
-                        boundaries.add(int(boundary))
-            ordered_boundaries = sorted(boundaries)
-            for part_start_ms, part_end_ms in zip(ordered_boundaries, ordered_boundaries[1:]):
-                transform = transforms.get(source_id) or {}
-                # Several revisions can carry an inherited auto-reframe for
-                # the same blade range. The latest manual choice is the
-                # authority; selecting the first operation made later takes
-                # appear to revert as the number of cuts grew.
-                candidates = [
-                    item for item in scoped
-                    if int((item.get('metadata') or {}).get('segment_start_ms') or 0)
-                    <= part_start_ms
-                    < int((item.get('metadata') or {}).get('segment_end_ms') or 0)
-                ]
-                selected = next(
-                    (item for item in reversed(candidates)
-                     if (item.get('metadata') or {}).get('manual_transform') is not None),
-                    candidates[-1] if candidates else None,
-                )
-                if selected:
-                    transform = (selected.get('metadata') or {}).get('manual_transform') or {}
-                scale = min(2.0, max(1.0, float(transform.get('scale') or 1)))
-                x = min(1.0, max(-1.0, float(transform.get('x') or 0)))
-                y = min(1.0, max(-1.0, float(transform.get('y') or 0)))
-                color = color_adjustments.get(source_id) or {}
-                brightness = min(100, max(-100, float(color.get('brightness') or 0))) / 200
-                contrast = min(200, max(0, float(color.get('contrast') or 100))) / 100
-                saturation = min(200, max(0, float(color.get('saturation') or 100))) / 100
-                temperature = min(100, max(-100, float(color.get('temperature') or 0))) / 100
-                red = float(color.get('red') or 0) + float(color.get('yellow') or 0) + float(color.get('magenta') or 0)
-                green = float(color.get('green') or 0) + float(color.get('yellow') or 0) + float(color.get('cyan') or 0)
-                blue = float(color.get('blue') or 0) + float(color.get('cyan') or 0) + float(color.get('magenta') or 0)
-                red = max(0.0, min(2.0, 1 + ((red / 300) + temperature) * .28))
-                green = max(0.0, min(2.0, 1 + (green / 300) * .28))
-                blue = max(0.0, min(2.0, 1 + ((blue / 300) - temperature) * .28))
-                grade = '' if not color else (
-                    f',eq=brightness={brightness:.4f}:contrast={contrast:.4f}:saturation={saturation:.4f}'
-                    f',colorchannelmixer=rr={red:.4f}:gg={green:.4f}:bb={blue:.4f}'
-                )
-                crop = '' if scale == 1 else (
-                    f',crop=trunc(iw/{scale:.5f}/2)*2:trunc(ih/{scale:.5f}/2)*2:'
-                    f'(iw-ow)/2-({x:.5f})*(iw-ow)/2:(ih-oh)/2-({y:.5f})*(ih-oh)/2,'
-                    f'scale=trunc(iw*{scale:.5f}/2)*2:trunc(ih*{scale:.5f}/2)*2'
-                )
-                normalize = (
-                    f',scale={int(concat_width)}:{int(concat_height)}:flags=fast_bilinear,setsar=1'
-                    if concat_width and concat_height else ''
-                )
-                start = (source_start + part_start_ms - clip_start_ms) / 1000
-                end = (source_start + part_end_ms - clip_start_ms) / 1000
-                bounds = f'start={start:.3f}:end={end:.3f}'
-                video_clock, audio_clock = VideoAssemblyService._concat_clip_clocks(part_end_ms - part_start_ms)
-                video_filters.append(f'[0:v]trim={bounds}{crop}{normalize}{grade},{video_clock}[v{count}]')
-                audio_filters.append(f'[0:a]atrim={bounds},{audio_clock}[a{count}]')
-                count += 1
-        if count:
-            joined = ''.join(f'[v{index}][a{index}]' for index in range(count))
-            video_filters.append(f'{joined}concat=n={count}:v=1:a=1[joinedv][joineda]')
-        return [*video_filters, *audio_filters], count
-
-    @classmethod
-    def _timeline_review_duration_ms(cls, revision):
-        """Return the exact edited clock expected from the concatenated clips."""
-        renderable_sources = {
-            str(source.get('id'))
-            for source in ((revision.source_manifest or {}).get('sources') or [])
-            if (source.get('metadata') or {}).get('render_enabled', True)
-        }
-        duration = 0
-        for clip in (revision.timeline or {}).get('clips') or []:
-            if str(clip.get('asset_id') or '') not in renderable_sources:
-                continue
-            start = int(clip.get('source_in_ms') or 0)
-            end = int(clip.get('source_out_ms') or 0)
-            duration += max(0, end - start)
-        return duration
 
 class PreviewCapabilityRegistry:
     CUTS = 'CUTS'

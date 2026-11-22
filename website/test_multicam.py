@@ -594,7 +594,10 @@ class CameraEndToEndTests(EditorFixture, TestCase):
             main = self.project.block_media.first()
             with (directory / 'red.mp4').open('rb') as handle:
                 main.file.save('main.mp4', File(handle))
-            with (directory / 'red.mp4').open('rb') as handle:
+            # Simulate a review master with the wrong picture and audio clock.
+            # The cut preview must resolve its media from the immutable clips.
+            review_base = 'blue.mp4' if speech_cut else 'red.mp4'
+            with (directory / review_base).open('rb') as handle:
                 self.project.render_job.original_video.save('review-source.mp4', File(handle))
             side = ProjectBlockMedia.objects.create(project=self.project, block=main.block, position=1, camera_order=2,
                 camera_role='SECONDARY', camera_key='side', duration_ms=10000, original_filename='side.mp4')
@@ -661,6 +664,13 @@ class CameraEndToEndTests(EditorFixture, TestCase):
             self.assertEqual(self.project.render_job.rendered_from_timeline_revision, revision.revision)
             delivery = self.project.render_job.original_video
             self.assertTrue(self.project.configuration['quality_report']['ok'])
+            if speech_cut:
+                for args in (['-an', '-f', 'framemd5'], ['-vn', '-f', 'framemd5']):
+                    decoded = [
+                        subprocess.check_output([settings.FFMPEG_BINARY, '-v', 'error', '-i', path, *args, '-'])
+                        for path in (preview.proxy_file.path, delivery.path)
+                    ]
+                    self.assertEqual(decoded[0], decoded[1])
             for path in (preview.proxy_file.path, delivery.path):
                 info = subprocess.check_output([settings.FFPROBE_BINARY, '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=r_frame_rate,avg_frame_rate,nb_frames,duration,start_time', '-of', 'json', path]).decode()
                 self.assertEqual(json.loads(info)['streams'][0]['r_frame_rate'], '30/1')

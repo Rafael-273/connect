@@ -2445,8 +2445,15 @@ class VideoAssemblyService:
                 f'[{index}:a:0]{audio_trim}{audio_clock}[a{index}]',
             ])
             concat_inputs.append(f'[v{index}][a{index}]')
+        video_output = 'fps=30'
+        if intervals is not None:
+            duration_ms = sum(end - start for start, end in map(self._concat_interval_bounds, intervals))
+            frame_count = max(1, (duration_ms * 30 + 500) // 1000)
+            # FFmpeg can round the last segment's EOF down by a frame after
+            # rebasing its PTS. Keep the approved output length on the 30 fps grid.
+            video_output += f',tpad=stop_mode=clone:stop=1,trim=end_frame={frame_count}'
         concat_filters.append(
-            f"{''.join(concat_inputs)}concat=n={len(paths)}:v=1:a=1[vjoined][aout];[vjoined]fps=30[vout]"
+            f"{''.join(concat_inputs)}concat=n={len(paths)}:v=1:a=1[vjoined][aout];[vjoined]{video_output}[vout]"
         )
         command.extend([
             '-filter_complex', ';'.join(concat_filters), '-map', '[vout]', '-map', '[aout]',
@@ -3165,7 +3172,7 @@ class ExternalMediaProjectPipeline:
             return 0
         return media_input_factory(primary.file).workspace_estimate(needs_proxy=needs_proxy)
 
-    def _materialize(self, project, plugins, workdir, *, revision=None):
+    def _materialize(self, project, plugins, workdir, *, revision=None, include_music=True):
         codes = {plugin.code for plugin in plugins}
         sources = []
 
@@ -3201,13 +3208,15 @@ class ExternalMediaProjectPipeline:
         if not sources:
             raise ExternalMediaError('Nenhum vídeo foi encontrado para montar o projeto.')
         lut_field = self.lut.selected_file(version, codes)
+        lut = materialize_small_asset(lut_field, 'template_lut') if lut_field else None
+        if not include_music:
+            return sources, lut, None
         # Editorial choices are frozen in the approved timeline revision.  The
         # configuration fallback only preserves projects edited before music
         # became a revisioned setting.
         music_revision = project.approved_timeline_revision or project.current_timeline_revision
         music_timeline = (music_revision.timeline if music_revision else {}) or {}
         music_tracks = self.music.selected_tracks(version, music_timeline, project.configuration or {})
-        lut = materialize_small_asset(lut_field, 'template_lut') if lut_field else None
         local_music_tracks = [
             materialize_small_asset(item['file'], f'template_music_{index + 1}')
             for index, item in enumerate(music_tracks) if item.get('file')
@@ -3306,8 +3315,8 @@ class ExternalMediaProjectPipeline:
             raise
         return proxies
 
-    def _prepare_final_master(self, project, workdir):
-        revision = project.approved_timeline_revision or project.current_timeline_revision
+    def _assemble_revision_base(self, project, workdir, revision, *, preview=False):
+        approved_revision = revision if preview else project.approved_timeline_revision
         if revision and (revision.timeline or {}).get('camera_segments'):
             from .multicam import MulticamRenderService
             MulticamRenderService.validate_timing(
@@ -3319,14 +3328,17 @@ class ExternalMediaProjectPipeline:
         has_editorial_sources = bool(revision and any(
             source.get('proxy_source_id') for source in revision.source_manifest.get('sources', [])
         ))
-        if has_editorial_sources:
+        if preview:
+            sources, lut_path, music_path = self._materialize(
+                project, plugins, workdir, revision=revision, include_music=False,
+            )
+        elif has_editorial_sources:
             sources, lut_path, music_path = self._materialize(project, plugins, workdir, revision=revision)
         else:
             sources, lut_path, music_path = self._materialize(project, plugins, workdir)
         assembled = workdir / 'project_master_original.mp4'
         source_intervals = (
-            self._approved_source_intervals(project.approved_timeline_revision, sources)
-            if project.approved_timeline_revision else None
+            self._approved_source_intervals(approved_revision, sources) if approved_revision else None
         )
         auto_reframe_plugin = next(
             (plugin for plugin in plugins if plugin.code == MediaTemplatePlugin.Code.AUTO_TRACKING),
@@ -3334,7 +3346,6 @@ class ExternalMediaProjectPipeline:
         )
         configuration = project.configuration or {}
         saved_reframe_plans = configuration.get('auto_reframe_plans') or []
-        approved_revision = project.approved_timeline_revision
         approved_color_adjustments = {
             str(item.get('source_id')): (item.get('metadata') or {}).get('adjustment')
             for item in ((approved_revision.edit_decision_set.get('operations') if approved_revision else []) or [])
@@ -3363,14 +3374,15 @@ class ExternalMediaProjectPipeline:
             with timed_step('create_final_analysis_proxies', count=len(sources)):
                 analysis_sources = self._create_proxies(
                     sources, workdir,
-                    on_progress=lambda completed, total: self._update(
+                    on_progress=None if preview else lambda completed, total: self._update(
                         project,
                         ExternalMediaProject.Status.PROCESSING,
                         69 + round((completed / max(1, total)) * 2),
                         'Preparando seu vídeo',
                     ),
                 )
-        self._update(project, ExternalMediaProject.Status.PROCESSING, 72, 'Montando seu vídeo')
+        if not preview:
+            self._update(project, ExternalMediaProject.Status.PROCESSING, 72, 'Montando seu vídeo')
         preflight_report = {}
 
         def validate_source_timeline(ranges):
@@ -3418,14 +3430,21 @@ class ExternalMediaProjectPipeline:
                 reframe_plans=saved_reframe_plans,
                 source_intervals=source_intervals,
                 source_color_adjustments=approved_color_adjustments,
-                preflight=validate_source_timeline if source_intervals is not None else None,
-                progress_callback=lambda completed, total: self._update(
+                preflight=validate_source_timeline if source_intervals is not None and not preview else None,
+                progress_callback=None if preview else lambda completed, total: self._update(
                     project,
                     ExternalMediaProject.Status.PROCESSING,
                     72 + round((completed / max(1, total)) * 8),
                     'Montando seu vídeo',
                 ),
             )
+        return assembled, music_path, source_intervals, preflight_report
+
+    def _prepare_final_master(self, project, workdir):
+        revision = project.approved_timeline_revision or project.current_timeline_revision
+        assembled, music_path, source_intervals, preflight_report = self._assemble_revision_base(project, workdir, revision)
+        version = project_editor_settings(project)
+        configuration = project.configuration or {}
         final_path = assembled
         approved = project.approved_timeline_revision
         background_plan_data = (project.configuration or {}).get('background_voice_plan')

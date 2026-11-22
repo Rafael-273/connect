@@ -44,12 +44,6 @@ class VideoMoveTests(EditorFixture, TestCase):
         )
         self.assertEqual([(item['start_ms'], item['end_ms']) for item in intervals],
                          [(0, 3000), (6000, 10000), (3000, 6000)])
-        filters, count = ProjectProxyService._timeline_review_filters(revision, None)
-        self.assertEqual(count, 3)
-        graph = ';'.join(filters)
-        self.assertIn('trim=start=6.000:end=10.000', graph)
-        self.assertIn('atrim=start=6.000:end=10.000', graph)
-        self.assertLess(graph.index('trim=start=6.000:end=10.000'), graph.index('trim=start=3.000:end=6.000'))
 
     def test_move_to_start_and_insert_before_another_take(self):
         before = clip_range(self.original.timeline['clips'][0])

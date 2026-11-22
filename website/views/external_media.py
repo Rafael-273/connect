@@ -2348,7 +2348,11 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
         # already resolves each source independently (including trim-range
         # aliases), therefore keep source playback whenever a manual frame is
         # present.
-        use_editable_source_proxies = has_reframe_override or bool(timeline.get('cameras')) or bool(timeline.get('video_reordered')) or project.is_free
+        use_editable_source_proxies = (
+            has_reframe_override or bool(timeline.get('cameras'))
+            or bool(timeline.get('video_reordered')) or project.is_free
+            or has_preview_cuts(timeline)
+        )
         revision_proxy = ready_proxies.get(ProjectProxyService.timeline_review_proxy_id(revision))
         if not ProjectProxyService.has_usable_timeline_review_proxy(revision_proxy, revision):
             revision_proxy = None
@@ -2724,6 +2728,13 @@ def preview_revision_response(project, member, revision, *, status=200, **extra)
     }, status=status)
 
 
+def has_preview_cuts(timeline):
+    return any(
+        item.get('type') == 'remove_segment' and item.get('enabled', True)
+        for item in timeline.get('decisions', [])
+    )
+
+
 def preview_timeline_with_music(project, timeline):
     """Add browser-only music metadata without mutating a stored revision."""
     timeline = deepcopy(timeline or {})
@@ -2731,7 +2742,8 @@ def preview_timeline_with_music(project, timeline):
     # available independently so untouched takes retain their automatic crop.
     timeline['framing_master_url'] = (
         reverse('external_media_project_preview_master', kwargs={'public_id': project.public_id})
-        if project.render_job_id and ProjectService.file_exists(ProjectProxyService.original_review_master(project))
+        if not has_preview_cuts(timeline) and project.render_job_id
+        and ProjectService.file_exists(ProjectProxyService.original_review_master(project))
         else None
     )
     selected_tracks = MusicService.selected_tracks(
