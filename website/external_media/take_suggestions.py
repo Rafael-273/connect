@@ -1,4 +1,4 @@
-"""Optional source analysis. Suggestions never write ProjectBlockMedia.trim_* fields."""
+"""Source transcription and automatic take selection."""
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -11,11 +11,12 @@ import uuid
 from urllib.request import urlopen
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
 from website.ai import TranscriptionSegment, get_ai_service
-from website.models import ProjectBlockMedia, SourceTakeAnalysis
+from website.models import ExternalMediaProject, ProjectBlockMedia, SourceTakeAnalysis
 from .workspace import JobWorkspace
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,19 @@ tentativas abandonadas e conversa posterior. Preserve contagens e expressões in
 pausas naturais e a mensagem completa. Música/ruído sem fala não é mensagem aproveitável:
 retorne attempts vazio. Se precisar reordenar partes, não reordene: retorne attempts vazio e
 explique em review_reason. Não forneça confiança nem tempos inventados.'''
+
+INSTRUCTIONS += '''
+Antes de selecionar cada tentativa, identifique onde começa a mensagem dirigida ao público.
+Exclua chamadas de gravação como "um, dois, três, vai", "gravando", "ação", "pode ir"
+e instruções ou conversas de bastidores antes, entre ou depois das tentativas. Use o contexto
+para distinguir essas chamadas de números que fazem parte do anúncio, como datas e horários.
+Quando uma fala transcrita parecer uma intervenção de alguém nos bastidores, exclua suas
+palavras e divida a tentativa em intervalos separados se for possível preservar a mensagem.
+Os tempos fornecidos ajudam a identificar pausas e interrupções, mas não identificam quem
+falou. Não suponha que uma fala é de outra pessoa apenas por ser curta. Quando a autoria
+ou o conteúdo for incerto, informe a dúvida em review_reason e preserve a mensagem.
+Cada intervalo deve começar na primeira palavra aproveitável e terminar na última.
+'''
 
 
 ANALYSIS_SCHEMA = {
@@ -103,8 +117,12 @@ def select_suggestions(payload, words, duration_ms, *, padding_ms=180):
             if left < result[-1]['speech_end_ms']:
                 raise ValueError('Trechos de fala sobrepostos.')
             result[-1]['end_ms'] = (result[-1]['speech_end_ms'] + left) // 2
-        start = max(result[-1]['end_ms'] if result else 0, left - padding_ms)
-        end = min(duration_ms, right + padding_ms)
+        # Do not let padding bring an excluded cue or background utterance
+        # back into an otherwise correctly selected range.
+        previous_end = max((word.end_ms for word in words if word.end_ms <= left), default=0)
+        next_start = min((word.start_ms for word in words if word.start_ms >= right), default=duration_ms)
+        start = max(result[-1]['end_ms'] if result else 0, left - padding_ms, previous_end)
+        end = min(duration_ms, right + padding_ms, next_start)
         result.append({'start_ms': start, 'end_ms': end, 'speech_end_ms': right, 'reason': reason})
     for item in result:
         item.pop('speech_end_ms')
@@ -126,6 +144,27 @@ def analysis_payload(item):
         'review_recommended': True,
         'trim_reviewed': item.trim_reviewed,
     }
+
+
+def apply_automatic_suggestions(cache):
+    """Apply finished analysis once, only to untouched draft uploads."""
+    if cache.status != 'ready' or not cache.suggestions:
+        return
+    ranges = [
+        {'start_ms': int(item['start_ms']), 'end_ms': int(item['end_ms'])}
+        for item in cache.suggestions
+    ]
+    with transaction.atomic():
+        project = ExternalMediaProject.objects.select_for_update().get(pk=cache.project_id)
+        if project.status != ExternalMediaProject.Status.DRAFT or project.is_free:
+            return
+        ProjectBlockMedia.objects.filter(
+            project=project, take_analysis=cache, trim_reviewed=False,
+            trim_start_ms=0, trim_end_ms__isnull=True, trim_ranges=[],
+        ).update(
+            trim_ranges=ranges, trim_start_ms=ranges[0]['start_ms'],
+            trim_end_ms=ranges[0]['end_ms'], take_analysis_status='ready',
+        )
 
 
 def analyze_source(media_id):
@@ -155,6 +194,8 @@ def analyze_source(media_id):
         if (item.take_analysis and item.take_analysis.status == 'ready'
                 and item.take_analysis.language == language and item.take_analysis.version == 1
                 and (not target or target in item.take_analysis.translations)):
+            if not free:
+                apply_automatic_suggestions(item.take_analysis)
             return
         media_input = media_input_factory(item.file)
         source = media_input.get_ffmpeg_input()
@@ -183,6 +224,9 @@ def analyze_source(media_id):
                 Q(lease_until__isnull=True) | Q(lease_until__lt=now),
             ).update(status='running', lease=token, lease_until=now + timedelta(hours=2)))
             if not claimed:
+                cache.refresh_from_db()
+                if not free:
+                    apply_automatic_suggestions(cache)
                 return
             cache.refresh_from_db()
             if free and target and target in cache.translations:
@@ -246,14 +290,19 @@ def analyze_source(media_id):
             if words:
                 ai = get_ai_service()
                 raw = ai.generate_text(
-                    json.dumps({'items': [{'id': i, 'text': word.text} for i, word in enumerate(words)]}, ensure_ascii=False),
+                    json.dumps({'items': [
+                        {'id': i, 'text': word.text, 'start_ms': word.start_ms, 'end_ms': word.end_ms}
+                        for i, word in enumerate(words)
+                    ]}, ensure_ascii=False),
                     instructions=INSTRUCTIONS, model=settings.EXTERNAL_MEDIA_OFF_CONTEXT_MODEL, max_output_tokens=4000,
                     response_schema=ANALYSIS_SCHEMA,
                 )
                 suggestions, review = select_suggestions(json.loads(raw), words, cache.duration_ms, padding_ms=settings.EXTERNAL_MEDIA_TAKE_PADDING_MS)
             else:
                 suggestions, review = [], 'Nenhuma fala identificada; marcação manual disponível.'
-            owned.update(status='ready', suggestions=suggestions, review_reason=review, lease=None, lease_until=None)
+            if owned.update(status='ready', suggestions=suggestions, review_reason=review, lease=None, lease_until=None):
+                cache.refresh_from_db()
+                apply_automatic_suggestions(cache)
     except Exception as exc:
         logger.exception('take_analysis_failed media=%s', media_id)
         if cache and claimed:

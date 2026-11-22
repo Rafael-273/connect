@@ -95,6 +95,12 @@ class SuggestionDecisionTests(SimpleTestCase):
         self.assertLessEqual(ranges[1]['start_ms'], 550)
         self.assertGreaterEqual(ranges[0]['end_ms'], 500)
 
+    def test_padding_does_not_restore_excluded_cues_or_background_speech(self):
+        words = [Word(100, 600, 'vai'), Word(650, 1100, 'Olá'),
+                 Word(1150, 1400, 'corta')]
+        ranges, _ = select_suggestions({'attempts': [attempt(1, 1)]}, words, 2000)
+        self.assertEqual((ranges[0]['start_ms'], ranges[0]['end_ms']), (600, 1150))
+
     def test_editor_mapping_respects_offsets_and_multiple_source_ranges(self):
         data = [asdict(word) for word in self.words]
         first = remap_source_transcript(data, 3800, 6700, 0)
@@ -149,8 +155,11 @@ class SourceAnalysisIntegrationTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(self.ai.return_value.generate_text.call_count, 1)
         self.assertEqual(SourceTakeAnalysis.objects.count(), 1)
         self.item.refresh_from_db()
-        self.assertEqual(self.item.trim_ranges, [])
+        self.assertEqual(self.item.trim_ranges, [{'start_ms': 820, 'end_ms': 2180}])
         self.assertFalse(self.item.trim_reviewed)
+        second.refresh_from_db()
+        self.assertEqual(second.trim_ranges, self.item.trim_ranges)
+        self.assertEqual((self.item.trim_start_ms, self.item.trim_end_ms), (820, 2180))
 
     @override_settings(EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED=False)
     def test_free_caption_option_reuses_whisper_without_take_suggestions(self):

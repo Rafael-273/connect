@@ -1428,7 +1428,8 @@
             takePanel.classList.remove('hidden');
             if (takeState.receive(analysis)) loadTakeSuggestions();
             takeLoad.classList.toggle('hidden', !takeState.latest.length || takeState.loaded && !takeState.dirty);
-            const labels = {pending: 'Analisando vídeo… Você pode marcar manualmente.', running: 'Analisando vídeo… Você pode marcar manualmente.', ready: 'Sugestões disponíveis — confira os trechos e salve para confirmar.', error: 'Análise indisponível. A marcação manual continua disponível.', unavailable: 'Análise indisponível. A marcação manual continua disponível.'};
+            const automaticApplied = analysis.suggestions.length && JSON.stringify((media.trim_ranges || []).map(item => [item.start_ms, item.end_ms])) === JSON.stringify(analysis.suggestions.map(item => [item.start_ms, item.end_ms]));
+            const labels = {pending: 'Analisando vídeo… Você pode marcar manualmente.', running: 'Analisando vídeo… Você pode marcar manualmente.', ready: automaticApplied ? 'Trechos automáticos salvos. Você pode ajustá-los.' : 'Sugestões disponíveis — confira os trechos e salve para confirmar.', error: 'Análise indisponível. A marcação manual continua disponível.', unavailable: 'Análise indisponível. A marcação manual continua disponível.'};
             takeLabel.textContent = analysis.status === 'ready' && !analysis.suggestions.length ? 'Revisão recomendada: nenhum trecho sugerido.' : (labels[analysis.status] || labels.pending);
             if (analysis.review_reason) takeLabel.textContent += ' ' + analysis.review_reason;
             if (['pending', 'running'].includes(analysis.status)) takeTimer = setTimeout(() => pollTakeSuggestions(url, epoch), 4000);
