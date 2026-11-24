@@ -1037,7 +1037,9 @@ class TimelineRevisionService:
             cls._shift_cues_for_decision(locked, decisions, target, enabling=requested)
         target['enabled'] = requested
         target['review'] = {'member_id': member.pk, 'reviewed_at': timezone.now().isoformat()}
-        revision = cls._create(locked, current.source_manifest, decisions, 'Revisão de corte', member, current)
+        restored_cut = target if not requested and (target.get('metadata') or {}).get('kind') == 'manual' else None
+        revision = cls._create(locked, current.source_manifest, decisions, 'Revisão de corte', member, current,
+                               restored_cut=restored_cut)
         session = cls.session(locked, member, revision)
         cls._record(session, current, revision, 'SET_DECISION_ENABLED', {
             'decision_id': decision_id, 'enabled': bool(enabled),
@@ -2156,6 +2158,7 @@ class TimelineRevisionService:
         cls, project, manifest, decisions, reason, member, parent=None,
         overlays=None, brolls=None, music_override_track_id=None, music_tracks=None, music_volume=None, audio_mix=None,
         reuse_review_video=False, hidden_caption_track_ids=None, new_source_id=None, new_source_transcript=None,
+        restored_cut=None,
     ):
         number = (project.timeline_revisions.aggregate(value=Max('revision'))['value'] or 0) + 1
         # Overlay edits live in the revision itself. Preserve them when another
@@ -2204,6 +2207,8 @@ class TimelineRevisionService:
             decisions = {**decisions, 'video_order': [clip_range(clip) for clip in timeline['clips']]}
         if new_source_transcript:
             cls._append_source_captions(project, timeline, new_source_id, new_source_transcript)
+        if restored_cut and project.render_job_id:
+            cls._restore_manual_cut_captions(project, parent, timeline, restored_cut)
         if parent is None:
             from .multicam import MulticamService
             proposals = MulticamService.propose(project, composition_manifest, timeline)
@@ -2424,6 +2429,62 @@ class TimelineRevisionService:
         return captions
 
     @staticmethod
+    def _restore_manual_cut_captions(project, revision, timeline, cut):
+        def cut_enabled(snapshot):
+            return any(
+                item.get('id') == cut['id'] and item.get('enabled', True)
+                for item in snapshot.edit_decision_set.get('operations', [])
+            )
+
+        before_cut = revision.parent
+        while before_cut and cut_enabled(before_cut):
+            revision, before_cut = before_cut, before_cut.parent
+        if not before_cut:
+            return
+
+        # Map only the source range reintroduced by this edit. Later cuts and
+        # moves are reflected in the newly composed clips.
+        restored_clips = []
+        for clip in timeline.get('clips', []):
+            start = max(clip['master_in_ms'], cut['source_in_ms'])
+            end = min(clip['master_out_ms'], cut['source_out_ms'])
+            if end > start:
+                restored_clips.append({
+                    **clip, 'master_in_ms': start, 'master_out_ms': end,
+                    'timeline_in_ms': clip['timeline_in_ms'] + start - clip['master_in_ms'],
+                })
+        mapping = timeline_mapping(before_cut.timeline.get('clips', []), restored_clips)
+        if not mapping:
+            return
+        captions = timeline['captions']
+        active = {item['id']: item for item in captions}
+        survived_cut = {item['id'] for item in revision.timeline.get('captions', [])}
+        for original in before_cut.timeline.get('captions', []):
+            cue_id = original['id']
+            existing = active.get(cue_id)
+            if existing is None and cue_id in survived_cut:
+                continue  # An explicit deletion after the cut takes precedence.
+            parts = relocate_item(original, mapping)
+            if not parts:
+                continue
+            cue = SubtitleCue.all_objects.filter(pk=cue_id, track__job=project.render_job).first()
+            if not cue:
+                continue
+            for part in parts:
+                if existing:
+                    if part['end_ms'] < existing['start_ms'] or part['start_ms'] > existing['end_ms']:
+                        continue
+                    existing['start_ms'] = min(existing['start_ms'], part['start_ms'])
+                    existing['end_ms'] = max(existing['end_ms'], part['end_ms'])
+                else:
+                    cue.undelete()
+                    existing = part
+                    captions.append(existing)
+                cue.start_ms, cue.end_ms = existing['start_ms'], existing['end_ms']
+                cue.save(update_fields=['start_ms', 'end_ms', 'update_at'])
+        captions.sort(key=lambda item: (item['start_ms'], item['id']))
+
+    @staticmethod
     def _shift_cues_for_decision(project, decisions, target, enabling):
         """Keep subtitle cues on the same edited clock as a removed take.
 
@@ -2454,13 +2515,17 @@ class TimelineRevisionService:
         )
         timeline_point = max(0, source_start - removed_before)
         if not enabling:
-            # History navigation restores the exact caption snapshot through
-            # ``_sync_cues_from_revision``. Keep the legacy inverse shift for
-            # disabling an automatic cut directly from the inspector.
-            cues = SubtitleCue.objects.filter(track__job=project.render_job, start_ms__gte=timeline_point)
+            # Open the gap on the edited clock. For manual cuts, captions
+            # spanning the insertion point also regain their original length.
+            manual = (target.get('metadata') or {}).get('kind') == 'manual'
+            cues = list(SubtitleCue.objects.filter(
+                track__job=project.render_job,
+                **({'end_ms__gt': timeline_point} if manual else {'start_ms__gte': timeline_point}),
+            ))
             for cue in cues:
-                cue.start_ms = max(0, cue.start_ms + duration)
-                cue.end_ms = max(cue.start_ms + 1, cue.end_ms + duration)
+                if cue.start_ms >= timeline_point:
+                    cue.start_ms += duration
+                cue.end_ms += duration
             SubtitleCue.objects.bulk_update(cues, ['start_ms', 'end_ms'])
             return
 

@@ -1471,6 +1471,29 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         )
         media.delete(force_policy=HARD_DELETE)
 
+    def test_restoring_manual_cut_recovers_speech_used_to_duck_music(self):
+        project = self.make_project()
+        ProjectBlockMedia.objects.create(
+            project=project, block=self.block, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=10000,
+        )
+        project.render_job = self.make_job()
+        project.save(update_fields=['render_job'])
+        track = SubtitleTrack.objects.create(job=project.render_job, language='pt', is_source=True)
+        speech = SubtitleCue.objects.create(
+            track=track, cue_index=1, start_ms=2100, end_ms=2800, text='Fala restaurada',
+        )
+        TimelineRevisionService.ensure_initial(project, self.member)
+        cut = TimelineRevisionService.create_manual_cut(project, self.member, 2000, 3000)
+        self.assertFalse(cut.timeline['captions'])
+
+        decision = next(item for item in cut.edit_decision_set['operations'] if item['type'] == 'remove_segment')
+        restored = TimelineRevisionService.mutate_decision(project, self.member, decision['id'], False)
+        self.assertEqual([(item['id'], item['start_ms'], item['end_ms']) for item in restored.timeline['captions']],
+                         [(speech.pk, 2100, 2800)])
+        speech.refresh_from_db()
+        self.assertIsNone(speech.deleted)
+
     def test_preview_subtitle_timing_and_delete_are_undoable(self):
         project = self.make_project()
         media = ProjectBlockMedia.objects.create(
