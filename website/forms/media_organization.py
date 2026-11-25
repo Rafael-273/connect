@@ -335,6 +335,7 @@ class MediaSubTeamMembershipForm(forms.ModelForm):
         elif not self.is_bound:
             self.initial.setdefault('is_active', True)
         self.fields['member'].queryset = ministry_members(sub_team.ministry) if sub_team else Member.objects.none()
+        self.fields['member'].empty_label = 'Selecione um membro'
         roles_qs = scoped_roles(sub_team.ministry) if sub_team else MediaRole.objects.none()
         if sub_team:
             roles_qs = roles_qs.filter(sub_team__isnull=True) | roles_qs.filter(sub_team=sub_team)

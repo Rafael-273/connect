@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -84,6 +85,20 @@ class MediaScheduleList(MediaSecretariatMixin, View):
             has_filters=any(request.GET.get(key) for key in ('q', 'status', 'month', 'year')),
             start_form=StartForm(initial={'month': now.month, 'year': now.year}),
         ))
+
+
+class MediaScheduleDelete(MediaSecretariatMixin, View):
+    @transaction.atomic
+    def post(self, request, pk):
+        schedule = get_object_or_404(MonthlySchedule.objects.select_for_update(), pk=pk, ministry=self.ministry)
+        state = ScheduleAssistantState.objects.select_for_update().filter(schedule=schedule, status='draft').first()
+        if state:
+            state.status = 'discarded'
+            state.updated_by = request.user
+            state.save(update_fields=['status', 'updated_by', 'update_at'])
+        schedule.delete()
+        messages.success(request, 'Escala excluída.')
+        return redirect('media_schedule_list')
 
 
 class ScheduleListFilter(forms.Form):

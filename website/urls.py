@@ -1,4 +1,4 @@
-from website.views.schedule_assistant import (MediaSecretariatHome, MediaScheduleList, ScheduleAssistantStart, ScheduleAssistantPage, ScheduleAssistantAPI)
+from website.views.schedule_assistant import (MediaSecretariatHome, MediaScheduleList, MediaScheduleDelete, ScheduleAssistantStart, ScheduleAssistantPage, ScheduleAssistantAPI)
 from website.views.media_team_configuration import MediaTeamDefaultEdit, MediaTeamServiceEdit, MediaTeamExperienceEdit
 from website.views.media_planning.operations import MediaEventsView, MediaDemandsView, MediaEventRemoveFromMediaView, MediaEventUpdateView
 from website.views.media_planning.my_work import (
@@ -293,6 +293,7 @@ from .views.subtitle_review import (
 urlpatterns = [
     path('media/secretaria/', MediaSecretariatHome.as_view(), name='media_secretariat'),
     path('media/secretaria/escalas/', MediaScheduleList.as_view(), name='media_schedule_list'),
+    path('media/secretaria/escalas/<int:pk>/excluir/', MediaScheduleDelete.as_view(), name='media_schedule_delete'),
     path('media/secretaria/escalas/automatica/', ScheduleAssistantStart.as_view(), name='media_schedule_assistant_start'),
     path('media/secretaria/escalas/assistente/<int:pk>/', ScheduleAssistantPage.as_view(), name='media_schedule_assistant'),
     path('media/secretaria/escalas/assistente/<int:pk>/dados/', ScheduleAssistantAPI.as_view(), name='media_schedule_assistant_api'),

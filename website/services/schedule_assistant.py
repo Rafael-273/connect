@@ -420,12 +420,12 @@ def mutate(state_id, ministry, user, payload):
         step = integer(payload.get('step'), 'Etapa', 1, 3)
         if step > 1:
             from django.db.models import Exists, OuterRef
-            team_plans = ScheduleOccurrenceTeam.objects.filter(occurrence_id=OuterRef('pk'))
+            team_plans = ScheduleOccurrenceTeam.objects.filter(occurrence_id=OuterRef('pk')).exclude(activities=[])
             missing = ScheduleOccurrence.objects.filter(schedule_day__schedule=schedule).annotate(
-                has_team=Exists(team_plans),
-            ).filter(has_team=False).count()
+                has_activity=Exists(team_plans),
+            ).filter(has_activity=False).count()
             if missing:
-                raise ValidationError(f'Defina pelo menos uma equipe em cada ocorrência antes de avançar. Faltam {missing}.')
+                raise ValidationError(f'Selecione pelo menos uma atividade em cada ocorrência antes de avançar. Faltam {missing}.')
         state.current_step = step
     elif action == 'add_source':
         sources, _ = agenda_occurrences(state.period)

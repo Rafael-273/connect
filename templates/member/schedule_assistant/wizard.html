@@ -1,7 +1,7 @@
 {% extends 'member/ministry_organization/base.html' %}
 {% load static %}
 {% block title %}Assistente de Escalas — Mídia{% endblock %}
-{% block head %}{{ block.super }}<link rel="stylesheet" href="{% static 'schedule_assistant.css' %}?v=6"><link rel="stylesheet" href="{% static 'schedule_availability.css' %}?v=2"><link rel="stylesheet" href="{% static 'schedule_generation.css' %}"><style>.ministry-organization{padding-bottom:2rem!important}</style>{% endblock %}
+{% block head %}{{ block.super }}<link rel="stylesheet" href="{% static 'schedule_assistant.css' %}?v=7"><link rel="stylesheet" href="{% static 'schedule_availability.css' %}?v=2"><link rel="stylesheet" href="{% static 'schedule_generation.css' %}"><style>.ministry-organization{padding-bottom:2rem!important}</style>{% endblock %}
 {% block org_header %}
 {% url 'media_schedule_list' as back %}
 <section class="relative overflow-hidden px-4 py-4 border-b" style="border-color: rgba(201, 9, 5, 0.1);">
@@ -36,7 +36,6 @@
         <div class="sa-layout">
             <section class="sa-calendar-section" aria-label="Calendário mensal">
                 <div class="sa-calendar-top"><span id="sa-summary"></span><div class="sa-view-switch" role="group" aria-label="Modo de visualização"><button type="button" data-view="calendar" aria-pressed="false">Calendário</button><button type="button" data-view="list" aria-pressed="true">Lista</button></div></div>
-                <div id="sa-legend" aria-label="Legenda das equipes"></div>
                 <div id="sa-weekdays" class="sa-weekdays" aria-hidden="true"><span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span></div>
                 <div id="sa-calendar" aria-label="Ocorrências do mês"></div>
                 <div id="sa-agenda-list" hidden></div>
@@ -61,5 +60,5 @@
 {{ initial|json_script:'schedule-assistant-data' }}
 <script src="{% static 'schedule_availability.js' %}?v=4" defer></script>
 <script src="{% static 'schedule_generation.js' %}" defer></script>
-<script src="{% static 'schedule_assistant.js' %}?v=13" defer></script>
+<script src="{% static 'schedule_assistant.js' %}?v=16" defer></script>
 {% endblock %}

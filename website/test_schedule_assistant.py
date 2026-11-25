@@ -121,6 +121,32 @@ class ScheduleAssistantTests(TestCase):
         self.assertEqual(ScheduleDay.objects.filter(schedule=self.state.schedule).count(), 11)
         self.assertEqual(DivisionMember.objects.count(), 0)
 
+    def test_delete_from_list_removes_draft_and_allows_new_one(self):
+        url = reverse('media_schedule_delete', args=[self.state.schedule_id])
+        self.assertEqual(self.client.get(url).status_code, 405)
+        self.assertEqual(self.client.post(url).status_code, 302)
+        self.assertFalse(MonthlySchedule.objects.filter(pk=self.state.schedule_id).exists())
+        self.assertTrue(Event.objects.filter(pk=self.special.pk).exists())
+        draft, created = start_draft(self.ministry, datetime.date(2026, 11, 1), self.user)
+        self.assertTrue(created)
+        self.assertNotEqual(draft.pk, self.state.pk)
+
+    def test_delete_from_list_scopes_permissions_and_ministry(self):
+        other = Ministry.objects.create(name='Outro ministério')
+        foreign = MonthlySchedule.objects.create(ministry=other, month=11, year=2026, title='Outra escala')
+        self.assertEqual(self.client.post(reverse('media_schedule_delete', args=[foreign.pk])).status_code, 404)
+        self.assertTrue(MonthlySchedule.objects.filter(pk=foreign.pk).exists())
+        volunteer = User.objects.create_user('volunteer-delete@example.test', password='test')
+        self.client.force_login(volunteer)
+        self.assertEqual(self.client.post(reverse('media_schedule_delete', args=[self.state.schedule_id])).status_code, 403)
+        self.assertTrue(MonthlySchedule.objects.filter(pk=self.state.schedule_id).exists())
+
+    def test_delete_from_list_removes_registered_schedule(self):
+        schedule = MonthlySchedule.objects.create(ministry=self.ministry, month=10, year=2026, title='Escala cadastrada')
+        self.assertContains(self.client.get(reverse('media_schedule_list')), reverse('media_schedule_delete', args=[schedule.pk]))
+        self.assertEqual(self.client.post(reverse('media_schedule_delete', args=[schedule.pk])).status_code, 302)
+        self.assertFalse(MonthlySchedule.objects.filter(pk=schedule.pk).exists())
+
     def test_same_day_contains_independent_cults_and_multiple_teams(self):
         sunday = [item for item in self.data['occurrences'] if item['date'] == '2026-11-01']
         self.assertEqual({item['time'] for item in sunday}, {'09:00', '10:00', '19:00'})
@@ -316,6 +342,9 @@ class ScheduleAssistantTests(TestCase):
         for occurrence in ScheduleOccurrence.objects.filter(schedule_day__schedule=self.state.schedule):
             if not occurrence.team_plans.exists():
                 ScheduleOccurrenceTeam.objects.create(occurrence=occurrence, sub_team=self.team, team_name=self.team.name, color='#2563EB')
+            plan = occurrence.team_plans.first()
+            plan.activities = [{'id': self.stories.pk, 'name': self.stories.name, 'order': 0}]
+            plan.save()
         for step in (2, 3, 1):
             self.assertEqual(self.post('navigate', step=step).json()['current_step'], step)
             self.assertEqual(self.client.get(self.api).json()['current_step'], step)
@@ -325,7 +354,7 @@ class ScheduleAssistantTests(TestCase):
         self.assertEqual(DivisionMember.objects.count(), 0)
         self.assertFalse(any(day.members.exists() for day in self.state.schedule.days.all()))
 
-    def test_cannot_advance_until_every_occurrence_has_a_team(self):
+    def test_cannot_advance_until_every_occurrence_has_an_activity(self):
         self.assertEqual(self.post('navigate', step=2).status_code, 400)
         self.assertEqual(self.post('navigate', step=3).status_code, 400)
         self.state.refresh_from_db()
@@ -333,6 +362,11 @@ class ScheduleAssistantTests(TestCase):
         for occurrence in ScheduleOccurrence.objects.filter(schedule_day__schedule=self.state.schedule):
             if not occurrence.team_plans.exists():
                 ScheduleOccurrenceTeam.objects.create(occurrence=occurrence, sub_team=self.team, team_name=self.team.name, color='#2563EB')
+        self.assertEqual(self.post('navigate', step=2).status_code, 400)
+        for occurrence in ScheduleOccurrence.objects.filter(schedule_day__schedule=self.state.schedule):
+            plan = occurrence.team_plans.first()
+            plan.activities = [{'id': self.stories.pk, 'name': self.stories.name, 'order': 0}]
+            plan.save()
         self.assertEqual(self.post('navigate', step=2).status_code, 200)
 
     def test_availability_review_preserves_unaffected_data_and_team_identity(self):

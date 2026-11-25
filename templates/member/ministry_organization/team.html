@@ -76,7 +76,9 @@
     .team-default-copy p { margin: .2rem 0 0; color: #6b7280; font-size: .75rem; line-height: 1.35; }
     .team-activity-pills { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .45rem; }
     .team-activity-pill { border-radius: 999px; padding: .18rem .5rem; background: #f3f4f6; color: #4b5563; font-size: .65rem; font-weight: 700; }
-    .team-default-edit { width: 2.25rem; height: 2.25rem; padding: 0; justify-content: center; flex: 0 0 auto; }
+    .team-create-action { display:inline-flex; align-items:center; justify-content:center; gap:.45rem; padding:.55rem .8rem; border:0; border-radius:.65rem; background:#c90905; color:#fff; font-size:.75rem; font-weight:700; cursor:pointer; transition:background .15s ease; }
+    .team-create-action:hover { background:#a70805; }
+    .team-create-action:focus-visible, .team-panel-action:focus-visible { outline:3px solid rgba(201,9,5,.3); outline-offset:2px; }
     @media (max-width: 520px) {
         .team-activity-row, .team-service-row { align-items: flex-start; }
         .team-default-edit { font-size: .75rem; }
@@ -181,6 +183,7 @@
     .team-panel-action:hover {
         background: rgba(201, 9, 5, 0.12);
     }
+    .team-panel-action.team-default-edit { width:2.25rem; height:2.25rem; flex:0 0 auto; }
 
     .team-panel-action--danger {
         color: #DC2626;
@@ -464,8 +467,8 @@
     <div class="team-detail-section-head">
         <h2 class="team-detail-section-title">Membros</h2>
         {% if can_manage %}
-        <button type="button" class="team-panel-action" data-open-team-modal="org-modal-add-member-{{ team.pk }}" aria-label="Adicionar membro" title="Adicionar membro">
-            <i class="fas fa-user-plus" aria-hidden="true"></i>
+        <button type="button" class="team-create-action" data-open-team-modal="org-modal-add-member-{{ team.pk }}" aria-label="Adicionar membro" title="Adicionar membro">
+            <i class="fas fa-plus" aria-hidden="true"></i> Adicionar membro
         </button>
         {% endif %}
     </div>
@@ -520,8 +523,8 @@
     <div class="team-detail-section-head">
         <h2 class="team-detail-section-title">Manuais</h2>
         {% if can_manage %}
-        <a href="{% url 'ministry_manual_create' ministry.pk %}?team={{ team.pk }}" class="team-panel-action" aria-label="Novo manual" title="Novo manual">
-            <i class="fas fa-plus" aria-hidden="true"></i>
+        <a href="{% url 'ministry_manual_create' ministry.pk %}?team={{ team.pk }}" class="team-create-action" aria-label="Novo manual" title="Novo manual">
+            <i class="fas fa-plus" aria-hidden="true"></i> Novo manual
         </a>
         {% endif %}
     </div>

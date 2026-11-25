@@ -15,3 +15,4 @@
 .schedule-filter-clear:hover{color:#111827;background:#f9fafb}
 .schedule-filter-apply{background:#c90905;color:#fff;border:0;border-radius:8px}
 .schedule-filter-apply:hover{opacity:.9}
+.schedule-delete-button{width:38px;height:38px;flex-shrink:0;display:grid;place-items:center;border:0;border-radius:10px;background:#fff1f0;color:#c90905;cursor:pointer}.schedule-delete-button:hover{background:#ffe1de}.schedule-delete-actions{display:flex;justify-content:flex-end;gap:10px}.schedule-delete-actions button{min-width:120px}.schedule-delete-dialog strong{overflow-wrap:anywhere}

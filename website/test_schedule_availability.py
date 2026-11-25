@@ -371,6 +371,9 @@ class ScheduleAvailabilityTests(TestCase):
         for occurrence in ScheduleOccurrence.objects.filter(schedule_day__schedule=self.state.schedule):
             if not occurrence.team_plans.exists():
                 ScheduleOccurrenceTeam.objects.create(occurrence=occurrence, sub_team=self.coverage, team_name=self.coverage.name, color='#2563EB')
+            plan = occurrence.team_plans.first()
+            plan.activities = [{'id': 1, 'name': 'Atividade', 'order': 0}]
+            plan.save()
         self.assertTrue(self.data['availability']['summary']['warnings'])
         self.assertEqual(self.post('navigate', step=3).status_code, 200)
         self.assertFalse(ScheduleAvailability.objects.exists())

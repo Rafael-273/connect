@@ -103,46 +103,60 @@
         if (!item.teams.length) teams.append(dom('span', 'sa-team-empty', 'Equipe não definida'));
         if (teams.childElementCount) content.append(teams);
         const activities = [...new Set(item.teams.flatMap(team => team.activities.map(activity => activity.name)))];
-        if (activities.length) content.append(dom('span', 'sa-occurrence-activities', activities.join(' · ')));
+        if (activities.length && !list) content.append(dom('span', 'sa-occurrence-activities', activities.join(' · ')));
         if (item.availability_review_required) content.append(dom('span', 'sa-review-tag', 'Revisar'));
         node.append(time, content); return node;
     }
     function occurrenceTeamSelect(item) {
-        const select = dom('details', 'sa-quick-teams' + (item.teams.length ? ' has-teams' : ''));
-        const summary = dom('summary', '', item.teams.length ? item.teams.map(team => team.name).join(', ') : 'Adicionar equipes');
-        summary.setAttribute('aria-label', `Selecionar equipes para ${item.name}, ${fmtDate(item.date)}, ${item.time}`);
+        const selectedActivities = item.teams.flatMap(team => team.activities.map(activity => activity.name));
+        const select = dom('details', 'sa-quick-teams' + (selectedActivities.length ? ' has-teams' : ''));
+        const summary = dom('summary', '', selectedActivities.length ? selectedActivities.join(', ') : 'Selecionar atividades');
+        summary.title = selectedActivities.join(', ');
+        summary.setAttribute('aria-label', `Selecionar atividades para ${item.name}, ${fmtDate(item.date)}, ${item.time}`);
         select.append(summary);
         const menu = dom('div', 'sa-quick-menu');
-        menu.append(dom('strong', '', 'Selecione as equipes'));
+        menu.append(dom('strong', '', 'Atividades por equipe'));
         const choices = new Map(state.teams.map(team => [team.id, team]));
-        item.teams.forEach(team => { if (!choices.has(team.team_id)) choices.set(team.team_id, {id: team.team_id, name: team.name}); });
+        item.teams.forEach(team => { if (!choices.has(team.team_id)) choices.set(team.team_id, {id: team.team_id, name: team.name, activities: []}); });
+        let choiceCount = 0;
         choices.forEach(team => {
-            const assigned = item.teams.some(existing => existing.team_id === team.id);
-            const label = dom('label', 'sa-quick-option'), checkbox = dom('input');
-            checkbox.type = 'checkbox'; checkbox.value = team.id; checkbox.checked = assigned;
-            label.append(checkbox, dom('span', '', team.name)); menu.append(label);
+            const existing = item.teams.find(row => row.team_id === team.id);
+            const activities = new Map((team.activities || []).map(activity => [activity.id, activity]));
+            existing?.activities.forEach(activity => { if (!activities.has(activity.id)) activities.set(activity.id, activity); });
+            if (!activities.size) return;
+            menu.append(dom('span', 'sa-quick-group', team.name));
+            activities.forEach(activity => {
+                const label = dom('label', 'sa-quick-option'), checkbox = dom('input');
+                checkbox.type = 'checkbox'; checkbox.value = activity.id; checkbox.dataset.teamId = team.id;
+                checkbox.checked = !!existing?.activities.some(row => row.id === activity.id);
+                label.append(checkbox, dom('span', '', activity.name)); menu.append(label); choiceCount++;
+            });
         });
-        if (!choices.size) menu.append(dom('p', '', 'Nenhuma equipe cadastrada.'));
-        const apply = button('Aplicar equipes', 'org-btn-primary', async () => {
+        if (!choiceCount) menu.append(dom('p', '', 'Nenhuma atividade cadastrada nas equipes.'));
+        if (item.teams.length) menu.append(dom('p', 'sa-quick-hint', 'As equipes já vinculadas permanecem no culto; edite a ocorrência para removê-las.'));
+        const apply = button('Aplicar atividades', 'org-btn-primary', async () => {
             const chosen = new Set(Array.from(menu.querySelectorAll('input:checked'), input => Number(input.value)));
             apply.disabled = true;
             if (!await flush()) { apply.disabled = false; return; }
             const occurrence = state.occurrences.find(row => row.id === item.id);
             if (!occurrence) { apply.disabled = false; return; }
-            const teams = occurrence.teams.filter(row => chosen.has(row.team_id)).map(row => ({
+            const teams = occurrence.teams.map(row => ({
                 team_id: row.team_id, member_count: row.member_count, minimum_mentors: row.minimum_mentors,
-                activity_ids: row.activities.map(activity => activity.id), notes: row.notes,
+                activity_ids: Array.from(menu.querySelectorAll('input:checked')).filter(input => Number(input.dataset.teamId) === row.team_id).map(input => Number(input.value)), notes: row.notes,
             }));
-            state.teams.filter(team => chosen.has(team.id) && !occurrence.teams.some(row => row.team_id === team.id)).forEach(team => teams.push({team_id: team.id, member_count: 2, activity_ids: team.activities.map(activity => activity.id), notes: ''}));
+            state.teams.filter(team => !occurrence.teams.some(row => row.team_id === team.id)).forEach(team => {
+                const activity_ids = team.activities.filter(activity => chosen.has(activity.id)).map(activity => activity.id);
+                if (activity_ids.length) teams.push({team_id: team.id, member_count: 2, activity_ids, notes: ''});
+            });
             if (!await send('save_occurrence', {occurrence_id: occurrence.id, name: occurrence.name, date: occurrence.date, time: occurrence.time, notes: occurrence.notes, teams})) apply.disabled = false;
         });
-        apply.disabled = !choices.size; menu.append(apply); select.append(menu);
+        apply.disabled = !choiceCount; menu.append(apply); select.append(menu);
         return select;
     }
     function renderCalendar() {
         const grid = $('sa-calendar'); grid.replaceChildren();
         const ordered = [...state.occurrences].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-        if (!ordered.some(item => !item.teams.length)) $('sa-teams-required').hidden = true;
+        if (!ordered.some(item => !item.teams.some(team => team.activities.length))) $('sa-teams-required').hidden = true;
         const today = new Intl.DateTimeFormat('en-CA', {timeZone: 'America/Sao_Paulo'}).format(new Date());
         const allDays = calendarDays(state.year, state.month);
         // Keep the calendar visually compact: render only the complete weeks
@@ -158,10 +172,6 @@
         ordered.forEach(item => { if (lastDate !== item.date) { agenda.append(dom('h3', 'sa-list-date', fmtDate(item.date))); lastDate = item.date; } const row = dom('div', 'sa-list-row'); row.append(occurrenceButton(item, true), occurrenceTeamSelect(item)); agenda.append(row); });
         if (!ordered.length) agenda.append(dom('p', 'sa-empty', 'Nenhuma ocorrência neste planejamento. Adicione um culto ou evento.'));
         $('sa-summary').textContent = `${ordered.length} ocorrência${ordered.length === 1 ? '' : 's'} · ${new Set(ordered.flatMap(item => item.teams.map(team => team.team_id))).size} equipes`;
-        const legend = $('sa-legend'); legend.replaceChildren(); const unique = new Map();
-        ordered.forEach(item => item.teams.forEach(team => unique.set(team.team_id, team)));
-        unique.forEach(team => { const node = dom('span', 'sa-legend-item'), dot = dom('span', 'sa-dot'); dot.style.backgroundColor = team.color; node.append(dot, dom('span', '', team.name)); legend.append(node); });
-        if (!unique.size) legend.append(dom('span', '', 'Selecione as equipes em cada culto ou evento.'));
         const warnings = $('sa-warnings');
         if (warnings) {
             warnings.hidden = !state.warnings.length;
@@ -248,10 +258,10 @@
     }
     async function navigate(step) {
         if (!await flush()) return;
-        const missing = state.occurrences.filter(item => !item.teams.length);
+        const missing = state.occurrences.filter(item => !item.teams.some(team => team.activities.length));
         if (step > 1 && missing.length) {
             const notice = $('sa-teams-required');
-            notice.textContent = `Selecione pelo menos uma equipe em cada culto ou evento para avançar. ${missing.length} ${missing.length === 1 ? 'ocorrência ainda está sem equipe' : 'ocorrências ainda estão sem equipe'}.`;
+            notice.textContent = `Selecione pelo menos uma atividade em cada culto ou evento para avançar. ${missing.length} ${missing.length === 1 ? 'ocorrência ainda está sem atividade' : 'ocorrências ainda estão sem atividade'}.`;
             notice.hidden = false; notice.scrollIntoView({behavior: 'smooth', block: 'center'});
             return;
         }

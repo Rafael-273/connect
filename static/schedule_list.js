@@ -24,6 +24,16 @@
         });
     }
     const dialog = document.getElementById('schedule-create-dialog');
+    const deleteDialog = document.getElementById('schedule-delete-dialog');
+    if (deleteDialog) {
+        document.querySelectorAll('[data-delete-schedule]').forEach(button => button.addEventListener('click', () => {
+            document.getElementById('schedule-delete-name').textContent = button.dataset.scheduleName;
+            document.getElementById('schedule-delete-form').action = button.dataset.deleteUrl;
+            deleteDialog.showModal();
+        }));
+        document.getElementById('schedule-delete-close').addEventListener('click', () => deleteDialog.close());
+        document.getElementById('schedule-delete-cancel').addEventListener('click', () => deleteDialog.close());
+    }
     if (!dialog) return;
     document.querySelectorAll('[data-open-schedule]').forEach(button => {
         button.addEventListener('click', () => dialog.showModal());

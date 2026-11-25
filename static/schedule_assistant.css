@@ -547,6 +547,8 @@
 .sa-quick-menu { position:absolute; z-index:30; top:calc(100% + 6px); right:0; width:260px; max-width:calc(100vw - 48px); max-height:300px; overflow:auto; display:flex; flex-direction:column; gap:8px; padding:14px; border:1px solid #e5e7eb; border-radius:12px; background:#fff; box-shadow:0 12px 30px #20253626; }
 .sa-quick-menu > strong { font-size:12px; }
 .sa-quick-menu > p { color:#687084; font-size:12px; }
+.sa-quick-group { padding-top:8px; border-top:1px solid #eef0f4; color:#687084; font-size:11px; font-weight:700; }
+.sa-quick-menu .sa-quick-hint { line-height:1.4; font-size:11px; }
 .sa-quick-option { display:flex; align-items:center; gap:8px; padding:6px 2px; cursor:pointer; }
 .sa-quick-menu button { margin-top:4px; }
 .sa-list-occurrence {

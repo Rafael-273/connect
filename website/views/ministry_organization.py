@@ -146,24 +146,34 @@ class MinistryTeamEdit(MinistryOrganizationMixin, View):
             return redirect(f"{reverse('ministry_team_list', args=[ministry_id])}?create=1")
         team = self.team(pk)
         form = MediaSubTeamForm(instance=team, ministry=self.ministry)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            form.fields.pop('responsibilities')
+            form.fields.pop('is_active')
         return self.render_form(request, form, team)
 
-    def render_form(self, request, form, team):
-        return render(request, 'member/ministry_organization/form.html', self.context(
-            form=form, title='Editar equipe' if team else 'Nova equipe', section='teams',
+    def render_form(self, request, form, team, status=200):
+        modal = team is not None and request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        template = 'member/ministry_organization/team_form_modal.html' if modal else 'member/ministry_organization/form.html'
+        return render(request, template, self.context(
+            form=form, team=team, title='Editar equipe' if team else 'Nova equipe', section='teams',
             back_url='ministry_team_list',
-        ))
+        ), status=status)
 
     def post(self, request, ministry_id, pk=None):
         team = self.team(pk) if pk else None
         form = MediaSubTeamForm(request.POST, instance=team, ministry=self.ministry)
+        if pk is not None and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            form.fields.pop('responsibilities')
+            form.fields.pop('is_active')
         if form.is_valid():
             team = form.save()
             messages.success(request, 'Equipe salva.')
+            if pk is not None and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': True, 'redirect_url': reverse('ministry_team_detail', kwargs={'ministry_id': ministry_id, 'pk': team.pk})})
             return redirect('ministry_team_detail', ministry_id=ministry_id, pk=team.pk)
         if pk is None:
             return self.render_team_list(request, create_form=form, create_mode=True)
-        return self.render_form(request, form, team)
+        return self.render_form(request, form, team, status=400 if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else 200)
 
 
 class MinistryTeamDetail(MinistryOrganizationMixin, View):

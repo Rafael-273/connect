@@ -77,6 +77,27 @@ class MediaTeamConfigurationTests(TestCase):
         self.assertEqual(self.membership.experience_level, 'mentor')
         self.assertTrue(self.membership.is_active)
 
+    def test_team_edit_modal_loads_validates_and_saves(self):
+        self.team.responsibilities = 'Responsabilidade existente'
+        self.team.save()
+        url = self.url('ministry_team_edit')
+        headers = {'HTTP_X_REQUESTED_WITH': 'XMLHttpRequest'}
+        response = self.client.get(url, **headers)
+        self.assertContains(response, 'team-default-modal-form')
+        self.assertContains(response, 'Editar equipe')
+        self.assertNotContains(response, 'name="responsibilities"')
+        self.assertNotContains(response, 'name="is_active"')
+        response = self.client.post(url, {'name': ''}, **headers)
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, 'team-default-modal-form', status_code=400)
+        response = self.client.post(url, {'name': 'Cobertura atualizada'}, **headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['success'])
+        self.team.refresh_from_db()
+        self.assertEqual(self.team.name, 'Cobertura atualizada')
+        self.assertTrue(self.team.is_active)
+        self.assertEqual(self.team.responsibilities, 'Responsabilidade existente')
+
     def test_invalid_experience_and_get_do_not_update(self):
         url = self.url('media_team_experience_edit', membership_id=self.membership.pk)
         self.assertEqual(self.client.get(url).status_code, 405)
@@ -115,6 +136,12 @@ class MediaTeamConfigurationTests(TestCase):
         self.membership.activities.clear()
         form = MediaSubTeamMembershipForm(instance=self.membership, sub_team=self.team)
         self.assertFalse(form.initial['activities'])
+
+    def test_add_member_modal_shows_selected_activity_options(self):
+        response = self.client.get(self.url('ministry_team_detail'))
+        self.assertContains(response, 'Selecione um membro')
+        self.assertContains(response, 'member-activity-option')
+        self.assertRegex(response.content.decode(), rf'<input[^>]*value="{self.activity.pk}"[^>]*checked')
 
     def test_activities_create_edit_order_and_deactivate(self):
         self.client.post(self.url('media_team_activity_create'), {'name': 'Fotografia', 'sort_order': 1, 'is_active': 'on'})
