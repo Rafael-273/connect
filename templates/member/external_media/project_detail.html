@@ -13,7 +13,7 @@
 
 {% block media_header_title %}
 <a href="{% url 'external_media_dashboard' %}" class="project-detail-header-title">
-    <span class="project-detail-header-title__meta"><i class="fas fa-layer-group"></i>{{ project.template_version.template.name }}</span>
+    <span class="project-detail-header-title__meta"><i class="fas fa-layer-group"></i>{% if project.is_free %}Edição livre{% else %}{{ project.template_version.template.name }}{% endif %}</span>
     <strong>{{ project.name }}</strong>
 </a>
 {% endblock %}
@@ -325,11 +325,11 @@
             <button type="button" class="project-media-action" data-close-reprocess-options aria-label="Fechar"><i class="fas fa-xmark"></i></button>
         </div>
         <div class="project-reprocess-options">
-            <form method="post" action="{% url 'external_media_project_resume_editing' project.public_id %}">{% csrf_token %}<button class="project-reprocess-option" type="submit"><span class="project-reprocess-option__icon"><i class="fas fa-layer-group"></i></span><span><strong>Voltar aos blocos</strong><small>Altere vídeos, B-rolls, câmeras extras e a organização das cenas antes de processar novamente.</small></span></button></form>
-            {% if project.template_version.interactive_preview_enabled and project.current_timeline_revision_id %}
+            {% if not project.is_free %}<form method="post" action="{% url 'external_media_project_resume_editing' project.public_id %}">{% csrf_token %}<button class="project-reprocess-option" type="submit"><span class="project-reprocess-option__icon"><i class="fas fa-layer-group"></i></span><span><strong>Voltar aos blocos</strong><small>Altere vídeos, B-rolls, câmeras extras e a organização das cenas antes de processar novamente.</small></span></button></form>{% endif %}
+            {% if project.editor_settings.interactive_preview_enabled and project.current_timeline_revision_id %}
             <form method="post" action="{% url 'external_media_project_reopen_review' project.public_id %}">{% csrf_token %}<button class="project-reprocess-option" type="submit"><span class="project-reprocess-option__icon"><i class="fas fa-sliders"></i></span><span><strong>Voltar à etapa de edição</strong><small>Abra a timeline atual para ajustar cortes, enquadramentos, B-rolls e legendas antes de uma nova renderização.</small></span></button></form>
             {% endif %}
-            <form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="project-reprocess-option" type="submit"><span class="project-reprocess-option__icon"><i class="fas fa-rotate"></i></span><span><strong>Reprocessar tudo</strong><small>Execute novamente a análise, legendas e renderização usando os vídeos já enviados.</small></span></button></form>
+            {% if not project.is_free %}<form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<input type="hidden" name="reset_manual_sequence" value="1"><button class="project-reprocess-option" type="submit"><span class="project-reprocess-option__icon"><i class="fas fa-rotate"></i></span><span><strong>Reprocessar tudo</strong><small>{% if project.has_manual_sequence %}Gere uma nova montagem a partir dos blocos e substitua a sequência manual.{% else %}Execute novamente a análise, legendas e renderização usando os vídeos já enviados.{% endif %}</small></span></button></form>{% endif %}
         </div>
         <div class="flex justify-end mt-5"><button type="button" class="media-btn media-muted" data-close-reprocess-options>Cancelar</button></div>
     </div>
@@ -354,7 +354,7 @@
     <div class="project-media-block__header"><div class="project-media-block__identity"><span class="project-media-block__number"><i class="fas fa-video"></i></span><div><h3 class="project-media-block__title">Vídeo do projeto</h3><p class="text-sm text-gray-500 mt-0.5">Envio direto, sem cenas predefinidas</p></div></div><div class="flex items-center gap-2"><span class="project-media-block__state {% if direct_media %}is-ready{% else %}is-empty{% endif %}">{% if direct_media %}<i class="fas fa-check"></i>Vídeo adicionado{% else %}<i class="fas fa-arrow-up"></i>Enviar vídeo{% endif %}</span>{% if direct_media %}<details class="project-actions-menu"><summary class="project-media-action cursor-pointer" aria-label="Mais opções"><i class="fas fa-ellipsis"></i></summary><div class="project-actions-menu__list"><button type="button" class="project-actions-menu__item" onclick="const card=document.querySelector('[data-broll-assets-list]');card.classList.remove('hidden');document.getElementById('direct-elements-panel').open=true;this.closest('details').removeAttribute('open')"><i class="fas fa-photo-film text-violet-600"></i>Adicionar elemento</button><button type="button" class="project-actions-menu__item" onclick="const panel=document.getElementById('direct-camera-panel');panel.classList.remove('hidden');panel.open=true;this.closest('details').removeAttribute('open')"><i class="fas fa-camera text-sky-600"></i>Adicionar câmera extra</button></div></details>{% endif %}</div></div>
     <div class="project-media-block__body">
         {% if direct_media %}<div class="space-y-2 mb-4">{% for media in direct_media %}
-        <div class="project-uploaded-media flex items-center justify-between gap-3 rounded-lg border border-white bg-white p-3 shadow-sm"><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.file_size|filesizeformat }}{% if media.trim_ranges %} · {{ media.trim_ranges|length }} trechos aplicados{% elif media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div><div class="flex items-center gap-1 shrink-0">{% if media.preview_status == 'READY' %}<button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-preview-start="{{ media.trim_start_ms|default:0 }}" data-media-preview-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button><button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges_json }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">Cortar</span></button>{% elif media.preview_status == 'ERROR' %}<span class="text-xs text-amber-700" title="{{ media.preview_error }}">Preview indisponível</span>{% else %}<span class="text-xs text-gray-500" data-preview-pending data-preview-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}"><i class="fas fa-spinner fa-spin mr-1"></i>Preparando preview</span>{% endif %}<form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover"><i class="fas fa-trash"></i></button></form></div></div>
+        <div class="project-uploaded-media flex items-center justify-between gap-3 rounded-lg border border-white bg-white p-3 shadow-sm"><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.file_size|filesizeformat }}{% if media.trim_ranges %} · {{ media.trim_ranges|length }} trechos aplicados{% elif media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div><div class="flex items-center gap-1 shrink-0">{% if media.preview_status == 'READY' %}<button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-preview-start="{{ media.trim_start_ms|default:0 }}" data-media-preview-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button><button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges_json }}" data-take-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}" data-trim-reviewed="{{ media.trim_reviewed|yesno:'true,false' }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">Cortar</span></button>{% elif media.preview_status == 'ERROR' %}<span class="text-xs text-amber-700" title="{{ media.preview_error }}">Preview indisponível</span>{% else %}<span class="text-xs text-gray-500" data-preview-pending data-preview-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}"><i class="fas fa-spinner fa-spin mr-1"></i>Preparando preview</span>{% endif %}<form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover"><i class="fas fa-trash"></i></button></form></div></div>
         {% endfor %}</div>{% endif %}
         {% if direct_media %}
         <section class="order-3 mt-4 overflow-hidden rounded-xl border border-violet-100 bg-violet-50/30{% if not direct_brolls %} hidden{% endif %}" data-broll-assets-list>
@@ -391,7 +391,7 @@
             <div class="flex items-center gap-1 shrink-0">
                 {% if media.preview_status == 'READY' %}
                 <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-preview-start="{{ media.trim_start_ms|default:0 }}" data-media-preview-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button>
-                <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges_json }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">{% if media.trim_ranges or media.trim_start_ms or media.trim_end_ms %}Editar corte{% else %}Cortar{% endif %}</span></button>
+                <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges_json }}" data-take-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}" data-trim-reviewed="{{ media.trim_reviewed|yesno:'true,false' }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">{% if media.trim_ranges or media.trim_start_ms or media.trim_end_ms %}Editar corte{% else %}Cortar{% endif %}</span></button>
                 {% elif media.preview_status == 'ERROR' %}
                 <span class="text-xs text-amber-700" title="{{ media.preview_error }}">Preview indisponível</span>
                 {% else %}
@@ -418,7 +418,7 @@
             <div class="flex items-center justify-between gap-3 rounded-lg border border-white bg-white p-3 shadow-sm" data-media-id="{{ media.pk }}">
                 <div class="flex items-center min-w-0 gap-3"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><i class="fas fa-camera"></i></span><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.camera_label|default:"Câmera extra" }} · {{ media.file_size|filesizeformat }}{% if media.trim_ranges %} · {{ media.trim_ranges|length }} trechos aplicados{% elif media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div></div>
                 <div class="flex items-center gap-1 shrink-0">
-                    {% if media.preview_status == 'READY' %}<button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-preview-start="{{ media.trim_start_ms|default:0 }}" data-media-preview-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button><button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges_json }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">Cortar</span></button>{% elif media.preview_status == 'ERROR' %}<span class="text-xs text-amber-700" title="{{ media.preview_error }}">Preview indisponível</span>{% else %}<span class="text-xs text-gray-500" data-preview-pending data-preview-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}"><i class="fas fa-spinner fa-spin mr-1"></i>Preparando preview</span>{% endif %}
+                    {% if media.preview_status == 'READY' %}<button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-preview-start="{{ media.trim_start_ms|default:0 }}" data-media-preview-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button><button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges_json }}" data-take-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}" data-trim-reviewed="{{ media.trim_reviewed|yesno:'true,false' }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">Cortar</span></button>{% elif media.preview_status == 'ERROR' %}<span class="text-xs text-amber-700" title="{{ media.preview_error }}">Preview indisponível</span>{% else %}<span class="text-xs text-gray-500" data-preview-pending data-preview-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}"><i class="fas fa-spinner fa-spin mr-1"></i>Preparando preview</span>{% endif %}
                     <form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover câmera extra"><i class="fas fa-trash"></i></button></form>
                 </div>
             </div>
@@ -449,9 +449,16 @@
         </div>
         {% endif %}
         {% if broll_config.enabled %}
-            <section id="scene-elements-card-{{ forloop.counter }}" class="order-3 mt-4 overflow-hidden rounded-xl border border-violet-100 bg-violet-50/30{% if not item.brolls %} hidden{% endif %}" data-broll-assets-list>
+            <section id="scene-elements-card-{{ forloop.counter }}" class="order-3 mt-4 overflow-hidden rounded-xl border border-violet-100 bg-violet-50/30{% if not item.brolls and not item.definition.default_brolls.exists %} hidden{% endif %}" data-broll-assets-list>
                 <div class="flex items-center justify-between gap-3 border-b border-violet-100 bg-violet-50/70 px-3 py-2"><div class="flex items-center gap-2"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600 text-xs text-white"><i class="fas fa-photo-film"></i></span><div><strong class="block text-sm text-gray-900">Elementos</strong><span class="block text-xs text-gray-500">Elementos visuais de apoio deste bloco</span></div></div>{% if not item.brolls %}<button type="button" class="project-media-action" aria-label="Fechar elementos" onclick="const panel=document.getElementById('scene-elements-panel-{{ forloop.counter }}');panel.open=false;this.closest('[data-broll-assets-list]').classList.add('hidden')"><i class="fas fa-xmark"></i></button>{% endif %}</div>
                 <div class="space-y-2 p-2" data-broll-assets-items>
+                {% if not item.is_custom and not item.brolls and item.definition.default_brolls.exists %}
+                <form method="post" action="{% url 'external_media_project_broll_upload' project.public_id item.definition.pk %}" class="flex flex-wrap items-center justify-between gap-2 p-2">
+                    {% csrf_token %}<input type="hidden" name="import_template_brolls" value="1">
+                    <span class="text-sm text-gray-600">Este bloco possui B-rolls padrão no modelo.</span>
+                    <button type="submit" class="media-btn media-muted text-sm"><i class="fas fa-layer-group"></i>Adicionar B-rolls do modelo</button>
+                </form>
+                {% endif %}
                 {% for broll in item.brolls %}
                 <div class="flex items-center justify-between gap-3 rounded-lg bg-white border border-violet-100 p-3">
                     <div class="min-w-0"><strong class="block truncate"><i class="fas {% if broll.media_type == 'VIDEO' %}fa-video{% else %}fa-image{% endif %} mr-1 text-violet-600"></i>{{ broll.original_filename }}</strong><span class="text-xs text-gray-500">{{ broll.get_media_type_display }}{% if broll.trim_start_ms or broll.trim_end_ms %} · corte aplicado{% endif %}</span></div>
@@ -585,11 +592,43 @@
 </details>
 {% endif %}
 
-<form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary w-full" {% if validation_errors %}disabled style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
+<div data-project-validation>
+{% if validation_errors %}
+<div id="project-validation-errors" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800" role="alert">
+    <strong class="block font-bold">Confira o que falta para gerar o vídeo:</strong>
+    <ul class="mt-2 list-disc pl-5 space-y-1">{% for error in validation_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+</div>
+<form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}{% if project.has_manual_sequence %}<label class="flex items-center gap-2 mb-3 text-sm"><input type="checkbox" name="reset_manual_sequence" value="1" required> Substituir a sequência manual pela montagem dos blocos</label>{% endif %}<button data-generate-video class="media-btn media-primary w-full" {% if validation_errors %}disabled aria-describedby="project-validation-errors" style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
 <script src="{% static 'external_media_s3_upload.js' %}"></script>
+<script src="{% static 'external_media_take_suggestions.js' %}"></script>
 <script>
 (function(){
     const MIN_TRIM_SECONDS = 0.1;
+    let validationRequest = 0;
+    async function refreshProjectValidation() {
+        const requestId = ++validationRequest;
+        try {
+            const response = await fetch(window.location.href, {credentials: 'same-origin', cache: 'no-store'});
+            if (!response.ok) return;
+            const html = await response.text();
+            if (requestId !== validationRequest) return;
+            const updated = new DOMParser().parseFromString(html, 'text/html');
+            const sourceErrors = updated.querySelector('[data-project-validation]');
+            const sourceButton = updated.querySelector('[data-generate-video]');
+            const errors = document.querySelector('[data-project-validation]');
+            const button = document.querySelector('[data-generate-video]');
+            if (!sourceErrors || !sourceButton || !errors || !button) return;
+            errors.innerHTML = sourceErrors.innerHTML;
+            button.disabled = sourceButton.disabled;
+            button.style.opacity = sourceButton.disabled ? '.5' : '';
+            if (sourceButton.disabled) button.setAttribute('aria-describedby', 'project-validation-errors');
+            else button.removeAttribute('aria-describedby');
+        } catch (_) {
+            // A atualização será tentada após o próximo envio ou recarga da página.
+        }
+    }
     function formatFileSize(bytes) {
         if (!bytes) return '0 B';
         const units = ['B', 'KB', 'MB', 'GB'];
@@ -646,6 +685,7 @@
             state.className = 'project-media-block__state is-ready';
             state.innerHTML = '<i class="fas fa-check"></i>Vídeo adicionado';
         }
+        refreshProjectValidation();
     }
     async function updatePreviewStates() {
         const pending = document.querySelectorAll('[data-preview-pending][data-preview-status-url]');
@@ -676,6 +716,9 @@
                     trimButton.dataset.mediaName = media.name;
                     trimButton.dataset.mediaUrl = media.preview_url;
                     trimButton.dataset.mediaTrimUrl = media.trim_url;
+                    trimButton.dataset.takeStatusUrl = status.dataset.previewStatusUrl;
+                    trimButton.dataset.mediaTrimRanges = JSON.stringify(media.trim_ranges || []);
+                    trimButton.dataset.trimReviewed = String(media.take_analysis?.trim_reviewed || false);
                     trimButton.dataset.mediaTrimStart = media.trim_start_ms || 0;
                     trimButton.dataset.mediaTrimEnd = media.trim_end_ms || '';
                     trimButton.innerHTML = `<i class="fas fa-scissors"></i><span class="hidden sm:inline">${media.trim_start_ms || media.trim_end_ms ? 'Editar corte' : 'Cortar'}</span>`;
@@ -1118,7 +1161,7 @@
     <h2 class="text-xl font-black">Tentar novamente</h2>
     <p class="text-gray-500 mb-5">Você pode repetir o projeto inteiro ou, quando as legendas já estiverem prontas, repetir só a renderização final.</p>
     <div class="flex flex-wrap justify-center gap-3">
-        <form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-secondary">Reprocessar projeto</button></form>
+        {% if not project.is_free and not project.has_manual_sequence %}<form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-secondary">Reprocessar projeto</button></form>{% endif %}
         {% if can_retry_render %}
         <form method="post" action="{% url 'external_media_project_render' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary">Tentar só a renderização</button></form>
         {% endif %}
@@ -1286,6 +1329,10 @@
             <div class="flex flex-wrap items-center justify-between gap-2"><div><strong class="text-sm text-gray-800">Trechos preservados</strong><p class="text-xs text-gray-500 mt-0.5">Ajuste o trecho ativo na linha do tempo e adicione outro quando precisar.</p></div><button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim-add><i class="fas fa-plus"></i>Adicionar trecho</button></div>
             <div class="flex flex-wrap gap-2 mt-3" data-media-trim-ranges></div>
         </div>
+        <div class="hidden mt-3 text-sm text-gray-600" data-take-analysis-panel aria-live="polite">
+            <span data-take-analysis-label></span>
+            <button type="button" class="hidden media-btn media-muted text-sm ml-2" data-take-analysis-load>Carregar sugestões no lugar dos trechos atuais</button>
+        </div>
         <p class="hidden text-sm text-red-700 mt-3" data-media-trim-error></p>
         <div class="flex flex-wrap items-center justify-between gap-3 mt-5">
             <p class="flex items-center gap-2 text-xs text-gray-500"><i class="fas fa-circle-info text-gray-400"></i>Prévia otimizada para edição. O vídeo final mantém a qualidade original.</p>
@@ -1353,6 +1400,48 @@
     };
     keepVideoInline(trimPlayer);
     let trimUrl = '';
+    let takeState = new window.TakeSuggestionState(true);
+    let takeEpoch = 0;
+    let takeTimer;
+    const takePanel = trimModal?.querySelector('[data-take-analysis-panel]');
+    const takeLabel = trimModal?.querySelector('[data-take-analysis-label]');
+    const takeLoad = trimModal?.querySelector('[data-take-analysis-load]');
+    const loadTakeSuggestions = () => {
+        if (!takeState.latest.length) return;
+        trimRanges = takeState.latest.map(item => ({start_seconds: item.start_ms / 1000, end_seconds: item.end_ms / 1000}));
+        activeTrimRange = 0;
+        trimStart.value = trimRanges[0].start_seconds.toFixed(3);
+        trimEnd.value = trimRanges[0].end_seconds.toFixed(3);
+        renderTrimRanges(); syncTrimTimeline();
+        takeLoad.classList.add('hidden');
+    };
+    takeLoad?.addEventListener('click', () => { takeState.edit(); loadTakeSuggestions(); });
+    async function pollTakeSuggestions(url, epoch) {
+        try {
+            const response = await fetch(url, {credentials: 'same-origin'});
+            if (epoch !== takeEpoch) return;
+            if (!response.ok) throw new Error('status');
+            const media = await response.json();
+            if (epoch !== takeEpoch) return;
+            const analysis = media.take_analysis;
+            if (!analysis) return;
+            takePanel.classList.remove('hidden');
+            if (takeState.receive(analysis)) loadTakeSuggestions();
+            takeLoad.classList.toggle('hidden', !takeState.latest.length || takeState.loaded && !takeState.dirty);
+            const automaticApplied = analysis.suggestions.length && JSON.stringify((media.trim_ranges || []).map(item => [item.start_ms, item.end_ms])) === JSON.stringify(analysis.suggestions.map(item => [item.start_ms, item.end_ms]));
+            const labels = {pending: 'Analisando vídeo… Você pode marcar manualmente.', running: 'Analisando vídeo… Você pode marcar manualmente.', ready: automaticApplied ? 'Trechos automáticos salvos. Você pode ajustá-los.' : 'Sugestões disponíveis — confira os trechos e salve para confirmar.', error: 'Análise indisponível. A marcação manual continua disponível.', unavailable: 'Análise indisponível. A marcação manual continua disponível.'};
+            takeLabel.textContent = analysis.status === 'ready' && !analysis.suggestions.length ? 'Revisão recomendada: nenhum trecho sugerido.' : (labels[analysis.status] || labels.pending);
+            if (analysis.review_reason) takeLabel.textContent += ' ' + analysis.review_reason;
+            if (['pending', 'running'].includes(analysis.status)) takeTimer = setTimeout(() => pollTakeSuggestions(url, epoch), 4000);
+        } catch (_) {
+            if (epoch === takeEpoch) { takePanel.classList.remove('hidden'); takeLabel.textContent = 'Análise indisponível. A marcação manual continua disponível.'; }
+        }
+    }
+    trimModal?.addEventListener('click', event => {
+        if (event.target.closest('[data-media-trim-add], [data-media-trim-reset], [data-media-trim-set-start], [data-media-trim-set-end]') || event.target.closest('[data-media-trim-ranges] .text-red-600')) takeState.edit();
+    }, true);
+    trimModal?.addEventListener('input', () => takeState.edit(), true);
+
     let trimIsSingle = false;
     let activeTrimHandle = null;
     let trimRanges = [];
@@ -1384,6 +1473,7 @@
         trimPlay?.querySelector('i')?.classList.toggle('fa-pause', !trimPlayer.paused);
     };
     const setTrimStart = (value) => {
+        takeState.edit();
         const end = selectedTrimEnd();
         const previousEnd = activeTrimRange ? trimRanges[activeTrimRange - 1].end_seconds + .01 : 0;
         const start = clampTrim(value, previousEnd, Math.max(previousEnd, end - 0.1));
@@ -1393,6 +1483,7 @@
         syncTrimTimeline();
     };
     const setTrimEnd = (value) => {
+        takeState.edit();
         const duration = trimDuration();
         const nextStart = activeTrimRange < trimRanges.length - 1 ? trimRanges[activeTrimRange + 1].start_seconds - .01 : duration;
         const end = clampTrim(value, Math.min(nextStart, selectedTrimStart() + 0.1), nextStart);
@@ -1434,6 +1525,7 @@
         moveTrimHandle(event);
     };
     const closeTrim = () => {
+        takeEpoch++; clearTimeout(takeTimer);
         if (!trimModal || !trimPlayer) return;
         trimPlayer.pause(); trimPlayer.removeAttribute('src'); trimPlayer.load();
         trimModal.classList.add('hidden'); trimModal.classList.remove('flex');
@@ -1443,6 +1535,9 @@
         const button = closestFromEvent(event, '[data-media-trim]');
         if (!button) return;
         if (!trimModal || !trimPlayer || !trimStart || !trimEnd) return;
+        takeEpoch++; clearTimeout(takeTimer);
+        takePanel.classList.add('hidden'); takeLoad.classList.add('hidden');
+        takeState = new window.TakeSuggestionState(button.dataset.trimReviewed === 'true' || Boolean(Number(button.dataset.mediaTrimStart)) || Boolean(button.dataset.mediaTrimEnd) || (button.dataset.mediaTrimRanges && button.dataset.mediaTrimRanges !== '[]'));
         trimUrl = button.dataset.mediaTrimUrl || '';
         trimIsSingle = button.dataset.mediaTrimSingle === 'true';
         trimAddRange?.classList.toggle('hidden', trimIsSingle);
@@ -1457,11 +1552,12 @@
         trimPlayer.load();
         trimModal.classList.remove('hidden'); trimModal.classList.add('flex');
         trimModal.setAttribute('aria-hidden', 'false');
+        if (button.dataset.takeStatusUrl) pollTakeSuggestions(button.dataset.takeStatusUrl, takeEpoch);
     });
     trimModal?.querySelectorAll('[data-media-trim-close]').forEach((button) => button.addEventListener('click', closeTrim));
     trimModal?.querySelector('[data-media-trim-set-start]')?.addEventListener('click', () => setTrimStart(trimPlayer.currentTime || 0));
     trimModal?.querySelector('[data-media-trim-set-end]')?.addEventListener('click', () => setTrimEnd(trimPlayer.currentTime || trimDuration()));
-    trimModal?.querySelector('[data-media-trim-reset]')?.addEventListener('click', () => { if (trimStart) trimStart.value = '0.000'; if (trimEnd) trimEnd.value = ''; trimPlayer.currentTime = 0; syncTrimTimeline(); });
+    trimModal?.querySelector('[data-media-trim-reset]')?.addEventListener('click', () => { takeState.edit(); trimRanges = [{start_seconds: 0, end_seconds: trimDuration()}]; activeTrimRange = 0; renderTrimRanges(); if (trimStart) trimStart.value = '0.000'; if (trimEnd) trimEnd.value = ''; trimPlayer.currentTime = 0; syncTrimTimeline(); });
     trimPlayer?.addEventListener('loadedmetadata', () => { if (!trimRanges[activeTrimRange].end_seconds) trimRanges[activeTrimRange].end_seconds = trimDuration(); renderTrimRanges(); syncTrimTimeline(); });
     trimPlayer?.addEventListener('timeupdate', () => {
         if (!trimPlayer.paused && trimPlayer.currentTime >= selectedTrimEnd()) { trimPlayer.pause(); trimPlayer.currentTime = selectedTrimEnd(); }
@@ -1800,7 +1896,7 @@
                         headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest'},
                         body: JSON.stringify({
                             filename: file.name, size: file.size, content_type: file.type,
-                            description: form.querySelector('[name=description]').value,
+                            description: formData.get('description') || '',
                             duration_seconds: form.querySelector('[name=duration_seconds]').value,
                         }),
                     });
@@ -1960,6 +2056,18 @@
         document.body.removeAttribute('aria-busy');
     };
     window.projectSubmitOverlay = {show, hide};
+
+    let downloadPending = false;
+    document.querySelectorAll('.project-header-download').forEach((link) => {
+        link.addEventListener('click', (event) => {
+            if (downloadPending) { event.preventDefault(); return; }
+            downloadPending = true;
+            show('Iniciando download…');
+            // O navegador assume a transferência; não há evento de conclusão
+            // confiável para downloads iniciados por um link comum.
+            window.setTimeout(() => { downloadPending = false; hide(); }, 3000);
+        });
+    });
 
     document.addEventListener('submit', (event) => {
         const form = event.target;

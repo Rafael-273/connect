@@ -175,7 +175,8 @@ def serialize_availability(state):
                'shortage': shortage, 'mentor_shortage': mentor_shortage}
         rows.append(row)
         if shortage:
-            warnings.append(f'{date[8:10]}/{date[5:7]} · {row["time"]} · {plan.team_name}: faltam {shortage} integrantes com disponibilidade confirmada.')
+            missing_label = f'falta {shortage} integrante' if shortage == 1 else f'faltam {shortage} integrantes'
+            warnings.append(f'{date[8:10]}/{date[5:7]} · {row["time"]} · {plan.team_name}: {missing_label} com disponibilidade confirmada.')
         if mentor_shortage:
             warnings.append(f'{date[8:10]}/{date[5:7]} · {row["time"]} · {plan.team_name}: nenhuma pessoa apta a acompanhar com disponibilidade confirmada.')
         if unclassified:

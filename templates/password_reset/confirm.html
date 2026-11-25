@@ -47,11 +47,11 @@
     }
     html, body { overflow-x: hidden; width: 100%; height: 100%; position: fixed; margin: 0; padding: 0; }
     .login-wrapper { position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; }
-    .login-card-container { height: 100vh; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none; }
+    .login-card-container { height: var(--app-viewport-height); overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none; }
     .login-card-container::-webkit-scrollbar { display: none; }
     @media (max-width: 640px) {
         .text-gradient { -webkit-text-fill-color: white; background: none; }
-        .mobile-full-height { min-height: 100vh; }
+        .mobile-full-height { min-height: var(--app-viewport-height); }
     }
 </style>
 {% endblock %}

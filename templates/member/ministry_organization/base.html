@@ -11,7 +11,7 @@
     {% include 'parciais/messages.html' %}
 
     {% block org_header %}
-    {% url 'media_organization' as org_url %}
+    {% url 'member_dashboard' as org_url %}
     {% if ministry.description %}
     {% include 'parciais/org_media_header.html' with back_url=org_url title=ministry.name subtitle=ministry.description %}
     {% else %}

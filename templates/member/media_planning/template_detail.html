@@ -31,60 +31,87 @@
         overflow-y: auto; background: #fff; border-radius: 1.25rem; border: 1px solid #e5e7eb;
     }
     .template-demand-card .demands-modal-body { padding: 1.25rem; }
+    .template-demand-modal.hidden { display: none; }
+    @media (max-width: 767px) {
+        .template-detail-header > section { padding-right: 7rem; }
+        .template-detail-header > section .gap-4 { gap: .65rem; }
+        .template-detail-header h1 { font-size: clamp(.95rem, 4.4vw, 1.15rem); line-height: 1.25; overflow-wrap: anywhere; }
+        .template-detail-header > section p { font-size: .7rem; line-height: 1.25; }
+        .template-detail-header .demands-page-nav { position: absolute; top: 1.25rem; right: 1rem; z-index: 45; padding: 0; border: 0; gap: .5rem; }
+        .template-detail-header .demands-page-active, .template-detail-header .demands-page-nav.is-open .demands-page-active { display: none; }
+        .template-detail-header .demands-page-nav-toggle, .template-detail-header .demands-page-nav.is-open .demands-page-nav-toggle { width: 2.75rem; height: 2.75rem; border-radius: .8rem; transform: none; }
+        .template-detail-header .demands-page-create { width: 2.75rem; height: 2.75rem; margin: 0; padding: 0; }
+        .template-detail-header .demands-page-nav-menu, .template-detail-header .demands-page-nav.is-open .demands-page-nav-menu { position: absolute; top: calc(100% + .5rem); right: 3.25rem; width: min(14rem, calc(100vw - 2rem)); max-width: none; margin: 0; overflow: visible; filter: none; transform: translateY(-.3rem); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .16s ease, transform .16s ease, visibility .16s; }
+        .template-detail-header .demands-page-nav.is-open .demands-page-nav-menu { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+        .template-detail-header .demands-kind-chips { display: grid; width: 100%; max-width: none; gap: .15rem; padding: .4rem; box-shadow: 0 14px 36px rgba(15,23,42,.16); }
+        .template-detail-header .demands-kind-chips .media-chip { justify-content: flex-start; width: 100%; min-height: 2.75rem; padding: .65rem .75rem; font-size: .8125rem; }
+        .template-detail-header .demands-kind-chips .media-chip span { display: inline; }
+        .template-detail-header .demands-kind-chips .media-chip i { width: 1.25rem; text-align: center; }
+        .org-media .template-item-list { display: grid; gap: .875rem; }
+        .template-item-card { border-color: #e5e7eb; box-shadow: 0 1px 3px rgba(16,24,40,.04); }
+        .template-item-card__head { display: flex; align-items: flex-start; gap: .75rem; }
+        .template-item-card__icon { display: flex; align-items: center; justify-content: center; flex: 0 0 2.75rem; height: 2.75rem; border-radius: .75rem; color: #c90905; background: #fef2f2; }
+        .template-item-card__info { min-width: 0; flex: 1; }
+        .template-item-card__info h2 { line-height: 1.35; overflow-wrap: anywhere; }
+        .template-item-card__actions { display: flex; flex-shrink: 0; gap: .375rem; }
+        .template-item-card__actions .action-btn { width: 2.75rem; height: 2.75rem; }
+        .template-item-card__steps { display: grid; gap: .5rem; margin-top: .875rem; padding-top: .75rem; border-top: 1px solid #f0f1f3; }
+        .template-item-card__step { display: flex; flex-wrap: wrap; align-items: baseline; gap: .15rem .4rem; color: #475467; font-size: .75rem; line-height: 1.4; }
+        .template-item-card__step i { color: #c90905; font-size: .5rem; }
+        .template-item-card__step strong { color: #344054; }
+        .template-demand-modal:not(.hidden) { align-items: flex-end; padding: 0; }
+        .template-demand-card { max-width: none; max-height: 92dvh; border-radius: 1.25rem 1.25rem 0 0; padding-bottom: env(safe-area-inset-bottom); }
+        .template-demand-card input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), .template-demand-card select, .template-demand-card textarea { font-size: 1rem; line-height: 1.4; }
+    }
+    @media (prefers-reduced-motion: reduce) { .template-detail-header .demands-page-nav-menu { transition: none; } }
 </style>
 {% include 'member/media_planning/partials/demands_assignments_styles.html' %}
 {% endblock %}
 
 {% block content %}
-<div class="org-media min-h-screen pb-28 bg-gray-50">
+<div class="org-media min-h-screen pb-8 bg-gray-50">
     {% include 'parciais/messages.html' %}
 
     {% url 'media_event_type_list' as back_url %}
-    {% include 'parciais/org_media_header.html' with back_url=back_url title=event_type.name subtitle='Demandas padrão deste tipo de evento' %}
-
-    <div class="px-4 sm:px-6 pt-3 pb-1">
-        {% include 'parciais/demands_kind_chips.html' with active='event_types' hide_content_kinds=True %}
+    <div class="relative template-detail-header">
+        {% include 'parciais/org_media_header.html' with back_url=back_url title=event_type.name subtitle='Demandas padrão deste tipo de evento' %}
+        {% include 'parciais/demands_header_navigation.html' with active='event_types' create_label='Nova demanda' create_href='?create=1' %}
     </div>
 
-    <div class="px-4 sm:px-6 pb-4 w-full">
+    <div class="px-4 sm:px-6 pt-4 pb-4 w-full">
         {% if event_type.description %}
         <p class="text-sm text-gray-500 mb-4 max-w-3xl">{{ event_type.description }}</p>
         {% endif %}
 
         <div class="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
-            <form method="get" class="flex items-center gap-2 flex-1 min-w-0 order-2 sm:order-1">
+            <form method="get" class="flex items-center gap-2 flex-1 min-w-0">
                 <input type="search" name="search" value="{{ search }}" placeholder="Buscar demanda..."
                        class="w-full min-w-0 h-10 px-4 border border-gray-200 rounded-xl focus:outline-none focus:border-red-400 bg-white text-sm">
-                <button type="submit" class="flex-shrink-0 w-10 h-10 text-white rounded-xl flex items-center justify-center org-btn-primary !p-0 !w-10 !h-10" title="Buscar">
+                <button type="submit" class="flex-shrink-0 w-10 h-10 text-white rounded-xl flex items-center justify-center org-btn-primary !p-0 !w-10 !h-10" title="Buscar" aria-label="Buscar demanda">
                     <i class="fas fa-search text-sm"></i>
                 </button>
             </form>
-            <a href="?create=1{% if search %}&search={{ search|urlencode }}{% endif %}"
-               class="order-1 sm:order-2 flex-shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm text-white"
-               style="background:#C90905;">
-                <i class="fas fa-plus"></i>
-                <span>Nova demanda</span>
-            </a>
         </div>
 
-        <div class="block md:hidden space-y-3">
+        <div class="template-item-list block md:hidden">
             {% for item in items %}
-            <div class="admin-card p-4">
-                <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
+            <div class="admin-card template-item-card p-4">
+                <div class="template-item-card__head">
+                    <div class="template-item-card__icon" aria-hidden="true"><i class="fas fa-clipboard-list"></i></div>
+                    <div class="template-item-card__info">
                         <h2 class="text-base font-bold text-gray-900">{{ item.title }}</h2>
                         <p class="text-xs text-gray-500 mt-0.5">{{ item.get_content_type_display }}{% if item.default_sub_team %} · {{ item.default_sub_team.name }}{% endif %}</p>
                     </div>
-                    <div class="flex gap-1.5 flex-shrink-0">
-                        <a href="?edit={{ item.pk }}{% if search %}&search={{ search|urlencode }}{% endif %}" class="action-btn action-btn-edit" title="Editar demanda"><i class="fas fa-pen"></i></a>
-                        <button type="button" class="action-btn action-btn-delete" title="Excluir demanda"
+                    <div class="template-item-card__actions">
+                        <a href="?edit={{ item.pk }}{% if search %}&search={{ search|urlencode }}{% endif %}" class="action-btn action-btn-edit" title="Editar demanda" aria-label="Editar {{ item.title }}"><i class="fas fa-pen"></i></a>
+                        <button type="button" class="action-btn action-btn-delete" title="Excluir demanda" aria-label="Excluir {{ item.title }}"
                                 data-delete-demand data-delete-url="{% url 'media_template_item_delete' item.pk %}" data-delete-name="{{ item.title }}"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
                 {% if item.steps.all %}
-                <div class="flex flex-wrap gap-1.5 mt-3">
+                <div class="template-item-card__steps">
                     {% for step in item.steps.all %}
-                    <span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">{{ step.title }}{% if step.due_label %} · {{ step.due_label }}{% endif %}</span>
+                    <div class="template-item-card__step"><i class="fas fa-circle" aria-hidden="true"></i><strong>{{ step.title }}</strong>{% if step.due_label %}<span>· {{ step.due_label }}</span>{% endif %}</div>
                     {% endfor %}
                 </div>
                 {% elif item.due_offset_days is not None or item.publication_offset_days is not None or item.lead_offset_days is not None %}
@@ -214,5 +241,4 @@
 }());
 </script>
 {% endif %}
-{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
 {% endblock %}

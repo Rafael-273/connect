@@ -277,7 +277,7 @@ def serialize_generation(state):
         elif pending and len(eligible) < plan.member_count:
             reasons.append(f'Esta ocorrência possui apenas {len(eligible)} integrante(s) elegível(is) para {plan.member_count} vagas.')
         elif pending:
-            reasons.append('Vagas pendentes: há disputa por integrantes entre cultos do mesmo dia ou necessidade de acompanhamento. Revise a composição e as disponibilidades.')
+            reasons.append(f'Não foi possível preencher {pending} vaga{"s" if pending != 1 else ""}. Pode haver pessoas escaladas em outro culto no mesmo dia ou falta de integrantes aptos a acompanhar. Revise as disponibilidades e a composição.')
         people = []
         prior = previous_by_team.get(plan.sub_team_id)
         for row in chosen:
@@ -294,13 +294,16 @@ def serialize_generation(state):
                 consecutive.append({'member': row.member.name, 'team': plan.team_name,
                                     'previous_date': prior[0], 'date': plan.occurrence.schedule_day.date.isoformat()})
         previous_by_team[plan.sub_team_id] = (plan.occurrence.schedule_day.date.isoformat(), {r.member_id for r in chosen})
+        busy_elsewhere = {r.member_id for r in current if r.occurrence_team_id and
+                          r.occurrence_team.occurrence_id != plan.occurrence_id and
+                          r.occurrence_team.occurrence.schedule_day.date == plan.occurrence.schedule_day.date}
         rows.append({'plan_id': plan.pk, 'team_id': plan.sub_team_id, 'team': plan.team_name, 'color': plan.color,
                      'occurrence_id': plan.occurrence_id, 'name': plan.occurrence.name,
                      'date': plan.occurrence.schedule_day.date.isoformat(), 'time': plan.occurrence.start_time.strftime('%H:%M'),
                      'activities': plan.activities, 'notes': plan.notes, 'required': plan.member_count,
                      'minimum_mentors': 1 if plan.member_count == 2 else plan.minimum_mentors,
                      'people': people, 'filled': valid_count, 'pending': pending, 'errors': errors, 'reasons': list(dict.fromkeys(reasons)),
-                     'candidates': [{'id': m, 'name': ctx['names'][m], 'experience': level, 'experience_label': EXPERIENCE[level]} for m, level in sorted(eligible.items(), key=lambda x: (ctx['names'][x[0]], x[0]))]})
+                     'candidates': [{'id': m, 'name': ctx['names'][m], 'experience': level, 'experience_label': EXPERIENCE[level]} for m, level in sorted(eligible.items(), key=lambda x: (ctx['names'][x[0]], x[0])) if m not in busy_elsewhere]})
     for member, name in ctx['names'].items():
         per_member.setdefault(member, {'member_id': member, 'name': name, 'services': set(), 'team_assignments': 0, 'mentor_assignments': 0})
     metrics = [{**row, 'services': len(row['services'])} for row in per_member.values()]

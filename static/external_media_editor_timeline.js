@@ -36,6 +36,63 @@
         if(timeline.video_tracks)next.video_tracks=timeline.video_tracks.map(track=>track.role==='main'?{...track,clips}:track);
         return {timeline:next,mapTime};
     }
-    root.ConnectEditorTimeline={removeVideoRange};
+    function moveVideo(timeline, selected, before) {
+        const matches = (clip, range) => range && String(clip.asset_id) === range.source_id
+            && Number(clip.master_in_ms) === range.start_ms && Number(clip.master_out_ms) === range.end_ms;
+        const original = timeline.clips;
+        const from = original.findIndex(clip => matches(clip, selected));
+        if (from < 0 || matches(original[from], before)) return null;
+        const order = original.filter((_, index) => index !== from);
+        const to = before ? order.findIndex(clip => matches(clip, before)) : order.length;
+        if (to < 0 || to === from) return null;
+        order.splice(to, 0, original[from]);
+        let cursor = 0;
+        const clock = new Map();
+        const clips = order.map(clip => {
+            const start = Number(clip.timeline_in_ms), end = Number(clip.timeline_out_ms);
+            const next = {...clip, timeline_in_ms: cursor, timeline_out_ms: cursor + end - start};
+            clock.set(clip, {start, end, offset: cursor - start});
+            cursor = next.timeline_out_ms;
+            return next;
+        });
+        const mapping = [];
+        for (const clip of original) {
+            const span = clock.get(clip), previous = mapping.at(-1);
+            if (previous && previous.end === span.start && previous.offset === span.offset) previous.end = span.end;
+            else mapping.push({...span});
+        }
+        const remap = item => mapping.flatMap(({start, end, offset}) => {
+            const left = Math.max(start, Number(item.start_ms)), right = Math.min(end, Number(item.end_ms));
+            if (right <= left) return [];
+            const next = {...item, start_ms: left + offset, end_ms: right + offset};
+            if (item.transitions) {
+                next.transitions = {...item.transitions};
+                if (left > item.start_ms) delete next.transitions.in;
+                if (right < item.end_ms) delete next.transitions.out;
+            }
+            if (item.source_in_ms != null) next.source_in_ms = Number(item.source_in_ms) + left - item.start_ms;
+            return [next];
+        }).map((item, index) => index ? {...item, id: `${item.id}-local-${index}`} : item);
+        const mapPoint = point => {
+            const span = mapping.find(item => item.start <= point && point < item.end);
+            return span ? point + span.offset : point;
+        };
+        const mapLayer = item => timeline.project?.mode === 'free' || ['USER', 'MANUAL'].includes(item.source)
+            ? [item] : remap(item);
+        const brolls = (timeline.brolls || []).flatMap(mapLayer), overlays = (timeline.overlays || []).flatMap(mapLayer);
+        const byRole = {main: clips, broll: brolls, overlay: overlays};
+        const next = {...timeline, clips, brolls, overlays, video_reordered: true,
+            captions: (timeline.captions || []).flatMap(remap),
+            camera_segments: (timeline.camera_segments || []).flatMap(remap),
+            video_splits_ms: (timeline.video_splits_ms || []).map(mapPoint).sort((a,b) => a-b),
+            markers: clips.map(clip => ({time_ms: clip.timeline_in_ms, name: clip.block?.name || clip.asset_id})),
+            video_tracks: (timeline.video_tracks || []).map(track => ({...track, clips: byRole[track.role] || track.clips})),
+            broll_tracks: (timeline.broll_tracks || []).map(track => ({...track, clips: brolls})),
+            overlay_tracks: (timeline.overlay_tracks || []).map(track => ({...track, clips: overlays})),
+            review_master_url: null, review_master_is_edited: false, review_rendered_layers: [], review_proxy_status: 'SOURCE'};
+        return {timeline: next, mapPoint};
+    }
+
+    root.ConnectEditorTimeline={removeVideoRange,moveVideo};
     if(typeof module!=='undefined')module.exports=root.ConnectEditorTimeline;
 })(typeof window!=='undefined'?window:globalThis);

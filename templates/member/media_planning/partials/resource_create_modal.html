@@ -1,0 +1,50 @@
+<div id="resource-create-modal" class="org-modal{% if resource_modal_open %} active{% endif %}" role="dialog" aria-modal="true" aria-labelledby="resource-create-title" aria-hidden="{% if resource_modal_open %}false{% else %}true{% endif %}">
+    <div class="org-modal-backdrop" data-close-resource-modal></div>
+    <div class="org-modal-card resource-modal-card">
+        <div class="org-modal-header-accent org-modal-header">
+            <div class="flex items-start gap-3 min-w-0">
+                <div class="org-modal-icon"><i class="fas fa-key" aria-hidden="true"></i></div>
+                <div>
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-red-600">Novo recurso</p>
+                    <h2 id="resource-create-title" class="text-lg font-black text-gray-900 leading-tight">Adicionar recurso</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Acessos, credenciais e ferramentas da equipe</p>
+                </div>
+            </div>
+            <button type="button" class="org-modal-close" data-close-resource-modal aria-label="Fechar"><i class="fas fa-times" aria-hidden="true"></i></button>
+        </div>
+        <form method="post" action="{% url 'media_resource_create' %}" class="org-modal-body">
+            {% csrf_token %}
+            <input type="hidden" name="from_resource_modal" value="1">
+            {% if resource_form.non_field_errors %}<div class="text-sm text-red-600 mb-3" role="alert">{{ resource_form.non_field_errors }}</div>{% endif %}
+            <div class="grid sm:grid-cols-2 gap-4">
+                {% for field in resource_form %}
+                <div{% if field.name == 'notes' or field.name == 'access_teams' %} class="sm:col-span-2"{% endif %}{% if field.errors %} data-field-error{% endif %}>
+                    {% if field.name == 'access_teams' %}
+                    <span id="resource-access-label" class="resource-form-label">{{ field.label }} <span class="normal-case font-normal text-gray-400">(opcional)</span></span>
+                    <details class="resource-access" aria-labelledby="resource-access-label" data-resource-access>
+                        <summary><span><i class="fas fa-users" aria-hidden="true"></i><span data-access-summary>Selecionar equipes</span></span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
+                        <div class="resource-access-options">
+                            {% for option in field %}
+                            <label class="resource-access-option">{{ option.tag }} <span>{{ option.choice_label }}</span></label>
+                            {% empty %}
+                            <p class="text-xs text-gray-500 px-3 py-2">Nenhuma equipe disponível.</p>
+                            {% endfor %}
+                        </div>
+                    </details>
+                    <p class="text-xs text-gray-500 mt-1">Sem equipes selecionadas, apenas líderes têm acesso.</p>
+                    {% else %}
+                    <label for="{{ field.id_for_label }}" class="resource-form-label">{{ field.label }}{% if not field.field.required %} <span class="normal-case font-normal text-gray-400">(opcional)</span>{% endif %}</label>
+                    {{ field }}
+                    {% endif %}
+                    {% if field.help_text %}<p class="text-xs text-gray-500 mt-1">{{ field.help_text }}</p>{% endif %}
+                    {% for error in field.errors %}<p class="text-xs text-red-600 mt-1" role="alert">{{ error }}</p>{% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+            <div class="org-modal-footer resource-modal-footer">
+                <button type="button" class="org-btn-secondary" data-close-resource-modal>Cancelar</button>
+                <button type="submit" class="org-btn-primary"><i class="fas fa-check" aria-hidden="true"></i> Criar recurso</button>
+            </div>
+        </form>
+    </div>
+</div>

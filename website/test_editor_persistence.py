@@ -2,6 +2,7 @@ import json
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import close_old_connections, connection
@@ -13,7 +14,7 @@ from website.external_media.preview import TimelineRevisionService
 from website.models import MinistryMembership
 from website.models.external_media import (
     ExternalMediaProject, MediaTemplate, MediaTemplateBlock, MediaTemplateVersion,
-    PreviewOperation, ProjectBlockMedia, SubtitleCue, SubtitleTrack,
+    PreviewOperation, ProjectBlockMedia, ProjectBrollAsset, SubtitleCue, SubtitleTrack,
 )
 from website.test_external_media import ExternalMediaFixtureMixin
 from website.views.external_media import ExternalMediaProjectPreviewSubtitleView
@@ -56,6 +57,104 @@ class EditorFixture(ExternalMediaFixtureMixin):
 
 
 class EditorPersistenceTests(EditorFixture, TestCase):
+    def test_finished_template_project_can_render_its_approved_revision_again(self):
+        revision = TimelineRevisionService.approve(self.project, self.member)
+        self.project.refresh_from_db()
+        self.project.status = self.project.Status.FINISHED
+        self.project.final_render_outdated = False
+        self.project.save(update_fields=['status', 'final_render_outdated'])
+        with patch('website.views.external_media.ExternalMediaProjectRenderView._enqueue') as enqueue:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    reverse('external_media_project_preview_approve', args=[self.project.public_id]),
+                    '{}', content_type='application/json',
+                    HTTP_X_EDITOR_VERSION=str(self.project.editorial_version),
+                    HTTP_X_EDITOR_OPERATION=str(uuid.uuid4()),
+                )
+        self.assertEqual(response.status_code, 200)
+        enqueue.assert_called_once_with(self.project.pk)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.status, self.project.Status.PENDING)
+        self.assertEqual(self.project.approved_timeline_revision_id, revision.pk)
+
+    def test_rejected_cut_returns_the_last_saved_timeline(self):
+        revision = self.project.current_timeline_revision
+        response = self.client.post(
+            reverse('external_media_project_preview_cut_create', args=[self.project.public_id]),
+            json.dumps({'start_ms': 1200, 'end_ms': 1201}), content_type='application/json',
+            HTTP_X_EDITOR_VERSION=str(self.base), HTTP_X_EDITOR_OPERATION=str(uuid.uuid4()),
+        )
+        self.assertEqual(response.status_code, 400)
+        result = response.json()
+        self.assertEqual(result['revision'], revision.revision)
+        self.assertEqual(result['editorial_version'], self.base)
+        self.assertEqual(result['timeline']['clips'], revision.timeline['clips'])
+
+    def test_legacy_history_response_restores_font_metrics_from_render_job(self):
+        from website.views.external_media import preview_revision_response
+
+        self.style.font_name = 'Montserrat'
+        self.style.save(update_fields=['font_name'])
+        self.project.refresh_from_db()
+        revision = self.project.current_timeline_revision
+        revision.timeline.pop('caption_styles', None)
+
+        response = preview_revision_response(self.project, self.member, revision)
+
+        source = json.loads(response.content)['timeline']['caption_styles']['source']
+        self.assertEqual(source['font'], 'Montserrat')
+        self.assertAlmostEqual(source['font_em_scale'], 1000 / 1562)
+
+    def test_removing_template_music_is_revisioned_and_used_by_render(self):
+        from website.external_media.services import MusicService
+        version = self.project.template_version
+        version.music_file = SimpleUploadedFile('default.wav', b'test-music')
+        version.save(update_fields=['music_file'])
+        self.addCleanup(version.music_file.delete, save=False)
+        initial = self.project.current_timeline_revision
+        self.assertTrue(MusicService.selected_tracks(version, initial.timeline, {}))
+        removed = TimelineRevisionService.update_music_tracks(self.project, self.member, [])
+        self.assertNotEqual(removed.pk, initial.pk)
+        self.assertEqual(removed.timeline['music_tracks'], [])
+        self.assertEqual(MusicService.selected_tracks(version, removed.timeline, {}), [])
+        self.project.refresh_from_db()
+        restored = TimelineRevisionService.navigate_history(self.project, self.member, 'undo')
+        self.assertTrue(MusicService.selected_tracks(version, restored.timeline, {}))
+        self.project.refresh_from_db()
+        redone = TimelineRevisionService.navigate_history(self.project, self.member, 'redo')
+        self.assertEqual(MusicService.selected_tracks(version, redone.timeline, {}), [])
+        approved = TimelineRevisionService.approve(self.project, self.member)
+        self.assertEqual(MusicService.selected_tracks(version, approved.timeline, {}), [])
+
+    def test_removing_one_music_clip_keeps_the_other_for_render(self):
+        from website.external_media.services import MusicService
+        from website.models.external_media import BackgroundMusicTrack
+        tracks = [BackgroundMusicTrack.objects.create(name=f'Trilha {index}', audio_file=SimpleUploadedFile(f'track-{index}.wav', b'music')) for index in range(2)]
+        for track in tracks:
+            self.addCleanup(track.audio_file.delete, save=False)
+        revision = TimelineRevisionService.update_music_tracks(self.project, self.member, [
+            {'clip_id': 'first', 'track_id': tracks[0].pk, 'start_ms': 0, 'end_ms': 5000},
+            {'clip_id': 'second', 'track_id': tracks[1].pk, 'start_ms': 5000, 'end_ms': 10000},
+        ])
+        self.project.refresh_from_db()
+        removed = TimelineRevisionService.update_music_tracks(self.project, self.member, [revision.timeline['music_tracks'][1]])
+        resolved = MusicService.selected_tracks(self.project.template_version, removed.timeline, {})
+        self.assertEqual([(item['id'], item['start_ms'], item['end_ms']) for item in resolved], [(tracks[1].pk, 5000, 10000)])
+
+    def test_removing_legacy_override_and_undo_restore_the_original_track(self):
+        from website.external_media.services import MusicService
+        from website.models.external_media import BackgroundMusicTrack
+        track = BackgroundMusicTrack.objects.create(name='Trilha antiga', audio_file=SimpleUploadedFile('legacy.wav', b'music'))
+        self.addCleanup(track.audio_file.delete, save=False)
+        self.project.configuration = {**self.project.configuration, 'music_override_track_id': track.pk}
+        self.project.save(update_fields=['configuration'])
+        removed = TimelineRevisionService.update_music_tracks(self.project, self.member, [])
+        self.project.refresh_from_db()
+        self.assertEqual(MusicService.selected_tracks(self.project.template_version, removed.timeline, self.project.configuration), [])
+        restored = TimelineRevisionService.navigate_history(self.project, self.member, 'undo')
+        self.project.refresh_from_db()
+        self.assertEqual(MusicService.selected_tracks(self.project.template_version, restored.timeline, self.project.configuration)[0]['id'], track.pk)
+
     def test_cached_editor_media_survives_reopening_without_enqueuing_another_job(self):
         from unittest.mock import patch
         from django.core.files.base import ContentFile
@@ -149,6 +248,43 @@ class EditorPersistenceTests(EditorFixture, TestCase):
             )
         self.project.refresh_from_db()
         self.assertEqual(self.project.editorial_version, self.base)
+
+    def test_manual_take_keeps_automatic_plan_and_master_available_after_reload(self):
+        from copy import deepcopy
+        from website.views.external_media import preview_timeline_with_music
+        current = self.project.current_timeline_revision
+        source_id = current.source_manifest['sources'][0]['id']
+        decisions = deepcopy(current.edit_decision_set)
+        automatic = {
+            'id': 'automatic-take', 'type': 'reframe', 'source_id': source_id,
+            'origin': 'AUTO', 'enabled': True, 'metadata': {},
+            'plan_reference': {'plan': {'crop_width': 300, 'crop_height': 500,
+                                      'keyframes': [{'time_seconds': 0, 'x': 70, 'y': 30}]}},
+        }
+        decisions['operations'].append(automatic)
+        TimelineRevisionService._create(self.project, current.source_manifest, decisions, 'Auto', self.member, current)
+        self.project.refresh_from_db()
+        TimelineRevisionService.create_video_split(self.project, self.member, 5000)
+        revision = TimelineRevisionService.update_transform(
+            self.project, self.member, automatic['id'], {
+                'scale': 1.4, 'x': .3, 'y': 0,
+                'segment_start_ms': 0, 'segment_end_ms': 5000,
+            },
+        )
+        self.assertEqual(revision.edit_decision_set['operations'][0], automatic)
+        self.assertFalse(any(effect['type'] == 'transform' for effect in revision.timeline['clips'][1]['effects']))
+        self.project.refresh_from_db()
+        payload = preview_timeline_with_music(self.project, self.project.current_timeline_revision.timeline)
+        self.assertIsNone(payload['review_master_url'])
+        self.assertEqual(payload['framing_master_url'], reverse(
+            'external_media_project_preview_master', args=[self.project.public_id],
+        ))
+        self.assertNotIn('framing_master_url', self.project.current_timeline_revision.timeline)
+        self.assertEqual(next(item for item in payload['decisions'] if item['id'] == automatic['id']), automatic)
+        response = self.client.get(reverse('external_media_project_preview', args=[self.project.public_id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['timeline']['framing_master_url'], payload['framing_master_url'])
+        self.assertIsNone(response.context['timeline']['review_master_url'])
 
     def test_sequential_edits_survive_reload_and_preserve_other_cues(self):
         first = self.post(self.cue, {'end_ms': 1800})
@@ -248,6 +384,52 @@ class EditorPersistenceTests(EditorFixture, TestCase):
         overlay = next(item for item in updated.timeline['overlays'] if item['id'] == 'text-1')
         self.assertEqual(overlay['position'], {'x': .8, 'y': .7, 'width': .4})
         self.assertEqual((overlay['start_ms'], overlay['end_ms']), (1000, 2000))
+
+    def test_transition_json_survives_revisions_and_only_outer_edges_survive_split(self):
+        transitions = {
+            'in': {'duration_ms': 800, 'effects': [{'type': 'wipe', 'direction': 'right'}]},
+            'out': {'duration_ms': 600, 'effects': [{'type': 'zoom', 'scale': 1.3}]},
+        }
+        revision = TimelineRevisionService.mutate_overlay(self.project, self.member, 'text-1', {
+            'type': 'TEXT', 'start_ms': 1000, 'end_ms': 3000, 'content': {'text': 'Texto'},
+            'position': {'x': .7, 'y': .65}, 'transitions': transitions,
+        }, create=True)
+        duplicate = TimelineRevisionService.mutate_overlay(self.project, self.member, 'text-1', {'duplicate': True})
+        self.assertEqual(duplicate.timeline['overlays'][1]['transitions'], revision.timeline['overlays'][0]['transitions'])
+        split = TimelineRevisionService.mutate_overlay(self.project, self.member, 'text-1', {'split_at_ms': 2000})
+        left, right = (next(item for item in split.timeline['overlays'] if item['id'].startswith(prefix))
+                       for prefix in ('text-1', 'text-1-split'))
+        self.assertEqual(set(left['transitions']), {'in'})
+        self.assertEqual(set(right['transitions']), {'out'})
+        self.assertEqual(left['position'], right['position'])
+        removed = TimelineRevisionService.mutate_overlay(self.project, self.member, 'text-1', {'transitions': {}})
+        self.assertEqual(removed.timeline['overlays'][0]['transitions'], {})
+        undone = TimelineRevisionService.navigate_history(self.project, self.member, 'undo')
+        self.assertEqual(undone.timeline['overlays'][0]['transitions'], left['transitions'])
+        redone = TimelineRevisionService.navigate_history(self.project, self.member, 'redo')
+        self.assertEqual(redone.timeline['overlays'][0]['transitions'], {})
+
+    def test_broll_transition_follows_move_trim_and_duplication(self):
+        asset = ProjectBrollAsset.objects.create(
+            project=self.project, file='broll-test.mp4', original_filename='broll-test.mp4',
+            media_type=ProjectBrollAsset.MediaType.VIDEO, duration_ms=2000,
+        )
+        created = TimelineRevisionService.add_broll(self.project, self.member, asset, 1000)
+        clip_id = created.timeline['brolls'][0]['id']
+        updated = TimelineRevisionService.mutate_broll(self.project, self.member, clip_id, {'transitions': {
+            'in': {'duration_ms': 800, 'effects': [{'type': 'zoom', 'scale': .8}]},
+            'out': {'duration_ms': 500, 'effects': [{'type': 'slide', 'direction': 'bottom'}]},
+        }})
+        moved = TimelineRevisionService.mutate_broll(self.project, self.member, clip_id, {
+            'start_ms': 3000, 'end_ms': 3500, 'layer': 1,
+        })
+        self.assertEqual(moved.timeline['brolls'][0]['transitions'], updated.timeline['brolls'][0]['transitions'])
+        self.assertEqual(moved.timeline['brolls'][0]['transform'], updated.timeline['brolls'][0]['transform'])
+        copied = TimelineRevisionService.mutate_broll(self.project, self.member, clip_id, {'duplicate': True})
+        self.assertEqual(copied.timeline['brolls'][1]['transitions'], moved.timeline['brolls'][0]['transitions'])
+        self.assertEqual(copied.timeline['brolls'][1]['start_ms'], 3500)
+        deleted = TimelineRevisionService.mutate_broll(self.project, self.member, clip_id, {}, delete=True)
+        self.assertEqual(len(deleted.timeline['brolls']), 1)
 
 
 class EditorConcurrentPersistenceTests(EditorFixture, TransactionTestCase):

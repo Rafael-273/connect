@@ -10,7 +10,7 @@ from django.conf import settings
 from ..models.external_media import OverlayPreset, ProjectOverlay, get_external_media_storage
 from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
-
+from .transitions import TransitionFilters
 
 ANIMATIONS = {'NONE', 'FADE', 'SLIDE_UP', 'SLIDE_DOWN', 'SLIDE_LEFT', 'SLIDE_RIGHT', 'POP'}
 EASINGS = {'ease', 'ease-in', 'ease-out', 'ease-in-out', 'linear'}
@@ -33,7 +33,7 @@ class OverlayTimelineService:
     def ensure_project_overlays(cls, project):
         presets = {item.code: item for item in OverlayPreset.objects.filter(is_active=True)}
         existing = {item.overlay_id: item for item in project.overlays.all()}
-        for block in project.template_version.blocks.all():
+        for block in project.editor_settings.blocks.all():
             for definition in block.overlay_definitions or []:
                 key = str(definition.get('key') or '').strip()
                 if not key:
@@ -355,6 +355,17 @@ class OverlayRenderService:
             input_label = f'[{index + 1}:v]'
             prepared = f'[overlay{index}]'
             image_filters = ['format=rgba']
+            if 'transitions' in overlay:
+                transition = TransitionFilters(
+                    overlay, round(start * 1000), round(end * 1000), 0, width / 1920,
+                    base={**(overlay.get('style') or {}), **position},
+                )
+                filters.append(transition.prepare(input_label, prepared, []))
+                x, y = transition.position(f'{center_x}-w/2', f'{center_y}-h/2')
+                output = f'[v{index + 1}]'
+                filters.append(f"{previous}{prepared}overlay=x='{x}':y='{y}':format=auto:shortest=1:enable='gte(t,{start})*lt(t,{end})'{output}")
+                previous = output
+                continue
             if kind in {'FADE', 'POP'}:
                 image_filters.extend([f'fade=t=in:st={start}:d={anim_duration}:alpha=1', f'fade=t=out:st={max(start, end-anim_duration)}:d={anim_duration}:alpha=1'])
             if kind == 'POP':
@@ -371,9 +382,10 @@ class OverlayRenderService:
             elif kind == 'SLIDE_RIGHT': x_expr = f'{base_x}-overlay_w*(1-{progress})'
             else: x_expr = base_x
             output = f'[v{index + 1}]'
-            filters.append(f"{previous}{prepared}overlay=x='{x_expr}':y='{y_expr}':enable='between(t,{start},{end})'{output}")
+            filters.append(f"{previous}{prepared}overlay=x='{x_expr}':y='{y_expr}':shortest=1:enable='between(t,{start},{end})'{output}")
             previous = output
-        command.extend(['-filter_complex', ';'.join(filters), '-map', previous, '-map', '0:a?', '-c:v', 'libx264'])
+        command.extend(FFmpegRunner.filter_graph_args(filters, Path(output_path).with_suffix('.filters')))
+        command.extend(['-map', previous, '-map', '0:a?', '-c:v', 'libx264'])
         if settings.EXTERNAL_MEDIA_RENDER_PRESET:
             command.extend(['-preset', settings.EXTERNAL_MEDIA_RENDER_PRESET])
         command.extend(['-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-shortest', str(output_path)])

@@ -319,16 +319,19 @@
     }
 
     .cal-task-modal-header {
-        padding: 1.25rem 1.25rem 0;
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 0.75rem;
+        padding: 1.25rem 1.25rem 1rem;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: .875rem .75rem;
+        border-bottom: 1px solid #f0f1f3;
     }
 
+    .cal-task-modal-heading { min-width: 0; }
+    .cal-task-modal-step { margin: 0 0 .3rem; color: #c90905; font-size: .6875rem; font-weight: 800; line-height: 1.35; letter-spacing: .06em; text-transform: uppercase; overflow-wrap: anywhere; }
+
     .cal-task-modal-close {
-        width: 2rem;
-        height: 2rem;
+        width: 2.75rem;
+        height: 2.75rem;
         border-radius: 9999px;
         border: none;
         background: #f3f4f6;
@@ -347,33 +350,32 @@
         color: #111827;
         line-height: 1.3;
         margin: 0 0 0.25rem;
-    }
-
-    .cal-task-modal-title-row {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.625rem;
+        overflow-wrap: anywhere;
     }
 
     .cal-task-complete-toggle {
-        width: 1.875rem;
-        height: 1.875rem;
+        grid-column: 1 / -1;
+        width: 100%;
+        min-height: 2.75rem;
         display: inline-flex;
         align-items: center;
-        justify-content: center;
-        flex: 0 0 1.875rem;
-        margin-top: 0.1rem;
-        padding: 0;
-        border: 1.5px solid #d1d5db;
-        border-radius: 9999px;
-        background: #fff;
-        color: transparent;
+        gap: .65rem;
+        padding: .5rem .75rem;
+        border: 1px solid #e5e7eb;
+        border-radius: .75rem;
+        background: #f9fafb;
+        color: #475467;
+        text-align: left;
+        font-size: .75rem;
+        font-weight: 700;
         cursor: pointer;
         transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
     }
 
+    .cal-task-complete-toggle i { width: 1.4rem; height: 1.4rem; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1.5px solid #cbd5e1; border-radius: 50%; background: #fff; color: #94a3b8; font-size: .625rem; }
     .cal-task-complete-toggle:hover { border-color: #10B981; background: #ecfdf5; }
-    .cal-task-complete-toggle.is-completed { border-color: #10B981; background: #10B981; color: #fff; }
+    .cal-task-complete-toggle.is-completed { border-color: #a7f3d0; background: #ecfdf5; color: #047857; }
+    .cal-task-complete-toggle.is-completed i { border-color: #10b981; background: #10b981; color: #fff; }
     .cal-task-complete-toggle:disabled { cursor: wait; opacity: .6; }
 
     .cal-task-modal-subtitle {
@@ -387,7 +389,7 @@
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 0.625rem;
-        margin-top: 1rem;
+        margin-top: 0;
     }
 
     .cal-task-modal-meta-item {
@@ -535,10 +537,50 @@
     #media-task-calendar .fc-daygrid-event .cal-task-time { display: none; }
 
     @media (max-width: 639px) {
-        .cal-calendar-toolbar { align-items: flex-start; flex-direction: column; }
-        #media-task-calendar .fc-timegrid { min-width: 38rem; }
-        #media-task-calendar .fc-scroller-harness { overflow-x: auto; }
+        .media-calendar-page.media-calendar-page { display: flex; flex-direction: column; min-height: 100dvh; padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+        .media-calendar-page .calendar-page-content { display: flex; flex: 1; flex-direction: column; padding-bottom: 0; }
+        .calendar-card { display: flex; flex: 1; flex-direction: column; }
+        .calendar-body { display: flex; flex: 1; flex-direction: column; }
+        #media-task-calendar { display: flex; flex: 1; flex-direction: column; }
+        #media-task-calendar .fc-view-harness { display: flex; flex: 1; flex-direction: column; }
+        #media-task-calendar .fc-list { flex: 1; }
+        .cal-calendar-toolbar { align-items: stretch; flex-direction: column; gap: .75rem; }
+        .cal-view-switcher { display: flex; }
+        .cal-view-btn { flex: 1; min-height: 2.75rem; font-size: .8125rem; }
+        .cal-calendar-toolbar .cal-month-nav { justify-content: space-between; padding: 0; gap: .5rem; }
+        .cal-calendar-toolbar .cal-month-title { flex: 1; min-width: 0; font-size: .95rem; }
+        .cal-month-nav-btn { width: 2.75rem; height: 2.75rem; }
+        .calendar-card { border-color: #e5e7eb; box-shadow: 0 1px 3px rgba(16,24,40,.05); }
+        .calendar-body { padding: .875rem; }
+        .calendar-legend { justify-content: flex-start; padding: .875rem; gap: .6rem 1rem; }
+        #media-task-calendar .fc-list { border: 1px solid #e5e7eb; border-radius: .875rem; overflow: hidden; }
+        #media-task-calendar .fc-list-day-cushion { padding: .7rem .8rem; background: #f9fafb; color: #475467; font-size: .75rem; }
+        #media-task-calendar .fc-list-event > td { padding: .5rem .35rem; vertical-align: middle; border-color: #f3f4f6; }
+        #media-task-calendar .fc-list-event-time { padding-left: .8rem; color: #667085; font-size: .75rem; white-space: nowrap; }
+        #media-task-calendar .fc-list-event-graphic { display: none; }
+        #media-task-calendar .fc-list-event-title { padding-right: .8rem; }
+        #media-task-calendar .fc-list-event .cal-task-pill { min-height: 2.75rem; padding: .55rem .65rem; }
+        #media-task-calendar .fc-list-event .cal-task-role { font-size: .8125rem; white-space: normal; }
+        #media-task-calendar .fc-list-event .cal-task-demand { font-size: .7rem; }
+        #media-task-calendar .fc-list-empty { min-height: 10rem; background: #fff; color: #667085; font-size: .8125rem; }
+        .cal-task-modal-card { max-height: 90dvh; padding-bottom: env(safe-area-inset-bottom); }
     }
+    @media (max-width: 767px) {
+        .calendar-page-header > section { padding-right: 4.5rem; }
+        .calendar-page-header > section .gap-4 { gap: .65rem; }
+        .calendar-page-header h1 { font-size: clamp(.95rem, 4.4vw, 1.15rem); line-height: 1.2; }
+        .calendar-page-header > section p { font-size: .7rem; line-height: 1.25; }
+        .calendar-page-header .demands-page-nav { position: absolute; top: 1.25rem; right: 1rem; z-index: 45; padding: 0; border: 0; }
+        .calendar-page-header .demands-page-active, .calendar-page-header .demands-page-nav.is-open .demands-page-active { display: none; }
+        .calendar-page-header .demands-page-nav-toggle, .calendar-page-header .demands-page-nav.is-open .demands-page-nav-toggle { width: 2.75rem; height: 2.75rem; border-radius: .8rem; transform: none; }
+        .calendar-page-header .demands-page-nav-menu, .calendar-page-header .demands-page-nav.is-open .demands-page-nav-menu { position: absolute; top: calc(100% + .5rem); right: 0; width: min(14rem, calc(100vw - 2rem)); max-width: none; margin: 0; overflow: visible; filter: none; transform: translateY(-.3rem); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .16s ease, transform .16s ease, visibility .16s; }
+        .calendar-page-header .demands-page-nav.is-open .demands-page-nav-menu { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); }
+        .calendar-page-header .demands-kind-chips { display: grid; width: 100%; max-width: none; gap: .15rem; padding: .4rem; box-shadow: 0 14px 36px rgba(15,23,42,.16); }
+        .calendar-page-header .demands-kind-chips .media-chip { justify-content: flex-start; width: 100%; min-height: 2.75rem; padding: .65rem .75rem; font-size: .8125rem; }
+        .calendar-page-header .demands-kind-chips .media-chip span { display: inline; }
+        .calendar-page-header .demands-kind-chips .media-chip i { width: 1.25rem; text-align: center; }
+    }
+    @media (prefers-reduced-motion: reduce) { .calendar-page-header .demands-page-nav-menu { transition: none; } }
 </style>
 {% endblock %}
 
@@ -546,13 +588,13 @@
 <div class="org-media media-calendar-page min-h-screen pb-8">
     {% include 'parciais/messages.html' %}
 
-    {% url 'member_dashboard' as back_url %}
-    <div class="relative">
-        {% include 'parciais/org_media_header.html' with back_url=back_url title='Calendário' accent='de mídia' subtitle='Etapas e prazos das demandas' %}
+    {% url 'media_content_list' as back_url %}
+    <div class="relative calendar-page-header">
+        {% include 'parciais/org_media_header.html' with back_url=back_url title='Calendário' accent='de mídia' subtitle='Etapas e prazos das demandas' history_back=True %}
         {% include 'parciais/demands_header_navigation.html' with active='calendar' %}
     </div>
 
-    <div class="px-4 sm:px-6 pb-6 pt-2">
+    <div class="calendar-page-content px-4 sm:px-6 pb-6 pt-2">
         <div class="calendar-card">
             <div class="calendar-body">
                 <div class="cal-calendar-toolbar">
@@ -586,18 +628,16 @@
     <div class="cal-task-modal-backdrop" data-cal-modal-close></div>
     <div class="cal-task-modal-card">
         <div class="cal-task-modal-header">
-            <div class="min-w-0">
-                <p id="cal-task-modal-step" class="text-[10px] font-bold uppercase tracking-wider text-red-600 mb-0.5"></p>
-                <div class="cal-task-modal-title-row">
-                    <button type="button" id="cal-task-modal-toggle" class="cal-task-complete-toggle" aria-label="Concluir etapa" title="Concluir etapa">
-                        <i class="fas fa-check" aria-hidden="true"></i>
-                    </button>
-                    <h2 id="cal-task-modal-title" class="cal-task-modal-title"></h2>
-                </div>
+            <div class="cal-task-modal-heading">
+                <p id="cal-task-modal-step" class="cal-task-modal-step"></p>
+                <h2 id="cal-task-modal-title" class="cal-task-modal-title"></h2>
                 <p id="cal-task-modal-subtitle" class="cal-task-modal-subtitle"></p>
             </div>
             <button type="button" class="cal-task-modal-close" data-cal-modal-close aria-label="Fechar">
                 <i class="fas fa-times"></i>
+            </button>
+            <button type="button" id="cal-task-modal-toggle" class="cal-task-complete-toggle" aria-label="Concluir etapa" aria-pressed="false" title="Concluir etapa">
+                <i class="fas fa-check" aria-hidden="true"></i><span class="cal-task-complete-label">Marcar etapa como concluída</span>
             </button>
         </div>
         <div class="cal-task-modal-body">
@@ -647,6 +687,16 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    var backLink = document.querySelector('.calendar-page-header [data-history-back]');
+    if (backLink) backLink.addEventListener('click', function (event) {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        try {
+            if (document.referrer && new URL(document.referrer).origin === window.location.origin && window.history.length > 1) {
+                event.preventDefault();
+                window.history.back();
+            }
+        } catch (error) { /* O link leva à lista de demandas quando não há histórico utilizável. */ }
+    });
     var calendarEl = document.getElementById('media-task-calendar');
     if (!calendarEl || typeof FullCalendar === 'undefined') return;
 
@@ -674,6 +724,8 @@ document.addEventListener('DOMContentLoaded', function () {
         toggle.querySelector('i').className = 'fas fa-check';
         toggle.classList.toggle('is-completed', isCompleted);
         toggle.setAttribute('aria-label', isCompleted ? 'Reabrir etapa' : 'Concluir etapa');
+        toggle.setAttribute('aria-pressed', isCompleted ? 'true' : 'false');
+        toggle.querySelector('.cal-task-complete-label').textContent = isCompleted ? 'Etapa concluída · tocar para reabrir' : 'Marcar etapa como concluída';
         toggle.title = isCompleted ? 'Reabrir etapa' : 'Concluir etapa';
     }
 
@@ -1022,7 +1074,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     var calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'timeGridWeek',
+        initialView: window.innerWidth < 640 ? 'listWeek' : 'timeGridWeek',
         locale: 'pt-br',
         firstDay: 0,
         height: weeklyCalendarHeight(),
@@ -1034,6 +1086,7 @@ document.addEventListener('DOMContentLoaded', function () {
         dayMaxEvents: 3,
         moreLinkText: function (n) { return '+' + n + ' etapas'; },
         headerToolbar: false,
+        noEventsContent: 'Nenhuma etapa nesta semana.',
         events: {
             url: '{% url "media_calendar_events" %}',
             method: 'GET',
@@ -1053,7 +1106,7 @@ document.addEventListener('DOMContentLoaded', function () {
             dot.style.background = statusColors[status] || arg.event.backgroundColor || '#C90905';
             var body = document.createElement('span');
             body.className = 'cal-task-body';
-            if (arg.timeText) {
+            if (arg.timeText && arg.view.type !== 'listWeek') {
                 var time = document.createElement('span');
                 time.className = 'cal-task-time';
                 time.textContent = arg.timeText;
@@ -1093,7 +1146,8 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('[data-cal-view]').forEach(function (button) {
         button.addEventListener('click', function () {
             var view = button.dataset.calView;
-            calendar.changeView(view);
+            var calendarView = view === 'timeGridWeek' && window.innerWidth < 640 ? 'listWeek' : view;
+            calendar.changeView(calendarView);
             syncCalendarHeight();
             document.querySelectorAll('[data-cal-view]').forEach(function (item) {
                 var active = item.dataset.calView === view;
@@ -1106,6 +1160,8 @@ document.addEventListener('DOMContentLoaded', function () {
     calendar.render();
     syncCalendarHeight();
     window.addEventListener('resize', function () {
+        if (calendar.view.type === 'timeGridWeek' && window.innerWidth < 640) calendar.changeView('listWeek');
+        else if (calendar.view.type === 'listWeek' && window.innerWidth >= 640) calendar.changeView('timeGridWeek');
         syncCalendarHeight();
     });
 });

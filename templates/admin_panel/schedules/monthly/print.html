@@ -129,9 +129,10 @@
             border-bottom: 1px solid var(--border);
         }
 
-        .hero-copy {
-            min-width: 0;
-        }
+        .hero { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+        .hero-copy { min-width: 0; }
+        .hero-logo { display: block; width: 90px; height: auto; flex: none; }
+        @media (max-width: 640px) { .hero-logo { width: 68px; } }
 
         .eyebrow {
             display: inline-flex;
@@ -399,6 +400,8 @@
             font-size: 12px;
         }
 
+        .footer { justify-content: center; }
+
         .footer-brand {
             display: flex;
             align-items: center;
@@ -459,7 +462,7 @@
         @media print {
             @page {
                 size: A4;
-                margin: 12mm 12mm 14mm;
+                margin: 8mm;
             }
 
             body {
@@ -471,6 +474,18 @@
             .toolbar {
                 display: none !important;
             }
+
+            .sheet { overflow: visible; }
+            .schedule-table { display: table; width: 100%; table-layout: fixed; }
+            .schedule-table thead { display: table-header-group; }
+            .schedule-table tbody tr { break-inside: avoid; page-break-inside: avoid; }
+            .schedule-table-wrap { overflow: visible; border: 0; border-radius: 0; }
+            .col-day { width: 105px; }
+            .schedule-table thead th { padding: 9px 7px; font-size: 10px; }
+            .schedule-table tbody td { padding: 8px 7px; font-size: 11px; }
+            .pill-list { gap: 4px; }
+            .pill { min-height: 25px; padding: 3px 7px 3px 3px; font-size: 10px; }
+            .pill-avatar { width: 18px; height: 18px; }
 
             .sheet {
                 width: auto;
@@ -484,15 +499,12 @@
                 padding: 0;
             }
 
-            .schedule-table-wrap,
-            .guidelines {
-                break-inside: avoid;
-                page-break-inside: avoid;
+            .schedule-table-wrap {
+                break-inside: auto;
+                page-break-inside: auto;
             }
 
-            .footer {
-                padding: 14px 0 0;
-            }
+            .footer { display: none; }
 
             .day-chip,
             .pill,
@@ -515,7 +527,7 @@
 </head>
 <body>
     <div class="toolbar">
-        <a class="toolbar-link" href="{% url 'schedule_detail' schedule.id %}">Voltar para a escala</a>
+        <a class="toolbar-link" id="print-back" href="{% url 'media_schedule_list' %}">Voltar</a>
         <div class="toolbar-actions">
             <button class="btn-print" type="button" onclick="window.print()">Exportar PDF</button>
         </div>
@@ -525,11 +537,11 @@
         <div class="sheet-inner">
             <header class="hero">
                 <div class="hero-copy">
-                    <div class="eyebrow">{{ schedule.ministry.name }}</div>
                     <h1 class="title">{{ schedule.title }}</h1>
                     {% if schedule.assistant_state.status == 'draft' %}<p><strong>Rascunho de planejamento — sem escala publicada</strong></p>{% endif %}
                     <p class="subtitle">Escala de serviço para {{ period_label }}.</p>
                 </div>
+                <img class="hero-logo" src="{% static 'assets/red_logo.png' %}" alt="Igreja Filadélfia">
             </header>
 
             {% if schedule.guidelines %}
@@ -609,7 +621,7 @@
                                                                             <span class="pill">
                                                                                 <span class="pill-avatar">
                                                                                     {% if member.profile_picture %}
-                                                                                        <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
+                                                                                        <img src="{{ member.profile_picture.url }}" alt="" onerror="this.parentElement.textContent=this.dataset.initial" data-initial="{{ member.name|slice:':1'|upper }}">
                                                                                     {% else %}
                                                                                         {{ member.name|slice:":1"|upper }}
                                                                                     {% endif %}
@@ -632,7 +644,7 @@
                                                                             <span class="pill">
                                                                                 <span class="pill-avatar">
                                                                                     {% if member.profile_picture %}
-                                                                                        <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
+                                                                                        <img src="{{ member.profile_picture.url }}" alt="" onerror="this.parentElement.textContent=this.dataset.initial" data-initial="{{ member.name|slice:':1'|upper }}">
                                                                                     {% else %}
                                                                                         {{ member.name|slice:":1"|upper }}
                                                                                     {% endif %}
@@ -653,7 +665,7 @@
                                                             <span class="pill">
                                                                 <span class="pill-avatar">
                                                                     {% if member.profile_picture %}
-                                                                        <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
+                                                                        <img src="{{ member.profile_picture.url }}" alt="" onerror="this.parentElement.textContent=this.dataset.initial" data-initial="{{ member.name|slice:':1'|upper }}">
                                                                     {% else %}
                                                                         {{ member.name|slice:":1"|upper }}
                                                                     {% endif %}
@@ -691,7 +703,7 @@
                                                     <span class="pill">
                                                         <span class="pill-avatar">
                                                             {% if member.profile_picture %}
-                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
+                                                                <img src="{{ member.profile_picture.url }}" alt="" onerror="this.parentElement.textContent=this.dataset.initial" data-initial="{{ member.name|slice:':1'|upper }}">
                                                             {% else %}
                                                                 {{ member.name|slice:":1"|upper }}
                                                             {% endif %}
@@ -711,7 +723,7 @@
                                                     <span class="pill">
                                                         <span class="pill-avatar">
                                                             {% if member.profile_picture %}
-                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
+                                                                <img src="{{ member.profile_picture.url }}" alt="" onerror="this.parentElement.textContent=this.dataset.initial" data-initial="{{ member.name|slice:':1'|upper }}">
                                                             {% else %}
                                                                 {{ member.name|slice:":1"|upper }}
                                                             {% endif %}
@@ -726,7 +738,7 @@
                                                     <span class="pill">
                                                         <span class="pill-avatar">
                                                             {% if member.profile_picture %}
-                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
+                                                                <img src="{{ member.profile_picture.url }}" alt="" onerror="this.parentElement.textContent=this.dataset.initial" data-initial="{{ member.name|slice:':1'|upper }}">
                                                             {% else %}
                                                                 {{ member.name|slice:":1"|upper }}
                                                             {% endif %}
@@ -747,7 +759,7 @@
                                                     <span class="pill">
                                                         <span class="pill-avatar">
                                                             {% if member.profile_picture %}
-                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
+                                                                <img src="{{ member.profile_picture.url }}" alt="" onerror="this.parentElement.textContent=this.dataset.initial" data-initial="{{ member.name|slice:':1'|upper }}">
                                                             {% else %}
                                                                 {{ member.name|slice:":1"|upper }}
                                                             {% endif %}
@@ -771,22 +783,22 @@
             {% endif %}
         </div>
 
-        <footer class="footer">
-            <div class="footer-brand">
-                <img src="{% static 'assets/red_logo.png' %}" alt="Igreja Filadélfia">
-            </div>
-            <div class="footer-copy">
-                <div>Documento gerado em {{ generated_at }}</div>
-                <div>Igreja Filadélfia</div>
-            </div>
-        </footer>
     </div>
 
     <script>
-        window.addEventListener('load', function () {
-            setTimeout(function () {
-                window.print();
-            }, 450);
+        document.getElementById('print-back').addEventListener('click', function (event) {
+            if (document.referrer) {
+                try {
+                    if (new URL(document.referrer).origin === window.location.origin && window.history.length > 1) {
+                        event.preventDefault();
+                        window.history.back();
+                    }
+                } catch (_) { /* O link mantém o destino alternativo. */ }
+            }
+        });
+        window.addEventListener('load', async function () {
+            if (document.fonts) await document.fonts.ready;
+            window.print();
         });
     </script>
 </body>

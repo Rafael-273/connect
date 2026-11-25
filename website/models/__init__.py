@@ -48,6 +48,7 @@ from .external_media import (
     MasteringProfile,
     MediaTemplate,
     MediaTemplateBlock,
+    TemplateBrollAsset,
     MediaTemplatePlugin,
     MediaTemplateVersion,
     OverlayPreset,
@@ -74,7 +75,10 @@ from .external_media import (
     TimelineRevision,
     VideoMasteringJob,
 )
-from .ministry_manual import MinistryManual
+from .ministry_manual import MinistryManual, ManualGenerationJob
+from .content_delivery import ContentFile, MediaDeliveryRequirement, MediaDelivery
+from .content_delivery import MediaDeliveryReview
+from .take_analysis import SourceTakeAnalysis
 from .media_team_service import MediaTeamActivity, MediaTeamService, MediaTeamServiceActivity
 from .schedule_assistant import ScheduleAssistantState, ScheduleOccurrence, ScheduleOccurrenceTeam
 from .schedule_availability import ScheduleAvailability, ScheduleAvailabilityOccurrence, ScheduleAvailabilityCoverage

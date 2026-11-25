@@ -134,12 +134,12 @@
         bottom: 0;
         overflow: hidden;
         width: 100%;
-        height: 100vh;
+        height: var(--app-viewport-height);
     }
     
     /* Permitir scroll apenas no card */
     .login-card-container {
-        height: 100vh;
+        height: var(--app-viewport-height);
         overflow-y: auto;
         overflow-x: hidden;
         -webkit-overflow-scrolling: touch;
@@ -158,14 +158,12 @@
     /* Ajustes mobile específicos */
     @media (max-width: 640px) {
         .login-card-container {
-            height: 100vh;
-            height: -webkit-fill-available;
+            height: var(--app-viewport-height);
         }
         
         /* Garantir que o card ocupe toda altura */
         .mobile-full-height {
-            min-height: 100vh;
-            min-height: -webkit-fill-available;
+            min-height: var(--app-viewport-height);
         }
     }
 </style>
@@ -401,15 +399,6 @@
                 });
             });
             
-            // Melhorar responsividade: ajustar viewport height em mobile
-            function adjustViewportHeight() {
-                const vh = window.innerHeight * 0.01;
-                document.documentElement.style.setProperty('--vh', `${vh}px`);
-            }
-            
-            adjustViewportHeight();
-            window.addEventListener('resize', adjustViewportHeight);
-            window.addEventListener('orientationchange', adjustViewportHeight);
         });
     </script>
 </body>

@@ -401,6 +401,32 @@ def mutate(state_id, ministry, user, payload):
         state.save()
         schedule.delete()
         return None
+    if action == 'publish':
+        if payload.get('confirmed') is not True:
+            raise ValidationError('Confirme a criação da escala.')
+        from .schedule_generation import serialize_generation
+        generation = serialize_generation(state)
+        if not generation['generated'] or generation['stale']:
+            raise ValidationError('Gere sugestões atualizadas antes de criar a escala.')
+        if not generation['rows']:
+            raise ValidationError('Inclua equipes no planejamento antes de criar a escala.')
+        if generation['obsolete'] or any(row['errors'] for row in generation['rows']):
+            raise ValidationError('Revise as designações inválidas ou removidas antes de criar a escala.')
+        pending = generation['summary']['pending']
+        if payload.get('confirmed_pending') != pending:
+            raise PlanningConflict('As vagas pendentes mudaram. Recarregue e revise antes de criar a escala.')
+        state.generation_report = {**state.generation_report, 'publication_snapshot': {
+            'schema_version': 1, 'published_at': timezone.now().isoformat(),
+            'period': state.period.isoformat(), 'summary': generation['summary'],
+            'rows': [{key: row[key] for key in ('occurrence_id', 'date', 'time', 'name', 'team_id', 'team', 'required', 'filled', 'pending', 'minimum_mentors', 'activities', 'people')} for row in generation['rows']],
+        }}
+        schedule.is_published = True
+        schedule.save(update_fields=['is_published', 'update_at'])
+        state.status = 'published'
+        state.updated_by = user
+        state.revision += 1
+        state.save()
+        return {'published': True}
     if action == 'generate':
         from .schedule_generation import generate
         generate(state, payload)

@@ -660,17 +660,6 @@
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 
-            // Registra o service worker
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/static/sw.js')
-                    .then(registration => {
-                        console.log('Service Worker registrado com sucesso:', registration);
-                    })
-                    .catch(error => {
-                        console.log('Falha ao registrar Service Worker:', error);
-                    });
-            }
-
             // Função para mostrar o prompt de instalação
             window.showInstallPrompt = function() {
                 console.log('showInstallPrompt chamado. isIOS:', isIOS, 'deferredPrompt:', !!deferredPrompt);
@@ -687,8 +676,11 @@
                                     <ol style="padding-left: 1.5rem; margin: 0; color: #4B5563; font-size: 0.95rem; line-height: 1.8;">
                                         <li style="margin-bottom: 0.5rem;">Toque no botão <strong>Compartilhar</strong> <i class="fas fa-share" style="color: #3B82F6;"></i></li>
                                         <li style="margin-bottom: 0.5rem;">Role e toque em <strong style="color: #C90905;">"Adicionar à Tela Inicial"</strong></li>
+                                        <li style="margin-bottom: 0.5rem;">Se aparecer, mantenha <strong>"Abrir como App"</strong> ativado.</li>
                                         <li>Toque em <strong style="color: #10B981;">"Adicionar"</strong></li>
+                                        <li>Abra o Connect pelo novo ícone na Tela Inicial.</li>
                                     </ol>
+                                    <p style="margin-top: 0.75rem; font-size: 0.9rem;">Se o ícone antigo ainda mostrar o endereço e os botões do navegador, remova-o da Tela Inicial e adicione novamente seguindo estes passos.</p>
                                 </div>
                             </div>
                         `,

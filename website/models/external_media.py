@@ -66,6 +66,8 @@ def subtitle_video_version_asset_path(instance, filename):
 
 def external_media_project_upload_path(instance, filename):
     suffix = Path(filename).suffix.lower()
+    if getattr(instance, 'editor_only', False):
+        return f'external_media/projects/{instance.project.public_id}/editor/{uuid.uuid4().hex}{suffix}'
     block_ref = getattr(instance, 'block_id', None) or getattr(instance.block, 'pk', 'block')
     return (
         f'external_media/projects/{instance.project.public_id}/b{block_ref}/'
@@ -74,6 +76,8 @@ def external_media_project_upload_path(instance, filename):
 
 
 def external_media_project_preview_path(instance, filename):
+    if instance.editor_only:
+        return f'external_media/projects/{instance.project.public_id}/editor/previews/{instance.pk}.mp4'
     block_ref = getattr(instance, 'block_id', None) or getattr(instance.block, 'pk', 'block')
     return f'external_media/projects/{instance.project.public_id}/b{block_ref}/previews/{instance.position:03d}.mp4'
 
@@ -591,6 +595,7 @@ class MediaAsset(BaseModel):
         SRT = 'SRT', 'Legenda SRT'
         VTT = 'VTT', 'Legenda VTT'
 
+    content_file = models.ForeignKey('ContentFile', on_delete=models.PROTECT, null=True, blank=True, related_name='editor_exports')
     job = models.ForeignKey(ExternalMediaJob, on_delete=models.CASCADE, related_name='assets')
     kind = models.CharField(max_length=20, choices=Kind.choices)
     language = models.CharField(max_length=10, choices=ExternalMediaJob.LANGUAGE_CHOICES)
@@ -1020,6 +1025,21 @@ class MediaTemplateBlock(BaseModel):
         return f'{self.version}: {self.name}'
 
 
+def template_broll_path(instance, filename):
+    return f'external_media/templates/broll/{uuid.uuid4().hex}{Path(filename).suffix.lower()}'
+
+
+class TemplateBrollAsset(BaseModel):
+    block = models.ForeignKey(MediaTemplateBlock, on_delete=models.CASCADE, related_name='default_brolls')
+    file = models.FileField(upload_to=template_broll_path, storage=get_external_media_storage, max_length=500)
+    original_filename = models.CharField(max_length=255)
+    description = models.CharField(max_length=500)
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['position', 'pk']
+
+
 class MediaTemplatePlugin(BaseModel):
     class Code(models.TextChoices):
         SILENCE_REMOVAL = 'silence_removal', 'Corte de silêncio'
@@ -1067,7 +1087,10 @@ class ExternalMediaProject(BaseModel):
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     name = models.CharField(max_length=180)
     template_version = models.ForeignKey(
-        MediaTemplateVersion, on_delete=models.PROTECT, related_name='projects',
+        MediaTemplateVersion, on_delete=models.PROTECT, related_name='projects', null=True, blank=True,
+    )
+    free_preset = models.ForeignKey(
+        RenderPreset, on_delete=models.PROTECT, related_name='+', null=True, blank=True,
     )
     created_by = models.ForeignKey(Member, on_delete=models.PROTECT, related_name='external_media_projects')
     configuration = models.JSONField(default=dict, blank=True, encoder=DjangoJSONEncoder)
@@ -1098,11 +1121,30 @@ class ExternalMediaProject(BaseModel):
             models.Index(fields=['created_by', '-created_at']),
             models.Index(fields=['status']),
         ]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(template_version__isnull=False) | models.Q(free_preset__isnull=False),
+                name='external_media_project_has_render_preset',
+            ),
+        ]
         verbose_name = 'Projeto de mídia'
         verbose_name_plural = 'Projetos de mídia'
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_free(self):
+        return self.template_version_id is None
+
+    @property
+    def editor_settings(self):
+        return project_editor_settings(self)
+
+    @property
+    def has_manual_sequence(self):
+        revision = self.current_timeline_revision
+        return bool(revision and revision.edit_decision_set.get('video_order'))
 
     @property
     def duration_seconds(self):
@@ -1122,6 +1164,48 @@ class ExternalMediaProject(BaseModel):
         if seconds is None:
             return None
         return (seconds + 59) // 60
+
+
+class FreeProjectSettings:
+    """Project-level editor defaults when no model supplies them."""
+
+    blocks = MediaTemplateBlock.objects.none()
+    plugins = MediaTemplatePlugin.objects.none()
+    default_settings = {}
+    allowed_overrides = ()
+    intro_enabled = outro_enabled = False
+    intro_video = outro_video = lut_file = music_file = None
+    color_lut = color_lut_id = background_music = background_music_id = None
+    subtitle_style = translated_subtitle_style = None
+    original_language = 'pt'
+    output_languages = ('pt',)
+    interactive_preview_enabled = True
+    translated_subtitles_enabled = False
+    preview_proxy_profile = None
+    preview_proxy_profile_id = None
+    preview_editable_capabilities = ('CUTS', 'TRANSFORMS', 'SUBTITLES')
+    preview_confidence_thresholds = {}
+    dialogue_processing_enabled = audio_noise_cleanup_enabled = audio_mastering_enabled = False
+    dialogue_processing_config = audio_noise_cleanup_config = audio_mixing_config = {}
+    mastering_profile = None
+    audio_mixing_enabled = audio_ducking_enabled = True
+    audio_spectral_ducking_enabled = False
+    fade_in_seconds = fade_out_seconds = 0
+    lut_intensity = 50
+    music_volume = .15
+
+    def __init__(self, project):
+        self.preset = project.free_preset
+        configuration = project.configuration or {}
+        self.subtitles_enabled = bool(configuration.get('automatic_captions'))
+        self.original_language = configuration.get('source_language') or 'pt'
+        target = configuration.get('caption_language') or self.original_language
+        self.translated_subtitles_enabled = self.subtitles_enabled and target != self.original_language
+        self.output_languages = (self.original_language, target) if self.translated_subtitles_enabled else (self.original_language,)
+
+
+def project_editor_settings(project):
+    return project.template_version or FreeProjectSettings(project)
 
 
 class ProjectCustomBlock(BaseModel):
@@ -1198,6 +1282,11 @@ class ProjectBlockMedia(BaseModel):
     preview_file = models.FileField(upload_to=external_media_project_preview_path, storage=get_external_media_storage, blank=True, max_length=255)
     preview_status = models.CharField(max_length=16, choices=PreviewStatus.choices, default=PreviewStatus.PENDING)
     preview_error = models.CharField(max_length=255, blank=True)
+
+    take_analysis = models.ForeignKey('SourceTakeAnalysis', null=True, blank=True, on_delete=models.SET_NULL)
+    take_analysis_status = models.CharField(max_length=16, default='pending')
+    trim_reviewed = models.BooleanField(default=False)
+    editor_only = models.BooleanField(default=False)
 
     @property
     def trim_ranges_json(self):

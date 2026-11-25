@@ -1,0 +1,11 @@
+{% if use_absolute_dates %}
+<div class="demand-assignment-desc" data-delivery-config>
+    <label class="demand-field-label">Entregas exigidas nesta etapa</label>
+    <input type="hidden" name="{{ prefix }}-assignment_formats" value="{{ row.delivery_formats_json|default:'[]' }}" data-delivery-formats {% if row.delivery_formats_json %}data-delivery-configured="1"{% endif %}>
+    <div class="delivery-format-options" role="group" aria-label="Formatos exigidos">
+        {% for code, label in delivery_format_choices %}<label class="delivery-format-option" data-format-group="{% if code == 'other' %}shared{% elif code == 'video' %}legacy{% elif code == 'reels' or code == 'horizontal' %}video{% else %}design{% endif %}" {% if code == 'video' %}hidden{% endif %}><input type="checkbox" value="{{ code }}" data-delivery-choice><span>{{ label }}</span></label>{% endfor %}
+    </div>
+    <p class="text-xs text-gray-500">Selecione os formatos que precisam ser entregues nesta etapa.</p>
+    <input name="{{ prefix }}-assignment_other_format" data-delivery-other class="media-field-input" maxlength="100" placeholder="Nome do formato Outro" aria-label="Nome do formato Outro" value="{{ row.delivery_other|default:'' }}">
+</div>
+{% endif %}

@@ -47,6 +47,7 @@ const assert=require('node:assert/strict');
   await page.goto(url);const takes=page.locator('.editor-track--video [data-clip-key]');
   await takes.first().waitFor();assert.equal(await takes.count(),2);
   await takes.first().click();
+  await page.locator('[data-preview-adjustment="framing"]').click();
   await page.locator('[data-transform="scale"]').waitFor({state:'visible'});
   await page.locator('#preview-transform-box.is-active').waitFor({state:'visible'});
   await page.waitForFunction(()=>[...document.querySelectorAll('.preview-stage>video')].some(video=>video.readyState>=2&&Number(getComputedStyle(video).opacity)>0));

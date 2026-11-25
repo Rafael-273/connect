@@ -143,10 +143,10 @@ test('actual applyTimeline preserves pending local edits and keeps only the newe
     assert.equal(context.observed,1500);assert.equal(context.pendingVersion,6);
 });
 
-test('minute conversion preserves 1000ms rather than rounding to 1020ms',()=>{
-    const expression=template.match(/const minFromMs = ms => (.*);/)[1];
+test('B-roll timing in seconds preserves milliseconds',()=>{
+    const expression=template.match(/const secondsFromMs = ms => (.*);/)[1];
     const convert=vm.runInNewContext(`ms=>${expression}`);
-    for(const ms of [33,1000,2000,1234567])assert.equal(Math.round(convert(ms)*60000),ms);
+    for(const ms of [33,1000,2000,1234567])assert.equal(Math.round(convert(ms)*1000),ms);
 });
 
 
@@ -162,4 +162,19 @@ test('an editorial response retains play intent while a transition is waiting fo
     const context=timelineHarness();
     vm.runInContext(`sourcePlayer.target={autoplay:true};sourcePlayer.waitingForPreload='b:0';loading=true;applyTimeline({editorial_version:6,timeline:{sequence:{duration_ms:10000},captions:[]}});observed=seekCalls.at(-1)[1]`,context);
     assert.equal(context.observed,true);
+});
+
+test('a rejected validation leaves the next queued edit on the same version', async () => {
+    const versions = [];
+    const editor = new EditorPersistence({version: 5, send: async (operation, version) => {
+        versions.push(version);
+        if (operation.url === '/invalid') throw Object.assign(new Error('Invalid edit'), {status: 400});
+        return {editorial_version: 6};
+    }});
+    const invalid = editor.enqueue('/invalid', {});
+    const valid = editor.enqueue('/valid', {});
+    await assert.rejects(invalid, /Invalid edit/);
+    await valid;
+    assert.deepEqual(versions, [5, 5]);
+    assert.equal(editor.error, null);
 });

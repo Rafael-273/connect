@@ -507,7 +507,7 @@
                 <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5 flex flex-col gap-3">
                     {% url 'media_my_work' as media_my_work_url %}
                     {% include 'parciais/media_link_card.html' with url=media_my_work_url icon='list-check' title='Meu trabalho' subtitle='Suas atividades, organizadas por prazo' %}
-                    <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pt-1">Produção de vídeos</p>
+                    <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pt-1">Ferramentas</p>
                     <a href="{% url 'external_media_dashboard' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color:rgba(201,9,5,.3)">
                         <div class="flex items-center gap-3 min-w-0">
                             <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background:rgba(201,9,5,.1);"><i class="fas fa-closed-captioning text-sm" style="color:#C90905;"></i></div>
@@ -526,8 +526,6 @@
                     {% url 'ministry_manual_list' media_ministry_id as ministry_manual_list_url %}
                     {% include 'parciais/media_link_card.html' with url=ministry_manual_list_url icon='book' title='Manuais' subtitle='Guias e orientações da mídia' %}
                     {% endif %}
-                    {% url 'media_resource_list' as media_resource_list_url %}
-                    {% include 'parciais/media_link_card.html' with url=media_resource_list_url icon='key' title='Recursos' subtitle='Acessos, credenciais e ferramentas' %}
                     {% url 'media_secretariat' as media_secretariat_url %}
                     {% include 'parciais/media_link_card.html' with url=media_secretariat_url icon='folder-open' title='Secretaria' subtitle='Escalas e planejamento mensal' %}
                     <div class="flex items-center justify-between bg-gray-50 rounded-xl p-4 border-2 border-gray-200 opacity-70" aria-disabled="true">
@@ -535,6 +533,8 @@
                         <span class="text-xs font-bold text-gray-400">Em breve</span>
                     </div>
                     {% endif %}
+                    {% url 'media_resource_list' as media_resource_list_url %}
+                    {% include 'parciais/media_link_card.html' with url=media_resource_list_url icon='key' title='Recursos' subtitle='Acessos, credenciais e ferramentas' %}
                 </div>
             </div>
         </div>
@@ -1125,21 +1125,6 @@
         console.warn('PWA requer HTTPS para funcionar em produção!');
     }
 
-    // Registra o service worker
-    if ('serviceWorker' in navigator && isSecureContext) {
-        navigator.serviceWorker.register('/static/sw.js', { updateViaCache: 'none' })
-            .then(registration => {
-                console.log('Service Worker registrado com sucesso:', registration);
-                // Força atualização do service worker
-                registration.update();
-            })
-            .catch(error => {
-                console.error('Falha ao registrar Service Worker:', error);
-            });
-    } else if (!isSecureContext) {
-        console.warn('Service Worker requer contexto seguro (HTTPS)');
-    }
-
     // Função para mostrar o prompt de instalação
     window.showInstallPrompt = function () {
         console.log('showInstallPrompt chamado. isIOS:', isIOS, 'isMobile:', isMobile, 'deferredPrompt:', !!deferredPrompt, 'isStandalone:', isStandalone);
@@ -1156,8 +1141,11 @@
                                 <ol style="padding-left: 1.5rem; margin: 0; color: #4B5563; font-size: 0.95rem; line-height: 1.8;">
                                     <li style="margin-bottom: 0.5rem;">Toque no botão <strong>Compartilhar</strong> <i class="fas fa-share" style="color: #3B82F6;"></i></li>
                                     <li style="margin-bottom: 0.5rem;">Role e toque em <strong style="color: #C90905;">"Adicionar à Tela Inicial"</strong></li>
+                                    <li style="margin-bottom: 0.5rem;">Se aparecer, mantenha <strong>"Abrir como App"</strong> ativado.</li>
                                     <li>Toque em <strong style="color: #10B981;">"Adicionar"</strong></li>
+                                    <li>Abra o Connect pelo novo ícone na Tela Inicial.</li>
                                 </ol>
+                                <p style="margin-top: 0.75rem; font-size: 0.9rem;">Se o ícone antigo ainda mostrar o endereço e os botões do navegador, remova-o da Tela Inicial e adicione novamente seguindo estes passos.</p>
                             </div>
                         </div>
                     `,

@@ -33,3 +33,5 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+.private_content_files/

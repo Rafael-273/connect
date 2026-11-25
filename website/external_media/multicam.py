@@ -22,10 +22,10 @@ from .ffmpeg_runner import FFmpegRunner
 
 
 class AudioSynchronizer:
-    VERSION = 1
+    VERSION = 2
     SAMPLE_RATE = 8000
     HOP = 80
-    ANALYSIS_SECONDS = 180
+    ANALYSIS_SECONDS = 7200
 
     @classmethod
     def features(cls, samples):
@@ -33,9 +33,12 @@ class AudioSynchronizer:
         if len(samples) < 320 or not np.isfinite(samples).all():
             return np.zeros((0, 6))
         frames = np.lib.stride_tricks.sliding_window_view(samples, 320)[::cls.HOP]
-        spectrum = abs(np.fft.rfft(frames * np.hanning(320), axis=1)) ** 2
         bands = [(4, 10), (10, 20), (20, 35), (35, 55), (55, 90), (90, 150)]
-        energy = np.stack([np.log1p(spectrum[:, a:b].mean(axis=1) * 100) for a, b in bands], axis=1)
+        # Bound FFT intermediates when analyzing a complete conversation.
+        energy = np.empty((len(frames), len(bands)))
+        for start in range(0, len(frames), 4096):
+            spectrum = abs(np.fft.rfft(frames[start:start + 4096] * np.hanning(320), axis=1)) ** 2
+            energy[start:start + 4096] = np.stack([np.log1p(spectrum[:, a:b].mean(axis=1) * 100) for a, b in bands], axis=1)
         # Per-band normalization tolerates gain, polarity and microphone EQ.
         scale = energy.std(axis=0)
         usable = scale > 1e-5
@@ -173,7 +176,9 @@ class MulticamService:
                    for key, value in (configuration.get('multicam_alignments') or {}).items()
                    if value.get('status') == 'ALIGNED']
         words = configuration.get('multicam_words') or []
-        candidates = cls.candidate_boundaries(words)[:120]
+        candidates = cls.candidate_boundaries(words)
+        if len(candidates) > 120:
+            candidates = [candidates[round(index * (len(candidates) - 1) / 119)] for index in range(120)]
         if not cameras or len(candidates) < 2 or configuration.get('multicam_semantic_enabled') is False:
             return None
         payload = {'cameras': cameras, 'pauses': candidates}
@@ -185,7 +190,8 @@ class MulticamService:
         instructions = (
             'Você é editor multicâmera. A principal é a referência. Selecione apenas pausas em que '
             'uma câmera extra melhora a narrativa: mudança de pensamento, ênfase ou novo argumento. '
-            'Não alterne em intervalos fixos, não preencha todas as pausas e prefira poucas mudanças. '
+            'Distribua as escolhas ao longo da conversa, preservando os pensamentos completos. '
+            'Não preencha todas as pausas nem se concentre somente no início do vídeo. '
             'Pode não escolher nenhuma. Cada escolha inicia uma passagem pela câmera extra; '
             'o sistema retorna à principal em outra pausa segura. Os nomes das câmeras não garantem '
             'a presença de um locutor: não invente informação visual. '
@@ -298,9 +304,16 @@ class MulticamService:
         review = (project.configuration or {}).get('multicam_editorial_review') or {}
         semantic = review.get('status') == 'REVIEWED' and (project.configuration or {}).get('multicam_semantic_enabled') is not False
         selections = {item['pause_id']: item for item in review.get('selections', [])}
+        duration = int((timeline.get('sequence') or {}).get('duration_ms') or max(
+            (clip.get('timeline_out_ms') or 0 for clip in timeline.get('clips') or []), default=0))
+        spacing = max(minimum, duration // maximum)
+        used_windows = set()
         for index, candidate in enumerate(candidates):
             start, selected = candidate['time_ms'], selections.get(candidate['id'])
             if (semantic and not selected) or (not semantic and not candidate['emphasis']) or start - last_end < minimum:
+                continue
+            window = start // spacing
+            if window in used_windows:
                 continue
             end = next((item['time_ms'] for item in candidates[index + 1:] if item['time_ms'] - start >= minimum), None)
             if end is None:
@@ -325,6 +338,7 @@ class MulticamService:
             if selected:
                 operation.update(origin='AI', confidence=selected['confidence'], reason=selected['reason'] or 'Transição narrativa')
             operations.append(operation)
+            used_windows.add(window)
             last_end = end
             if len(operations) >= maximum:
                 break
@@ -348,11 +362,23 @@ class MulticamRenderService:
     def __init__(self, runner, storage):
         self.runner, self.storage = runner, storage
 
-    def apply(self, project, revision, video, output, width, height):
+    @staticmethod
+    def validate_timing(segments, duration_ms=None):
+        if duration_ms is not None:
+            duration_ms = int(duration_ms)
+            if duration_ms <= 0 or any(int(item['start_ms']) < 0 or int(item['end_ms']) <= int(item['start_ms']) or int(item['end_ms']) > duration_ms + 34 for item in segments):
+                raise ExternalMediaError('Os intervalos de câmera não correspondem à duração planejada. Revise a timeline antes de exportar.')
+        if any(not math.isfinite(float(item.get('rate', 1))) or float(item.get('rate', 1)) <= 0
+               or int(item['source_in_ms']) < 0 or int(item['source_out_ms']) <= int(item['source_in_ms']) for item in segments):
+            raise ExternalMediaError('Recorte ou velocidade de câmera inválidos. Revise a timeline antes de exportar.')
+
+    def apply(self, project, revision, video, output, width, height, duration_ms=None):
         from .canonical import SourceManifestBuilder
         segments = (revision.timeline or {}).get('camera_segments') or []
         if not segments:
             return video
+        duration_ms = duration_ms if duration_ms is not None else ((revision.timeline or {}).get('sequence') or {}).get('duration_ms')
+        self.validate_timing(segments, duration_ms)
         sources = {s['id']: s for s in revision.source_manifest['sources']}
         operations = (getattr(revision, 'edit_decision_set', None) or {}).get('operations') or []
 
@@ -405,7 +431,6 @@ class MulticamRenderService:
             batch = segments[batch_start:batch_start + 8]
             target = Path(output) if batch_start + 8 >= len(segments) else Path(output).with_name(f'multicam-pass-{batch_start}.mp4')
             command = [settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(current)]
-            duration_ms = ((revision.timeline or {}).get('sequence') or {}).get('duration_ms')
             duration_filter = f',trim=duration={int(duration_ms) / 1000:.6f}' if duration_ms else ''
             filters, label = [f'[0:v]fps=30{duration_filter},setpts=PTS-STARTPTS[base]'], 'base'
             for index, item in enumerate(batch, 1):
@@ -416,13 +441,40 @@ class MulticamRenderService:
                 command += ['-ss', f"{item['source_in_ms'] / 1000:.6f}", '-t', f"{(item['source_out_ms'] - item['source_in_ms']) / 1000:.6f}", '-i', FFmpegRunner.input_arg(self.storage.ffmpeg_input(field))]
                 start, end = item['start_ms'] / 1000, item['end_ms'] / 1000
                 visual = camera_visual_filters(item)
-                filters.append(f'[{index}:v]setpts=(PTS-STARTPTS)/{item["rate"]:.9f}+{start:.6f}/TB{visual},scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1,fps=30[cam{index}]')
+                filters.append(f'[{index}:v]setpts=(PTS-STARTPTS)/{item["rate"]:.9f},trim=duration={end-start:.6f},setpts=PTS-STARTPTS+{start:.6f}/TB{visual},scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1,fps=30[cam{index}]')
                 # Hold the last 24/25 fps frame through its display interval;
                 # the half-open enable expression still ends on the exact cut.
                 filters.append(f"[{label}][cam{index}]overlay=eof_action=repeat:repeatlast=1:enable='gte(t,{start:.6f})*lt(t,{end:.6f})'[out{index}]")
                 label = f'out{index}'
             command += ['-filter_complex_threads', '1', '-filter_complex', ';'.join(filters), '-map', f'[{label}]', '-map', '0:a?', '-c:a', 'copy', '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_RENDER_PRESET or 'fast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', '30', '-movflags', '+faststart', str(target)]
-            self.runner.run(command)
+            # Framesync may keep producing frames after the master ends while
+            # another input is alive. Bound every pass, not only the last one.
+            if duration_ms:
+                command[-1:-1] = ['-t', f'{duration_ms / 1000:.6f}']
+            # Intermediate passes are full-length files. In S3 mode, stage
+            # the preceding pass before writing the next one, just as the
+            # pipeline stages the master before entering this compositor.
+            temporary_name = None
+            try:
+                processing_input = current
+                if settings.USE_S3 and batch_start > 0:
+                    processing_input, temporary_name = self.storage.stage_temporary(
+                        current, f'project-{project.public_id}-multicam-pass',
+                    )
+                    command[3] = FFmpegRunner.input_arg(processing_input)
+                input_size = getattr(processing_input, 'size_bytes', 0)
+                if isinstance(processing_input, Path) and processing_input.is_file():
+                    input_size = processing_input.stat().st_size
+                if input_size:
+                    from .workspace import DiskCapacityGuard
+                    DiskCapacityGuard.require_capacity(
+                        int(input_size * settings.EXTERNAL_MEDIA_WORKSPACE_SAFETY_FACTOR),
+                        root=target.parent,
+                    )
+                self.runner.run(command)
+            finally:
+                if temporary_name:
+                    self.storage.delete_temporary(temporary_name)
             if current != video and Path(current).name.startswith('multicam-pass-'):
                 Path(current).unlink(missing_ok=True)
             current = target

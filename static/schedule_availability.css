@@ -3,8 +3,17 @@
 .av-roster, .av-overview { background: white; border: 1px solid var(--sa-border); border-radius: 16px; padding: 20px; }
 .av-roster { display: flex; flex-direction: column; gap: 10px; }
 .av-muted { font-size: 11px; line-height: 1.7; color: #758095; }
-.av-members { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
-.av-member { display: flex; flex-direction: column; gap: 3px; text-align: left; background: #fafbfe; border: 1px solid #e9ecf3; border-radius: 10px; padding: 12px; }
+.av-members { display: grid; gap: 24px; margin-top: 4px; }
+.av-member-group-heading { display: flex; align-items: baseline; gap: 10px; margin: 0 0 10px; }
+.av-member-group-heading h3 { font-size: 15px; font-weight: 700; color: #30394b; }
+.av-member-group-heading span { color: #758095; font-size: 11px; }
+.av-member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.av-member { display: flex; align-items: flex-start; flex-direction: column; gap: 4px; text-align: left; background: #fafbfe; border: 1px solid #e1e6ef; border-radius: 12px; padding: 15px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.av-member:hover { border-color: #d6a3a0; box-shadow: 0 4px 14px rgba(31, 41, 55, .07); }
+.av-member:focus-visible { outline: 2px solid #c90905; outline-offset: 2px; }
+.av-member .av-member-status { margin-top: 8px; padding: 4px 8px; border-radius: 20px; background: #f7f0dc; }
+.av-member .av-member-status.av-available { background: #e5f5ee; }
+.av-member .av-member-action { margin-top: 6px; color: #a60d0a; font-size: 11px; font-weight: 700; }
 .av-member strong { font-size: 13px; }
 .av-member > span:not(.av-muted) { font-size: 10px; font-weight: 700; }
 .av-member.is-selected { border-color: #c90905; background: #fff5f4; }
@@ -73,7 +82,7 @@
     .av-dates { grid-template-columns: 1fr; }
 }
 @media (max-width: 700px) {
-    .av-members { grid-template-columns: 1fr; }
+    .av-member-grid { grid-template-columns: 1fr; }
     .av-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .av-person { flex-direction: column; gap: 10px; }
     .av-editor, .av-roster, .av-overview { padding: 16px; }

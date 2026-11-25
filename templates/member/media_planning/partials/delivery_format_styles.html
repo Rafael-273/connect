@@ -1,0 +1,10 @@
+<style>
+    .delivery-format-options { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+    .delivery-format-option { cursor: pointer; position: relative; display: inline-flex; margin: 0; }
+    .delivery-format-option input { position: absolute; opacity: 0; }
+    .delivery-format-option span { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; box-sizing: border-box; border: 1px solid #d1d5db; border-radius: .6rem; padding: .45rem .85rem; background: white; color: #475569; font-size: .875rem; line-height: 1.25; transition: .15s; }
+    .delivery-format-option input:checked + span { color: #b91c1c; border-color: #dc2626; background: #fef2f2; font-weight: 600; }
+    .delivery-format-option input:checked + span::before { content: '✓'; display: inline-flex; align-items: center; line-height: 1; margin-right: .4rem; }
+    .delivery-format-option input:focus-visible + span { outline: 2px solid #dc2626; outline-offset: 2px; }
+    .delivery-format-option[hidden] { display: none; }
+</style>

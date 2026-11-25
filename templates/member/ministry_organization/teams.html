@@ -1,7 +1,7 @@
 {% extends 'member/ministry_organization/base.html' %}
 
 {% block org_header %}
-{% url 'media_organization' as org_url %}
+{% url 'member_dashboard' as org_url %}
 {% if can_manage %}
 {% include 'parciais/org_media_header.html' with back_url=org_url title='Equipes' subtitle='Subequipes e membros' action_partial='member/ministry_organization/partials/team_header_action.html' %}
 {% else %}

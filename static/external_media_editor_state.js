@@ -108,8 +108,15 @@
                 // Telemetry must not turn a successful commit into a failed operation.
                 try { this.onMetrics({operationId:operation.id, queueMs:startedAt-operation.enqueuedAt, requestMs:Date.now()-startedAt, totalMs:Date.now()-operation.enqueuedAt, attempts:operation.attempts}); } catch (_) {}
             } catch (error) {
-                // Keep the same operation/id/base: the server may already have committed.
-                this.error = error;
+                if (error.status === 400) {
+                    // Validation rejected the edit before a commit. Later edits can
+                    // still use the same editorial version.
+                    this.queue.shift();
+                    operation.reject(error);
+                } else {
+                    // Keep the same operation/id/base when a commit is uncertain.
+                    this.error = error;
+                }
             } finally {
                 this.running = false;
                 this.changed();

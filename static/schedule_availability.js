@@ -25,16 +25,16 @@
     const dateLabel = value => new Intl.DateTimeFormat('pt-BR', {weekday: 'long', day: '2-digit', month: 'short', timeZone: 'America/Sao_Paulo'}).format(new Date(value + 'T12:00:00-03:00'));
     class AvailabilityUI {
         constructor(options) {
-            this.options = options; this.state = options.getState(); this.teamId = null; this.memberId = null;
+            this.options = options; this.state = options.getState(); this.teamId = null; this.filterTeamId = null; this.memberId = null;
             this.dirty = false; this.busy = false; this.blocked = false; this.mode = ''; this.selection = new Set(); this.saving = null;
             $('av-team').addEventListener('change', async () => {
                 const requested = Number($('av-team').value);
-                $('av-team').value = this.teamId;
+                $('av-team').value = this.filterTeamId || '';
                 if (!await this.canLeave()) return;
-                this.teamId = requested; this.memberId = null; this.render(this.state);
+                this.filterTeamId = requested || null; this.teamId = null; this.memberId = null; this.render(this.state);
             });
             $('av-search').addEventListener('input', () => this.renderRoster());
-            $('av-form').addEventListener('submit', event => { event.preventDefault(); this.save(); });
+            $('av-form').addEventListener('submit', async event => { event.preventDefault(); if (await this.save() && $('av-editor-dialog').open) $('av-editor-dialog').close(); });
             $('av-form').querySelectorAll('[name=availability-mode]').forEach(input => input.addEventListener('change', () => { this.mode = input.value; this.markDirty(); this.renderDates(); }));
             $('av-notes').addEventListener('input', () => this.markDirty());
             $('av-confirm-review').addEventListener('change', () => this.markDirty());
@@ -73,38 +73,57 @@
         render(state) {
             this.state = state;
             const teamSelect = $('av-team');
-            const catalogKey = JSON.stringify(state.teams.map(team => [team.id, team.name]));
+            const plannedIds = new Set(state.occurrences.flatMap(item => item.teams.filter(team => team.activities.length).map(team => team.team_id)));
+            const plannedTeams = state.teams.filter(team => plannedIds.has(team.id));
+            const catalogKey = JSON.stringify(plannedTeams.map(team => [team.id, team.name]));
             if (teamSelect.dataset.catalogKey !== catalogKey) {
                 teamSelect.replaceChildren();
-                state.teams.forEach(team => { const option = node('option', '', team.name); option.value = team.id; teamSelect.append(option); });
+                const all = node('option', '', 'Todas as equipes do planejamento'); all.value = ''; teamSelect.append(all);
+                plannedTeams.forEach(team => { const option = node('option', '', team.name); option.value = team.id; teamSelect.append(option); });
                 teamSelect.dataset.catalogKey = catalogKey;
             }
-            if (!state.teams.some(team => team.id === this.teamId)) { this.teamId = state.teams[0]?.id || null; this.memberId = null; }
-            teamSelect.value = this.teamId || '';
+            if (this.filterTeamId && !plannedIds.has(this.filterTeamId)) this.filterTeamId = null;
+            if (this.teamId && !plannedIds.has(this.teamId)) { this.teamId = null; this.memberId = null; }
+            teamSelect.value = this.filterTeamId || '';
             this.renderRoster();
             if (!this.dirty && !this.busy) this.loadPerson();
             this.setBlocked(this.blocked);
         }
         renderRoster() {
             const search = $('av-search').value.toLocaleLowerCase('pt-BR');
-            const members = this.state.availability.roster.filter(item => item.team_id === this.teamId && item.name.toLocaleLowerCase('pt-BR').includes(search));
+            const plannedIds = new Set(this.state.occurrences.flatMap(item => item.teams.filter(team => team.activities.length).map(team => team.team_id)));
+            const members = this.state.availability.roster.filter(item => plannedIds.has(item.team_id) && (!this.filterTeamId || item.team_id === this.filterTeamId) && item.name.toLocaleLowerCase('pt-BR').includes(search));
             const container = $('av-members'); container.replaceChildren();
-            $('av-roster-count').textContent = `${members.length} integrante${members.length === 1 ? '' : 's'} encontrado${members.length === 1 ? '' : 's'}`;
+            const uniqueCount = new Set(members.map(person => person.member_id)).size;
+            $('av-roster-count').textContent = `${uniqueCount} integrante${uniqueCount === 1 ? '' : 's'} encontrado${uniqueCount === 1 ? '' : 's'}` + (uniqueCount < members.length ? ' · Pessoas em mais de uma equipe aparecem em cada grupo' : '');
+            const groups = new Map();
             members.forEach(person => {
+                if (!groups.has(person.team_id)) groups.set(person.team_id, []);
+                groups.get(person.team_id).push(person);
+            });
+            groups.forEach((people, teamId) => {
+                const group = node('section', 'av-member-group');
+                const heading = node('div', 'av-member-group-heading');
+                const team = this.state.teams.find(item => item.id === teamId);
+                heading.append(node('h3', '', team?.name || 'Equipe'), node('span', '', `${people.length} integrante${people.length === 1 ? '' : 's'}`));
+                const grid = node('div', 'av-member-grid');
+                group.append(heading, grid); container.append(group);
+                people.forEach(person => {
                 const button = action('', async () => {
                     if (!await this.canLeave()) return;
-                    this.memberId = person.member_id; this.renderRoster(); this.loadPerson();
+                    this.teamId = person.team_id; this.memberId = person.member_id; this.renderRoster(); this.loadPerson();
                     const dialog = $('av-editor-dialog'); if (!dialog.open) dialog.showModal();
                     $('av-person-name').tabIndex = -1; $('av-person-name').focus({preventScroll: true});
                 });
-                button.className = 'av-member' + (this.memberId === person.member_id ? ' is-selected' : '');
-                button.setAttribute('aria-pressed', String(this.memberId === person.member_id));
+                button.className = 'av-member' + (this.teamId === person.team_id && this.memberId === person.member_id ? ' is-selected' : '');
+                button.setAttribute('aria-pressed', String(this.teamId === person.team_id && this.memberId === person.member_id));
                 const caption = person.needs_review ? 'Revisar disponibilidades' : person.record ? 'Informado' : 'Não informado';
-                button.append(node('strong', '', person.name), node('span', 'av-muted', person.experience_label), node('span', person.needs_review ? 'av-unknown' : person.record ? 'av-available' : 'av-unknown', caption));
-                if (person.other_teams.length) button.append(node('small', 'av-muted', 'Também: ' + person.other_teams.map(team => team.name).join(', ')));
-                container.append(button);
+                const status = node('span', 'av-member-status ' + (person.needs_review ? 'av-unknown' : person.record ? 'av-available' : 'av-unknown'), caption);
+                button.append(node('strong', '', person.name), node('span', 'av-muted', person.experience_label), status, node('span', 'av-member-action', 'Ver disponibilidade  →'));
+                grid.append(button);
+                });
             });
-            if (!members.length) container.append(node('p', 'av-muted', 'Nenhum integrante ativo encontrado nesta equipe.'));
+            if (!members.length) container.append(node('p', 'av-muted', 'Nenhum integrante ativo encontrado para o planejamento.'));
         }
         loadPerson() {
             const person = this.person(); $('av-empty').hidden = !!person; $('av-form').hidden = !person;
@@ -197,7 +216,7 @@
             if (this.matches(payload)) { this.dirty = false; this.options.onDirty(); this.render(this.options.getState()); }
         }
         async clear() {
-            if (this.blocked || this.busy || !window.confirm('Marcar a disponibilidade desta pessoa, nesta equipe e neste mês, como não informada?')) return;
+            if (this.blocked || this.busy || !await window.ScheduleConfirm({title: 'Limpar disponibilidade?', message: 'A disponibilidade desta pessoa nesta equipe e neste mês voltará a constar como não informada.', action: 'Limpar disponibilidade'})) return;
             this.busy = true; this.setBlocked(false);
             try { if (await this.options.onClear({team_id: this.teamId, member_id: this.memberId})) { this.dirty = false; this.options.onDirty(); } }
             finally { this.busy = false; this.render(this.options.getState()); }

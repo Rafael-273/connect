@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.html import strip_tags
+import uuid
 
 from ._base import BaseModel
 from website.utils.manual_content import sanitize_manual_content
@@ -17,6 +18,8 @@ class MinistryManual(BaseModel):
     )
     created_by = models.ForeignKey('User', on_delete=models.SET_NULL, null=True, blank=True)
     is_active = models.BooleanField('Ativo', default=True)
+    is_draft = models.BooleanField('Rascunho', default=False)
+    origin = models.CharField('Origem', max_length=12, default='manual', choices=[('manual', 'Manual'), ('ai', 'IA')])
 
     class Meta:
         ordering = ['title']
@@ -41,3 +44,17 @@ class MinistryManual(BaseModel):
     @property
     def safe_content(self):
         return sanitize_manual_content(self.content)
+
+
+class ManualGenerationJob(models.Model):
+    ministry = models.ForeignKey('Ministry', on_delete=models.CASCADE)
+    created_by = models.ForeignKey('User', on_delete=models.CASCADE)
+    audio = models.BinaryField(null=True, editable=False)
+    filename = models.CharField(max_length=255)
+    transcript = models.TextField(blank=True)
+    status = models.CharField(max_length=20, default='waiting')
+    run_token = models.UUIDField(default=uuid.uuid4, editable=False)
+    error = models.CharField(max_length=300, blank=True)
+    manual = models.ForeignKey(MinistryManual, null=True, blank=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

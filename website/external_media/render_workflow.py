@@ -19,8 +19,8 @@ def enabled():
 
 
 VIDEO_OPERATIONS = {
-    'project-run', 'project-render', 'project-preview', 'broll-preview', 'review-preview',
-    'review-render', 'legacy-prepare', 'legacy-render', 'mastering-analyze',
+    'take-analysis', 'project-run', 'project-render', 'project-preview', 'broll-preview', 'review-preview',
+    'review-render', 'preview-artifact', 'timeline-thumbnail', 'timeline-review-proxy', 'legacy-prepare', 'legacy-render', 'mastering-analyze',
     'mastering-render', 'premiere-export',
 }
 
@@ -29,6 +29,9 @@ def enqueue_video_work(operation, primary_id, secondary_id=None):
     """Start any media task on Render and return its run ID without waiting."""
     if operation not in VIDEO_OPERATIONS:
         raise ValueError(f'Unsupported Render video operation: {operation}')
+    token_operation = operation in {'preview-artifact', 'timeline-thumbnail'}
+    if token_operation and (not isinstance(secondary_id, str) or not secondary_id):
+        raise ValueError('A preview operation requires its lease token.')
     if not enabled():
         return None
     if not settings.USE_S3:
@@ -47,9 +50,13 @@ def enqueue_video_work(operation, primary_id, secondary_id=None):
         ) from exc
 
     try:
+        task_name = settings.RENDER_WORKFLOW_TASK
+        if operation == 'take-analysis':
+            prefix, separator, _ = task_name.rpartition('/')
+            task_name = (prefix + separator if separator else '') + 'process_take_analysis'
         task_run = Render(token=settings.RENDER_API_KEY).workflows.start_task(
-            settings.RENDER_WORKFLOW_TASK,
-            [operation, int(primary_id), int(secondary_id) if secondary_id is not None else None],
+            task_name,
+            [operation, int(primary_id), secondary_id if token_operation else int(secondary_id) if secondary_id is not None else None],
         )
     except Exception as exc:
         raise RenderWorkflowError('O Render não aceitou o job de vídeo.') from exc

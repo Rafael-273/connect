@@ -1,0 +1,7 @@
+{% if delivery_requirements %}
+<section class="{% if delivery_integrated %}work-detail-deliveries{% if activity.briefing or activity.observations or activity.description %} work-detail-deliveries-separated{% endif %}{% else %}work-detail-card mt-4{% endif %}" data-deliveries>
+    <div class="work-detail-section-heading"><p class="work-detail-kicker">Entregas</p></div>
+    {% for requirement in delivery_requirements %}{% include 'member/media_planning/partials/delivery_requirement.html' %}{% endfor %}
+    {% if delivery_writable %}<p class="delivery-guidance"><i class="fas fa-info-circle" aria-hidden="true"></i><span>{% if delivery_needs_confirmation %}Após concluir os ajustes, confirme o envio para a liderança revisar novamente.{% else %}Após o envio dos arquivos obrigatórios, a etapa será enviada para revisão.{% endif %}</span></p>{% endif %}
+</section>
+{% endif %}

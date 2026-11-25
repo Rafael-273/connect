@@ -272,7 +272,11 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
             request.POST, request.FILES, instance=version, prefix='blocks',
         )
 
-        if template_form.is_valid() and form.is_valid() and block_formset.is_valid():
+        # Validate every component so the response can show all problems at once.
+        template_valid = template_form.is_valid()
+        version_valid = form.is_valid()
+        blocks_valid = block_formset.is_valid()
+        if template_valid and version_valid and blocks_valid:
             try:
                 with transaction.atomic():
                     saved_template = template_form.save()
@@ -284,6 +288,9 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
                     saved_version.save()
                     block_formset.instance = saved_version
                     block_formset.save()
+                    for block_form in block_formset.forms:
+                        if block_form.instance.pk and not block_form.cleaned_data.get('DELETE') and block_form.cleaned_data.get('name'):
+                            block_form.save_brolls()
                     form.sync_advanced_plugins(saved_version)
             except ProtectedError:
                 # The formset's own validation already blocks deleting a block that is

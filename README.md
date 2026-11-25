@@ -333,7 +333,17 @@ cp .env.example .env   # ajuste os valores
 docker compose up --build
 ```
 
+A sugestão de recortes depende também do serviço `media-analysis-worker`, que consome a fila `media_analysis`. Se iniciar os serviços individualmente, execute `docker compose up -d media-analysis-worker`. Apenas reiniciar os workers existentes não cria esse novo serviço.
+
+
 O `docker-compose.yml` executa automaticamente `collectstatic`, `migrate` e inicia o servidor de desenvolvimento.
+
+Por padrão, as etapas de construção usam a rede do host para evitar falhas de
+DNS da rede bridge do Docker. Em ambientes onde essa opção não estiver
+disponível, use `DOCKER_BUILD_NETWORK=default docker compose up --build` após
+verificar a conectividade do Docker. Essa opção afeta apenas o build; os
+containers em execução continuam usando a rede do Compose. O APT tem tempo
+limite e falha caso o repositório esteja inacessível.
 
 A aplicação ficará disponível em `http://localhost:8000`.
 
@@ -363,6 +373,27 @@ transcricao = ai.transcribe(
 A chave nunca deve ser enviada ao navegador; somente o backend deve usar esse
 serviço. Para texto, cada fluxo escolhe o `model` explicitamente; apenas a
 transcrição fica centralizada na `env`.
+
+### Manuais gerados a partir de áudio
+
+Administradores e líderes autorizados podem gerar um rascunho na tela de
+manuais. O processamento ocorre em segundo plano no próprio processo web, sem
+worker ou Redis para manuais. É necessário ter `ffmpeg` e `ffprobe` disponíveis
+no container web (configuráveis por `FFMPEG_BINARY` e `FFPROBE_BINARY`), além
+de `OPENAI_API_KEY`. Cada processo web executa um manual por vez. Execute as migrações e o
+`collectstatic` ao atualizar a instalação. São aceitos arquivos MP3, MP4,
+MPEG, MPGA, M4A, WAV e WebM de até 128 MB (configurável por
+`MANUAL_AUDIO_MAX_UPLOAD_MB`) e duas horas. Arquivos acima de 24 MB são
+convertidos e divididos em blocos no container web antes da transcrição.
+
+O áudio fica temporariamente no banco de dados para permitir novas tentativas
+sem upload; a transcrição é mantida apenas durante o processamento ou após
+falha. Ambos são removidos após a geração bem-sucedida. Ao acessar a lista de manuais, são excluídas tarefas sem atualização por
+24 horas, inclusive dados de tentativas com erro. Se o processo web reiniciar
+durante uma geração, ela pode ser retomada pela tela após 30 minutos; a
+transcrição já concluída em blocos é reaproveitada. O conteúdo gerado é salvo como rascunho e deve ser revisado antes da
+publicação. Faça backup e defina a retenção do banco conforme a política da
+instalação.
 
 O módulo de Mídia Externa escolhe `gpt-4.1-mini` no próprio fluxo de tradução,
 enquanto o Whisper permanece configurável por `OPENAI_TRANSCRIPTION_MODEL`.

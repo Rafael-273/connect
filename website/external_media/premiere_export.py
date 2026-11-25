@@ -628,6 +628,8 @@ class PremierePackageService:
                 if reference_mix_available else ''
             )
             + caption_instructions +
+            'Os SRTs de Captions/ contêm uma única linha de texto por legenda, sem quebras manuais. '
+            'Se o Premiere redistribuir o texto em duas linhas, ajuste o tamanho da fonte e a largura da caixa de legenda no próprio Premiere.\n'
             'A masterização do mix completo não foi duplicada individualmente nos stems.\n'
             'Consulte Metadata/timeline.json e Metadata/validation.json para detalhes.\n'
             'A masterização final deve ser feita após a edição, usando “Masterizar Vídeo”.\n',

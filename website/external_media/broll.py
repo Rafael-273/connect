@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import tempfile
 from copy import deepcopy
@@ -11,15 +12,58 @@ from pathlib import Path
 
 from django.conf import settings
 from django.urls import reverse
+from django.db import transaction
 
 from website.ai import AIServiceError, get_ai_service
-from website.models.external_media import MediaTemplatePlugin, ProjectBrollAsset, SubtitleCue
+from website.forms.external_media import IMAGE_EXTENSIONS
+from website.models.external_media import ExternalMediaProject, MediaTemplatePlugin, ProjectBrollAsset, SubtitleCue
 
 from .ffmpeg_runner import FFmpegRunner
-from .media_input import RemoteMediaSource
+from .exceptions import ExternalMediaError
+from .media_input import RemoteMediaSource, media_input_factory
+from .transitions import TransitionFilters
+from .workspace import JobWorkspace
 
 
 logger = logging.getLogger(__name__)
+
+
+def copy_template_brolls(project, block):
+    for source in block.default_brolls.all():
+        is_image = Path(source.original_filename).suffix.lower() in IMAGE_EXTENSIONS
+        asset = ProjectBrollAsset(
+            project=project, block=block, original_filename=source.original_filename,
+            description=source.description, position=source.position + 1,
+            media_type=ProjectBrollAsset.MediaType.IMAGE if is_image else ProjectBrollAsset.MediaType.VIDEO,
+            preview_status=ProjectBrollAsset.PreviewStatus.READY if is_image else ProjectBrollAsset.PreviewStatus.PENDING,
+        )
+        with source.file.open('rb') as content:
+            asset.file_size = content.size
+            asset.file.save(source.original_filename, content, save=False)
+        asset.save()
+        yield asset
+
+
+@transaction.atomic
+def import_missing_template_brolls(project):
+    ExternalMediaProject.objects.select_for_update().only('pk').get(pk=project.pk)
+    # Include removed assets so a rerun respects editorial removals.
+    occupied = ProjectBrollAsset.all_objects.filter(project=project).values_list('block_id', flat=True)
+    blocks = project.template_version.blocks.exclude(pk__in=occupied.exclude(block_id__isnull=True))
+    count = 0
+    for block in blocks.prefetch_related('default_brolls'):
+        for asset in copy_template_brolls(project, block):
+            count += 1
+            if asset.media_type == ProjectBrollAsset.MediaType.VIDEO:
+                from .render_workflow import enqueue_video_work
+
+                if settings.RENDER_WORKFLOW_ENABLED:
+                    transaction.on_commit(lambda pk=asset.pk: enqueue_video_work('broll-preview', pk), robust=True)
+                else:
+                    from .tasks import create_project_broll_preview
+
+                    transaction.on_commit(lambda pk=asset.pk: create_project_broll_preview.delay(pk), robust=True)
+    logger.info('template_broll_import project=%s imported=%s', project.public_id, count)
 
 
 class BrollTimelineService:
@@ -36,7 +80,7 @@ class BrollTimelineService:
 
     @classmethod
     def configuration(cls, project):
-        plugin = project.template_version.plugins.filter(
+        plugin = project.editor_settings.plugins.filter(
             code=MediaTemplatePlugin.Code.BROLL,
         ).first()
         # B-roll is always available at the project/block level. A legacy
@@ -61,8 +105,11 @@ class BrollTimelineService:
             for item in ((project.configuration or {}).get('broll_decisions') or [])
         }
         missing = [asset for asset in assets if str(asset.public_id) not in existing]
-        if missing:
-            generated = cls._generate(project, missing, config, ai_service=ai_service)
+        if missing and not getattr(project, 'current_timeline_revision_id', None):
+            generated = cls._generate(project, missing, config, ai_service=ai_service, occupied=list(existing.values()))
+            generated = cls._fill_block_defaults(project, missing, config, generated, list(existing.values()))
+            for item in generated:
+                item['time_basis'] = 'edited'
             existing.update({str(item['asset_id']): item for item in generated})
             project.configuration = {
                 **(project.configuration or {}),
@@ -70,6 +117,67 @@ class BrollTimelineService:
             }
             project.save(update_fields=['configuration', 'update_at'])
         return [deepcopy(existing[str(asset.public_id)]) for asset in assets if str(asset.public_id) in existing]
+
+    @classmethod
+    def _fill_block_defaults(cls, project, assets, config, generated, existing):
+        ranges = cls._configured_block_ranges(project)
+        groups = {}
+        for asset in assets:
+            key = cls._asset_block_key(asset)
+            if key != 'project-main' and key in ranges:
+                groups.setdefault(key, []).append(asset)
+        result = list(generated)
+        for key, block_assets in groups.items():
+            selected = {item['asset_id'] for item in result}
+            unplaced = [asset for asset in block_assets if str(asset.public_id) not in selected]
+            if not unplaced:
+                continue
+            defaults = cls._place_block_assets(unplaced, ranges[key], config, existing + result)
+            if len(defaults) < len(unplaced):
+                # A semantic candidate may consume the whole scene. Try a
+                # compact layout using the whole group before omitting assets.
+                other = [item for item in result if item.get('block_key') != key]
+                compact = cls._place_block_assets(block_assets, ranges[key], config, existing + other)
+                if len(compact) > len(block_assets) - len(unplaced) + len(defaults):
+                    result = other + compact
+                    continue
+            result.extend(defaults)
+        return result
+
+    @classmethod
+    def _place_block_assets(cls, assets, limits, config, occupied):
+        left, right = limits
+        gaps = [(left, right)] if right > left else []
+        for item in occupied:
+            if not item.get('enabled', True):
+                continue
+            start, end = item.get('start_ms'), item.get('end_ms')
+            if start is None or end is None or end <= start:
+                continue
+            gaps = [(a, b) for left, right in gaps
+                    for a, b in ((left, min(right, start)), (max(left, end), right)) if b > a]
+        result = []
+        for index, asset in enumerate(assets):
+            if not gaps:
+                break
+            slot = max(range(len(gaps)), key=lambda position: gaps[position][1] - gaps[position][0])
+            start, end = gaps[slot]
+            desired = 3000
+            trim_start = asset.trim_start_ms or 0
+            source_end = asset.trim_end_ms or asset.duration_ms
+            if asset.media_type == ProjectBrollAsset.MediaType.VIDEO and source_end:
+                desired = min(desired, max(0, source_end - trim_start))
+            elif asset.media_type == ProjectBrollAsset.MediaType.IMAGE and asset.duration_ms:
+                desired = min(6000, asset.duration_ms)
+            budget = sum(b - a for a, b in gaps) // (len(assets) - index)
+            duration = min(end - start, desired, max(50, budget))
+            if duration < 50:
+                continue
+            decision = cls._decision(asset, start, start + duration, 'FULLSCREEN', 0, config)
+            decision.update(source='TEMPLATE', source_out_ms=trim_start + duration)
+            result.append(decision)
+            gaps[slot] = (start + duration, end)
+        return result
 
     @classmethod
     def purge_asset_references(cls, project, asset, member=None):
@@ -138,13 +246,18 @@ class BrollTimelineService:
                 )
                 continue
             block_key = cls._asset_block_key(asset)
+            edited = decision.get('time_basis') == 'edited'
+            if edited and block_key != 'project-main' and block_key not in block_ranges:
+                continue
             block_start, block_end = block_ranges.get(block_key, (0, duration_ms))
-            raw_start = int(decision.get('start_ms') or block_start)
-            raw_end = int(decision.get('end_ms') or raw_start + 5000)
-            mapped_start = time_mapper(raw_start) if time_mapper else raw_start
-            mapped_end = time_mapper(raw_end) if time_mapper else raw_end
+            raw_start = int(decision['start_ms']) if decision.get('start_ms') is not None else block_start
+            raw_end = int(decision['end_ms']) if decision.get('end_ms') is not None else raw_start + 5000
+            mapped_start = time_mapper(raw_start) if time_mapper and not edited else raw_start
+            mapped_end = time_mapper(raw_end) if time_mapper and not edited else raw_end
             start = max(block_start, min(mapped_start, block_end))
             end = min(block_end, max(start + 1, mapped_end))
+            if end <= start:
+                continue
             payload = cls._normalize_decision(asset, decision, start, end, config)
             result.append(payload)
         asset_payload = [
@@ -163,69 +276,145 @@ class BrollTimelineService:
         return result, asset_payload
 
     @classmethod
-    def _generate(cls, project, assets, config, ai_service=None):
+    def _generate(cls, project, assets, config, ai_service=None, occupied=None):
+        if not config.get('auto_placement') or not project.render_job_id:
+            return []
         ranges = cls._configured_block_ranges(project)
+        described = [
+            (asset, cls._asset_block_key(asset)) for asset in assets
+            if (asset.description or '').strip()
+        ]
+        described = [(asset, key) for asset, key in described if key in ranges or key == 'project-main']
+        if not described:
+            return []
         cues = list(SubtitleCue.objects.filter(
             track__job=project.render_job, track__is_source=True,
-        ).values('start_ms', 'end_ms', 'text').order_by('start_ms')) if project.render_job_id else []
-        fallback = [cls._fallback_decision(asset, ranges, cues, config, index) for index, asset in enumerate(assets)]
-        if not config.get('auto_placement') or not cues:
-            return fallback
+        ).values('start_ms', 'end_ms', 'text').order_by('start_ms'))
+        cues = [cue for cue in cues if cue['text'].strip()]
+        if not cues and not (project.configuration or {}).get('speech_edit_plan'):
+            cues = cls._placement_cues(project, ranges, described)
+        if not cues:
+            logger.info('broll_placement_no_transcript project=%s described=%s', project.public_id, len(described))
+            return []
         request_assets = []
-        for asset in assets:
-            block_key = cls._asset_block_key(asset)
-            start, end = ranges.get(block_key, (0, max((cue['end_ms'] for cue in cues), default=5000)))
+        transcript_end = max(cue['end_ms'] for cue in cues)
+        for asset, block_key in described:
+            start, end = ranges.get(block_key, (0, transcript_end))
+            if not cls._has_speech(cues, start, end):
+                continue
             request_assets.append({
                 'asset_id': str(asset.public_id), 'media_type': asset.media_type,
+                'description': asset.description, 'block_name': getattr(asset.block, 'name', '') if asset.block_id else '',
                 'duration_ms': asset.duration_ms, 'block_key': block_key,
                 'allowed_range_ms': [start, end],
             })
+        if not request_assets:
+            return []
         prompt = json.dumps({'assets': request_assets, 'transcript': cues}, ensure_ascii=False)
-        instructions = """Você é um editor de vídeo. Posicione cada asset de B-roll no momento semanticamente mais relevante da transcrição, sempre dentro de allowed_range_ms. Escolha FULLSCREEN para fotos/vídeos ilustrativos e OVERLAY para QR Codes, logos e cards. Não sobreponha assets quando puder evitar. Responda somente JSON válido: {"placements":[{"asset_id":"uuid","start_ms":0,"end_ms":5000,"source_in_ms":0,"source_out_ms":5000,"display_mode":"FULLSCREEN|OVERLAY","confidence":0.0}]}."""
+        instructions = """Você é um editor de vídeo. Para cada B-roll, compare o significado da descrição com as falas no seu allowed_range_ms. Quando várias descrições compartilham um tema, priorize o detalhe que distingue cada mídia, como um lugar, um público ou uma quantidade. Reconheça números escritos por extenso e relações sem palavras em comum. Proponha até três candidatos por asset, ordenados por relevância, com timestamps reais em milissegundos dentro do intervalo permitido. Comece junto à fala específica e considere a duração da mídia e os demais B-rolls para evitar sobreposição. Omita assets sem correspondência relevante. A confiança é um indicador heurístico de 0 a 1. Escolha FULLSCREEN para imagens ilustrativas e OVERLAY para QR codes, logos e cards. Responda somente JSON: {"placements":[{"asset_id":"uuid","candidates":[{"start_ms":0,"end_ms":5000,"display_mode":"FULLSCREEN|OVERLAY","confidence":0.8}]}]}."""
         try:
             raw = (ai_service or get_ai_service()).generate_text(
                 prompt, instructions=instructions,
                 model=getattr(settings, 'EXTERNAL_MEDIA_BROLL_MODEL', settings.EXTERNAL_MEDIA_OFF_CONTEXT_MODEL),
-                max_output_tokens=max(800, len(assets) * 180),
+                max_output_tokens=max(1000, len(request_assets) * 250),
             )
             data = cls._parse_json(raw)
-            by_id = {str(item.get('asset_id')): item for item in data.get('placements', [])}
-            return [
-                cls._validated_ai_decision(asset, by_id.get(str(asset.public_id)), ranges, config, fallback[index])
-                for index, asset in enumerate(assets)
-            ]
+            return cls._select_candidates(assets, request_assets, cues, data, ranges, config, occupied or [])
         except (AIServiceError, ValueError, TypeError, KeyError, json.JSONDecodeError):
             logger.exception('broll_auto_placement_failed project=%s', project.public_id)
-            return fallback
+            return []
+
+    @staticmethod
+    def _has_speech(cues, start, end):
+        return end > start and any(cue['start_ms'] < end and cue['end_ms'] > start for cue in cues)
 
     @classmethod
-    def _fallback_decision(cls, asset, ranges, cues, config, index):
-        block_start, block_end = ranges.get(cls._asset_block_key(asset), (0, max((c['end_ms'] for c in cues), default=5000)))
-        start = int(block_start + index * 1000)
-        duration = min(6000, max(2500, int(asset.duration_ms or 5000)))
-        start = min(max(block_start, start), max(block_start, block_end - 1))
-        end = min(block_end, start + duration)
-        return cls._decision(asset, start, max(start + 1, end), 'FULLSCREEN', .55, config)
+    def _placement_cues(cls, project, ranges, described):
+        from .services import AudioExtractor, ExternalMediaPipeline, TranscriptionService
+        from .take_suggestions import cached_project_transcript
+
+        job = project.render_job
+        language = ExternalMediaPipeline._transcription_language(job)
+        boundaries = sorted({end for _, end in ranges.values()})
+
+        def as_cues(words):
+            return [
+                {'start_ms': segment.start_ms, 'end_ms': segment.end_ms, 'text': segment.text}
+                for segment in TranscriptionService.group_for_subtitles(words, boundaries)
+                if segment.text.strip()
+            ]
+
+        cached = as_cues(cached_project_transcript(project, language, allow_partial=True) or [])
+        if cached and all(
+            key not in ranges or ranges[key][1] <= ranges[key][0] or cls._has_speech(cached, *ranges[key])
+            for _, key in described
+        ):
+            return cached
+        try:
+            media_input = media_input_factory(job.original_video)
+            with JobWorkspace(project.public_id, 'broll-analysis', estimated_bytes=media_input.workspace_estimate()) as workspace:
+                chunks = AudioExtractor().extract(media_input.get_ffmpeg_input(), workspace.path)
+                words = TranscriptionService().transcribe_detailed(chunks, language, allow_empty=True)
+            assembled = as_cues(words)
+            return assembled or cached
+        except (ExternalMediaError, AIServiceError):
+            logger.warning('broll_placement_transcript_failed project=%s', project.public_id, exc_info=True)
+            return cached
 
     @classmethod
-    def _validated_ai_decision(cls, asset, candidate, ranges, config, fallback):
-        if not candidate:
-            return fallback
-        block_start, block_end = ranges.get(cls._asset_block_key(asset), (0, 5000))
-        start = min(block_end - 1, max(block_start, int(candidate.get('start_ms') or block_start)))
-        end = min(block_end, max(start + 1, int(candidate.get('end_ms') or start + 5000)))
-        mode = str(candidate.get('display_mode') or fallback['display_mode']).upper()
-        if mode == 'OVERLAY' and not config.get('allow_overlay'):
-            mode = 'FULLSCREEN'
-        result = cls._decision(asset, start, end, mode, float(candidate.get('confidence') or .75), config)
-        trim_start = int(getattr(asset, 'trim_start_ms', 0) or 0)
-        trim_end = int(getattr(asset, 'trim_end_ms', 0) or 0)
-        result['source_in_ms'] = max(trim_start, int(candidate.get('source_in_ms') or trim_start))
-        requested_out = int(candidate.get('source_out_ms') or result['source_in_ms'] + (end - start))
-        result['source_out_ms'] = max(result['source_in_ms'] + 1, requested_out)
-        if trim_end:
-            result['source_out_ms'] = min(trim_end, result['source_out_ms'])
-        return result
+    def _select_candidates(cls, assets, requested, cues, data, ranges, config, occupied):
+        """Validate suggestions against actual speech and allocate the strongest non-conflicting candidates."""
+        if not isinstance(data, dict) or not isinstance(data.get('placements'), list):
+            raise ValueError('Invalid B-roll response')
+        by_id = {str(asset.public_id): asset for asset in assets}
+        bounds = {item['asset_id']: item['allowed_range_ms'] for item in requested}
+        candidates = []
+        for placement in data['placements']:
+            if not isinstance(placement, dict):
+                continue
+            asset_id = str(placement.get('asset_id', ''))
+            if asset_id not in bounds or asset_id not in by_id:
+                continue
+            options = placement.get('candidates', [placement])
+            if not isinstance(options, list):
+                continue
+            for option in options[:3]:
+                if not isinstance(option, dict):
+                    continue
+                try:
+                    start, end = int(option['start_ms']), int(option['end_ms'])
+                    confidence = float(option['confidence'])
+                    mode = str(option.get('display_mode', 'FULLSCREEN')).upper()
+                    asset = by_id[asset_id]
+                    trim_start = int(asset.trim_start_ms or 0)
+                    available = (asset.trim_end_ms or asset.duration_ms or 0) - trim_start
+                    if (not math.isfinite(confidence) or not .65 <= confidence <= 1 or
+                        mode not in ('FULLSCREEN', 'OVERLAY') or start < bounds[asset_id][0] or
+                        end > bounds[asset_id][1] or end - start < 1500 or
+                        (asset.media_type == ProjectBrollAsset.MediaType.VIDEO and available and end - start > available) or
+                        not any(cue['start_ms'] < end and cue['end_ms'] > start for cue in cues)):
+                        continue
+                    candidates.append((confidence, asset_id, start, end, mode))
+                except (KeyError, TypeError, ValueError, OverflowError):
+                    continue
+        selected, used = [], set()
+        intervals = [(int(item['start_ms']), int(item['end_ms'])) for item in occupied
+                     if item.get('enabled', True) and item.get('start_ms') is not None and item.get('end_ms') is not None]
+        for confidence, asset_id, start, end, mode in sorted(candidates, key=lambda item: (-item[0], item[2], item[1])):
+            if asset_id in used or any(start < right and end > left for left, right in intervals):
+                continue
+            if mode == 'OVERLAY' and not config.get('allow_overlay'):
+                mode = 'FULLSCREEN'
+            decision = cls._decision(by_id[asset_id], start, end, mode, confidence, config)
+            decision['source_out_ms'] = decision['source_in_ms'] + end - start
+            selected.append(decision)
+            used.add(asset_id)
+            intervals.append((start, end))
+            logger.info('broll_placement_selected asset_id=%s start_ms=%s end_ms=%s confidence=%.2f candidates=%s',
+                        asset_id, start, end, confidence, sum(item[1] == asset_id for item in candidates))
+        logger.info('broll_placement_summary requested=%s candidates=%s selected=%s cues=%s',
+                    len(requested), len(candidates), len(selected), len(cues))
+        return selected
 
     @classmethod
     def _decision(cls, asset, start, end, display_mode, confidence, config):
@@ -373,7 +562,8 @@ class BrollRenderService:
             )
         segments = self._segments(available, timeline_duration_ms)
         filters = self._timeline_filters(segments, width, height)
-        command.extend(['-filter_complex', ';'.join(filters), '-map', '[broll_output]', '-map', '0:a?', '-c:v', 'libx264'])
+        command.extend(FFmpegRunner.filter_graph_args(filters, Path(output_path).with_suffix('.filters')))
+        command.extend(['-map', '[broll_output]', '-map', '0:a?', '-c:v', 'libx264'])
         if settings.EXTERNAL_MEDIA_RENDER_PRESET:
             command.extend(['-preset', settings.EXTERNAL_MEDIA_RENDER_PRESET])
         command.extend(['-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'copy', str(output_path)])
@@ -528,7 +718,7 @@ class BrollRenderService:
             previous = composited
         filters.append(f'{previous}format=yuv420p[chunk_output]')
         command.extend([
-            '-t', f'{duration:.3f}', '-filter_complex', ';'.join(filters),
+            '-t', f'{duration:.3f}', *FFmpegRunner.filter_graph_args(filters, Path(output_path).with_suffix('.filters')),
             '-map', '[chunk_output]', '-c:v', 'libx264',
         ])
         if settings.EXTERNAL_MEDIA_RENDER_PRESET:
@@ -670,7 +860,25 @@ class BrollRenderService:
             and mode == 'FULLSCREEN'
             and str((item.get('motion') or {}).get('type', 'NONE')).upper() != 'NONE'
         )
-        if is_moving_image:
+        modern = 'transitions' in item
+        base_scale = None
+        if modern and mode == 'FULLSCREEN':
+            chain.extend([
+                f'trim=start={source_in}:duration={segment_duration}', 'setpts=PTS-STARTPTS',
+                f'scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos',
+                f"crop={width}:{height}:x='(iw-ow)*{focus_x}':y='(ih-oh)*{focus_y}',setsar=1",
+            ])
+            base_scale = str(min(2, max(1, float(transform.get('scale') or 1))))
+            motion = item.get('motion') or {}
+            kind = motion.get('type')
+            if kind in ('ZOOM_IN', 'ZOOM_OUT'):
+                progress = f'clip((t+{(segment_start_ms-item_start_ms)/1000})/{item_duration},0,1)'
+                if kind == 'ZOOM_OUT':
+                    progress = f'(1-{progress})'
+                initial = float(motion.get('from_scale') or 1)
+                final = float(motion.get('to_scale') or 1.06)
+                base_scale = f'({base_scale}*({initial}+({final-initial})*{progress}))'
+        elif is_moving_image:
             motion = str((item.get('motion') or {}).get('type')).upper()
             frames = max(1, round(item_duration * 30))
             offset_frames = max(0, round((segment_start_ms - item_start_ms) / 1000 * 30))
@@ -723,6 +931,12 @@ class BrollRenderService:
             else:
                 target_w = max(80, round(width * min(.9, max(.08, float(transform.get('scale') or .28)))))
                 chain.append(f'scale={target_w}:-2')
+        if modern:
+            transition = TransitionFilters(item, item_start_ms, item_end_ms, segment_start_ms, width / 1920,
+                                           segment_end_ms=segment_end_ms, base=transform)
+            if transition.effects or transition.rotation or transition.opacity != 1 or base_scale is not None:
+                return transition.prepare(input_label, output_label, chain, base_scale=base_scale)
+            return f'{input_label}{",".join(chain + ["format=rgba"])}{output_label}'
         scale_factor = '1'
         if starts_here and entry_type == 'SCALE':
             scale_factor = f'if(lt(t,{entry_duration}),0.82+0.18*t/{entry_duration},1)'
@@ -759,6 +973,19 @@ class BrollRenderService:
         else:
             x = f'{float(transform.get("x", .82))}*W-w/2'
             y = f'{float(transform.get("y", .78))}*H-h/2'
+        if 'transitions' in item:
+            if mode == 'FULLSCREEN':
+                x, y = '(W-w)/2', '(H-h)/2'
+            motion = (item.get('motion') or {}).get('type')
+            if motion in ('PAN_LEFT', 'PAN_RIGHT') and mode == 'FULLSCREEN':
+                elapsed = (segment_start_ms - int(item['start_ms'])) / 1000
+                length = (int(item['end_ms']) - int(item['start_ms'])) / 1000
+                direction = '-' if motion == 'PAN_LEFT' else '+'
+                x = f'({x}){direction}.03*W*clip((t+{elapsed})/{length},0,1)'
+            transition = TransitionFilters(item, int(item['start_ms']), int(item['end_ms']), segment_start_ms,
+                                           segment_end_ms=segment_end_ms)
+            x, y = transition.position(x, y)
+            return f"{previous}{prepared}overlay=x='{x}':y='{y}':format=auto{output}"
         if starts_here and entry_type == 'SLIDE':
             x = f'if(lt(t,{entry_duration}),({x})-W*(1-t/{entry_duration}),({x}))'
         if ends_here and exit_type == 'SLIDE':

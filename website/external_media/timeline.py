@@ -4,12 +4,13 @@ import logging
 import math
 import re
 import time
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings
 
-from ..models.external_media import BackgroundMusicTrack
+from ..models.external_media import BackgroundMusicTrack, project_editor_settings
 from .audio_mixing import (
     DuckingSettings, build_ducking_envelope, build_dynamic_ducking_envelope,
     build_spectral_windows, combine_gain_envelopes, group_speech_blocks,
@@ -261,7 +262,7 @@ class InternalTimelineBuilder:
             'project': {
                 'id': str(project.public_id),
                 'name': project.name,
-                'template': project.template_version.template.name,
+                'template': project.template_version.template.name if project.template_version else None,
                 'created_by': project.created_by.name,
             },
             'sequence': {**sequence, 'duration_ms': duration_ms},
@@ -478,7 +479,7 @@ class InternalTimelineBuilder:
         )
 
     def _sequence(self, project, sources):
-        preset = project.template_version.preset
+        preset = project_editor_settings(project).preset
         first = sources[0][1] if sources else {}
         fps = float(first.get('fps') or 30.0)
         return {
@@ -495,6 +496,9 @@ class InternalTimelineBuilder:
         }
 
     def _video_clips(self, project, sources, plan, sequence):
+        revision = getattr(project, 'approved_timeline_revision', None)
+        if revision and 'clips' in (revision.timeline or {}):
+            return self._approved_video_clips(revision, sources)
         plan = plan if plan.duration_ms > 1 or plan.cuts else SpeechEditPlan((), sum(
             max(1, int(metadata['duration_ms']) - source.trim_start_ms)
             for source, metadata in sources
@@ -557,6 +561,41 @@ class InternalTimelineBuilder:
                 decisions.append({'operation': 'auto_reframe', 'source_index': index, 'confidence': None})
         return clips, decisions, markers
 
+    @staticmethod
+    def _approved_video_clips(revision, sources):
+        """Use the frozen delivery order for the independent dialogue stem.
+
+        The consolidated picture already has these moves/cuts baked in. Rebuilding
+        A1 from manifest order plus old removal decisions desynchronizes it from V1.
+        """
+        available = {source.asset_id: (source, metadata) for source, metadata in sources}
+        clips, markers, cursor = [], [], 0
+        for index, snapshot in enumerate(revision.timeline.get('clips') or [], start=1):
+            asset_id = snapshot.get('asset_id')
+            if asset_id not in available:
+                raise ExternalMediaError('Um vídeo da revisão aprovada não está disponível para exportar o áudio sincronizado.')
+            source, metadata = available[asset_id]
+            clip = deepcopy(snapshot)
+            start, end = int(clip['timeline_in_ms']), int(clip['timeline_out_ms'])
+            source_in, source_out = int(clip['source_in_ms']), int(clip['source_out_ms'])
+            if start != cursor or end <= start or source_in < source.trim_start_ms or source_out - source_in != end - start:
+                raise ExternalMediaError('A revisão aprovada contém um intervalo inválido para exportar o áudio sincronizado.')
+            clip.update({
+                'id': clip.get('id') or f'clip_{index}',
+                'name': source.block_name or source.original_name,
+                'role': source.role,
+                'source_duration_ms': int(metadata['duration_ms']),
+                'audio_enabled': False,
+                'skip_extra_processing': source.skip_extra_processing,
+            })
+            clips.append(clip)
+            markers.append({'name': clip['name'], 'time_ms': start, 'block_key': source.block_key})
+            cursor = end
+        if not clips:
+            raise ExternalMediaError('A revisão aprovada não possui trechos de vídeo para exportar.')
+        decisions = deepcopy((getattr(revision, 'edit_decision_set', {}) or {}).get('operations') or [])
+        return clips, decisions, markers
+
     def _dialogue_assets(self, project, sources, video_clips, package_root):
         """Builds one timeline-aligned, treated 48 kHz/24-bit dialogue stem."""
         audio_sources = []
@@ -615,7 +654,7 @@ class InternalTimelineBuilder:
         self.runner.run(command)
 
         processed_path = raw_path
-        version = project.template_version
+        version = project_editor_settings(project)
         decisions = self._noise_decisions(project)
         if version.audio_noise_cleanup_enabled and decisions:
             cleanup_result = AudioCleanupService(self.runner).apply(
@@ -794,7 +833,7 @@ class InternalTimelineBuilder:
         return {**keyframes[-1], 'source_time_ms': time_ms}
 
     def _music(self, project, package_root, duration_ms):
-        version = project.template_version
+        version = project_editor_settings(project)
         revision = project.approved_timeline_revision or project.current_timeline_revision
         revision_timeline = (revision.timeline if revision else {}) or {}
         revision_mix = dict(revision_timeline.get('audio_mix') or {})
@@ -915,18 +954,23 @@ class InternalTimelineBuilder:
         }
 
     def _captions(self, project, package_root):
-        if not project.render_job_id:
+        if not project.render_job_id or not project_editor_settings(project).subtitles_enabled:
             return [], []
         captions, assets = [], []
-        for track in project.render_job.subtitle_tracks.prefetch_related('cues').all():
+        from .caption_visibility import visible_caption_tracks
+        revision = project.approved_timeline_revision or project.current_timeline_revision
+        for track in visible_caption_tracks(project.render_job.subtitle_tracks.prefetch_related('cues').all(), revision):
             cues = []
             srt_lines = []
             for cue in track.cues.all():
                 cues.append({'start_ms': cue.start_ms, 'end_ms': cue.end_ms, 'text': cue.text})
+                # Native Premiere captions should receive one text line per
+                # cue, regardless of manual/editor line breaks or HTML breaks.
+                srt_text = ' '.join(re.sub(r'<br\s*/?\s*>', ' ', cue.text, flags=re.IGNORECASE).split())
                 srt_lines.extend([
                     str(cue.cue_index),
                     f'{self._srt_time(cue.start_ms)} --> {self._srt_time(cue.end_ms)}',
-                    cue.text, '',
+                    srt_text, '',
                 ])
             relative = f'Captions/{track.language}.srt'
             (package_root / relative).write_text('\n'.join(srt_lines), encoding='utf-8')
@@ -948,25 +992,28 @@ class InternalTimelineBuilder:
         as native captions in Premiere.
         """
         job = getattr(project, 'render_job', None)
-        if not job or duration_ms <= 0:
+        if not job or not project_editor_settings(project).subtitles_enabled or duration_ms <= 0:
             return None, None
         tracks = list(
             job.subtitle_tracks.filter(language__in=job.output_languages)
             .prefetch_related('cues')
             .order_by('pk')
         )
+        from .caption_visibility import visible_caption_tracks
+        revision = project.approved_timeline_revision or project.current_timeline_revision
+        tracks = visible_caption_tracks(tracks, revision)
         if not tracks:
             return None, None
         source_tracks = [track for track in tracks if track.is_source]
         source_track = source_tracks[0] if source_tracks else tracks[0]
         translated_tracks = [track for track in tracks if track.pk != source_track.pk]
         source_language = job.original_language or source_track.language
-        source_style = job.subtitle_style
+        source_style = (job.translated_subtitle_style or job.subtitle_style) if len(tracks) == 1 and not tracks[0].is_source else job.subtitle_style
         translated_style = job.translated_subtitle_style or source_style
         if not source_style:
             return None, None
 
-        version = project.template_version
+        version = project_editor_settings(project)
         is_dual = (
             (version.default_settings or {}).get('language_mode') == 'translated'
             and bool(translated_tracks)
@@ -1081,7 +1128,7 @@ class InternalTimelineBuilder:
         )
 
     def _lut(self, project, package_root):
-        version = project.template_version
+        version = project_editor_settings(project)
         if not version.lut_file or not version.plugins.filter(is_enabled=True, code='lut').exists():
             return None
         relative = f'LUTs/{self._safe_name(Path(version.lut_file.name).stem)}{Path(version.lut_file.name).suffix.lower()}'
@@ -1090,7 +1137,7 @@ class InternalTimelineBuilder:
 
     @staticmethod
     def _effects(project, lut):
-        version = project.template_version
+        version = project_editor_settings(project)
         effects = []
         if lut:
             effects.append({'type': 'lut', 'asset_id': lut['id'], 'intensity': 1.0, 'portability': 'NON_PORTABLE'})
@@ -1141,7 +1188,7 @@ class InternalTimelineBuilder:
             warnings.append('EQ, compressão, de-esser e nivelamento foram aplicados ao stem de voz A1.')
         if any(effect['type'] == 'audio_noise_reduction' for effect in effects):
             warnings.append('As reduções de ruído aprovadas foram aplicadas ao stem de voz A1.')
-        if project.template_version.audio_mastering_enabled:
+        if project_editor_settings(project).audio_mastering_enabled:
             warnings.append('A masterização final não foi aplicada destrutivamente. Use “Masterizar Vídeo” após o Premiere.')
         if consolidated_video_available:
             warnings.append(

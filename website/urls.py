@@ -1,5 +1,7 @@
 from website.views.schedule_assistant import (MediaSecretariatHome, MediaScheduleList, MediaScheduleDelete, ScheduleAssistantStart, ScheduleAssistantPage, ScheduleAssistantAPI)
 from website.views.media_team_configuration import MediaTeamDefaultEdit, MediaTeamServiceEdit, MediaTeamExperienceEdit
+from website.views.media_planning.delivery_review import MediaDeliveryReviewView
+from website.views.media_planning.deliveries import MediaDeliveryActionView, MediaDeliveryProjectsView, MediaDeliveryFileView
 from website.views.media_planning.operations import MediaEventsView, MediaDemandsView, MediaEventRemoveFromMediaView, MediaEventUpdateView
 from website.views.media_planning.my_work import (
     MediaMyWorkView, MediaMyWorkDetailView, MediaMyWorkStatusView, MediaMyWorkAttachmentView,
@@ -245,8 +247,12 @@ from .views.external_media import (
     ExternalMediaProjectPreviewApplyAllNoiseView,
     ExternalMediaProjectPreviewCutView,
     ExternalMediaProjectPreviewVideoSplitView,
+    ExternalMediaProjectPreviewVideoMoveView,
+    ExternalMediaProjectPreviewVideoTrimView,
+    ExternalMediaProjectPreviewMediaView,
     ExternalMediaProjectPreviewNoiseClipView,
     ExternalMediaProjectPreviewSubtitleView,
+    ExternalMediaProjectPreviewSubtitleCreateView, ExternalMediaProjectPreviewCaptionVisibilityView,
     ExternalMediaProjectPreviewTransformView,
     ExternalMediaProjectPreviewColorView,
     ExternalMediaProjectPreviewOverlayView,
@@ -312,10 +318,14 @@ urlpatterns = [
     path('ministries/<int:ministry_id>/teams/<int:pk>/services/<int:item_id>/edit/', MediaTeamServiceEdit.as_view(), name='media_team_service_edit'),
     path('ministries/<int:ministry_id>/manuals/', ministry_org.MinistryManualList.as_view(), name='ministry_manual_list'),
     path('ministries/<int:ministry_id>/manuals/preview/', ministry_org.MinistryManualPreview.as_view(), name='ministry_manual_preview'),
+    path('ministries/<int:ministry_id>/manuals/format/', ministry_org.MinistryManualFormat.as_view(), name='ministry_manual_format'),
+    path('ministries/<int:ministry_id>/manuals/generate/', ministry_org.MinistryManualGeneration.as_view(), name='ministry_manual_generate'),
+    path('ministries/<int:ministry_id>/manuals/generate/<int:pk>/', ministry_org.MinistryManualGenerationStatus.as_view(), name='ministry_manual_generation_status'),
     path('ministries/<int:ministry_id>/manuals/new/', ministry_org.MinistryManualEdit.as_view(), name='ministry_manual_create'),
     path('ministries/<int:ministry_id>/manuals/<int:pk>/', ministry_org.MinistryManualDetail.as_view(), name='ministry_manual_detail'),
     path('ministries/<int:ministry_id>/manuals/<int:pk>/edit/', ministry_org.MinistryManualEdit.as_view(), name='ministry_manual_edit'),
     path('ministries/<int:ministry_id>/manuals/<int:pk>/archive/', ministry_org.MinistryManualArchive.as_view(), name='ministry_manual_archive'),
+    path('ministries/<int:ministry_id>/manuals/<int:pk>/delete/', ministry_org.MinistryManualDelete.as_view(), name='ministry_manual_delete'),
 
     path('', HomeView.as_view(), name='home'),
     path('sitio-filadelfia/', PhiladelphiaSiteView.as_view(), name='philadelphia_site'),
@@ -405,8 +415,13 @@ urlpatterns = [
     path('member/media/projects/<uuid:public_id>/preview/cameras/', ExternalMediaProjectPreviewCameraView.as_view(), name='external_media_project_preview_camera'),
     path('member/media/projects/<uuid:public_id>/preview/cuts/', ExternalMediaProjectPreviewCutView.as_view(), name='external_media_project_preview_cut_create'),
     path('member/media/projects/<uuid:public_id>/preview/video-splits/', ExternalMediaProjectPreviewVideoSplitView.as_view(), name='external_media_project_preview_video_split'),
+    path('member/media/projects/<uuid:public_id>/preview/media/', ExternalMediaProjectPreviewMediaView.as_view(), name='external_media_project_preview_media'),
+    path('member/media/projects/<uuid:public_id>/preview/video-trim/', ExternalMediaProjectPreviewVideoTrimView.as_view(), name='external_media_project_preview_video_trim'),
+    path('member/media/projects/<uuid:public_id>/preview/video-move/', ExternalMediaProjectPreviewVideoMoveView.as_view(), name='external_media_project_preview_video_move'),
     path('member/media/projects/<uuid:public_id>/preview/noise/<str:decision_id>/', ExternalMediaProjectPreviewNoiseClipView.as_view(), name='external_media_project_preview_noise_clip'),
     path('member/media/projects/<uuid:public_id>/preview/subtitles/<int:cue_id>/', ExternalMediaProjectPreviewSubtitleView.as_view(), name='external_media_project_preview_subtitle'),
+    path('member/media/projects/<uuid:public_id>/preview/subtitles/visibility/', ExternalMediaProjectPreviewCaptionVisibilityView.as_view(), name='external_media_project_preview_caption_visibility'),
+    path('member/media/projects/<uuid:public_id>/preview/subtitles/new/', ExternalMediaProjectPreviewSubtitleCreateView.as_view(), name='external_media_project_preview_subtitle_create'),
     path('member/media/projects/<uuid:public_id>/preview/transforms/<str:decision_id>/', ExternalMediaProjectPreviewTransformView.as_view(), name='external_media_project_preview_transform'),
     path('member/media/projects/<uuid:public_id>/preview/colors/<str:source_id>/', ExternalMediaProjectPreviewColorView.as_view(), name='external_media_project_preview_color'),
     path('member/media/projects/<uuid:public_id>/preview/overlays/new/', ExternalMediaProjectPreviewOverlayView.as_view(), name='external_media_project_preview_overlay_create'),
@@ -764,6 +779,10 @@ urlpatterns = [
     path('media/events/<int:event_pk>/tipo/', MediaEventSetTypeView.as_view(), name='media_event_set_type'),
     path('media/events/<int:event_pk>/aplicar-template/', MediaApplyTemplateView.as_view(), name='media_apply_template'),
     # Organization
+    path('media/etapas/<int:pk>/revisar-entregas/', MediaDeliveryReviewView.as_view(), name='media_delivery_review'),
+    path('media/entregas/requisitos/<int:pk>/', MediaDeliveryActionView.as_view(), name='media_delivery_action'),
+    path('media/entregas/requisitos/<int:pk>/projetos/', MediaDeliveryProjectsView.as_view(), name='media_delivery_projects'),
+    path('media/entregas/<int:pk>/arquivo/', MediaDeliveryFileView.as_view(), name='media_delivery_file'),
     path('media/meu-trabalho/', MediaMyWorkView.as_view(), name='media_my_work'),
     path('media/meu-trabalho/<int:pk>/', MediaMyWorkDetailView.as_view(), name='media_my_work_detail'),
     path('media/meu-trabalho/<int:pk>/status/', MediaMyWorkStatusView.as_view(), name='media_my_work_status'),

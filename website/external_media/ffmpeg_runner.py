@@ -17,6 +17,15 @@ logger = logging.getLogger(__name__)
 
 class FFmpegRunner:
     @staticmethod
+    def filter_graph_args(filters, script_path):
+        graph = ';'.join(filters)
+        # Keep large graphs below the process argument size limit.
+        if len(graph.encode()) > 60_000:
+            script_path.write_text(graph, encoding='utf-8')
+            return ['-filter_complex_script', str(script_path)]
+        return ['-filter_complex', graph]
+
+    @staticmethod
     def input_arg(value):
         """Keep remote-input metadata while preserving legacy local command strings."""
         return value if isinstance(value, RemoteMediaSource) else str(value)
@@ -62,6 +71,11 @@ class FFmpegRunner:
         except subprocess.CalledProcessError as exc:
             stderr = self.redact_sensitive_urls(exc.stderr or '')
             logger.error('FFmpeg falhou: %s', stderr[-4000:])
+            if re.search(r'no space left on device|disk quota exceeded', stderr, re.IGNORECASE):
+                raise ExternalMediaError(
+                    'O armazenamento temporário do processamento ficou sem espaço. '
+                    'Aumente o espaço disponível no worker antes de tentar novamente.'
+                ) from None
             # CalledProcessError also embeds the command; keeping it as __cause__
             # would leak the presigned query in an outer exception traceback.
             detail = self._failure_detail(stderr)

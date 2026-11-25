@@ -28,6 +28,7 @@ services:
     hostname: "${HOSTNAME}"
     build:
       context: .
+      network: ${DOCKER_BUILD_NETWORK:-host}
       dockerfile: Dockerfile
     working_dir: /usr/src/platform
     command: [

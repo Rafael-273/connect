@@ -154,4 +154,7 @@ class ScheduleAssistantAPI(MediaSecretariatMixin, View):
             return JsonResponse({'error': ' '.join(exc.messages)}, status=400)
         if result is None:
             return JsonResponse({'discarded': True, 'redirect_url': reverse('media_schedule_list')})
+        if result.get('published'):
+            messages.success(request, 'Escala criada e disponível para os integrantes.')
+            return JsonResponse({'published': True, 'redirect_url': reverse('media_schedule_list')})
         return JsonResponse(result)

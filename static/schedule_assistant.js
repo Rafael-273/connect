@@ -20,10 +20,26 @@
     let dirty = false, pending = 0, blocked = false, failed = false, lastFailed = null, leaving = false;
     const $ = id => document.getElementById(id), status = $('sa-save-status');
     const csrf = $('assistant-csrf').querySelector('input').value;
+    const loading = document.createElement('dialog');
+    loading.className = 'sa-loading';
+    loading.setAttribute('aria-label', 'Processando solicitação');
+    loading.innerHTML = '<div role="status" aria-live="polite"><span class="sa-loading-spinner" aria-hidden="true"></span><strong>Processando…</strong><span>Aguarde um momento.</span></div>';
+    loading.addEventListener('cancel', event => event.preventDefault());
+    document.body.append(loading);
     const dom = (tag, className, content) => { const node = document.createElement(tag); if (className) node.className = className; if (content !== undefined) node.textContent = content; return node; };
     const button = (label, cls, fn) => { const node = dom('button', cls, label); node.type = 'button'; if (fn) node.addEventListener('click', fn); return node; };
     const fmtDate = date => new Intl.DateTimeFormat('pt-BR', {day: '2-digit', month: 'short', timeZone: 'America/Sao_Paulo'}).format(new Date(date + 'T12:00:00-03:00'));
     const current = () => state.occurrences.find(item => item.id === selected);
+    window.ScheduleConfirm = ({title, message, action = 'Confirmar'}) => {
+        const dialog = $('sa-confirm-dialog');
+        if (dialog.open) return Promise.resolve(false);
+        $('sa-confirm-title').textContent = title; $('sa-confirm-message').textContent = message; $('sa-confirm-action').textContent = action;
+        dialog.returnValue = '';
+        return new Promise(resolve => {
+            dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), {once: true});
+            dialog.showModal();
+        });
+    };
     function showError(message, conflict = false, retry = false) {
         root.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
         $('sa-error').hidden = false; $('sa-error').querySelector('p').textContent = message;
@@ -39,6 +55,7 @@
     function updateStatus() { if (!blocked && !failed && !lastFailed) status.textContent = dirty || pending ? 'Salvando alterações…' : availabilityUI?.isDirty() ? 'Disponibilidade ainda não salva' : generationUI?.isDirty() ? 'Composição ainda não salva' : 'Todas as alterações salvas'; }
     function send(action, payload = {}) {
         pending++; updateStatus();
+        if (!loading.open) loading.showModal();
         const work = queue.then(async () => {
             if (blocked || failed) return false;
             try {
@@ -50,7 +67,7 @@
                     showError(data.error || 'Não foi possível salvar.', response.status === 409, response.status !== 409);
                     return false;
                 }
-                if (data.discarded) { leaving = true; dirty = false; window.location.assign(data.redirect_url); return true; }
+                if (data.discarded || data.published) { leaving = true; dirty = false; window.location.assign(data.redirect_url); return true; }
                 state = data; lastFailed = null; $('sa-error').hidden = true; availabilityUI?.render(state); generationUI?.render(state); renderCalendar(); renderStep(); renderReview();
                 if ($('sa-editor-heading') && current()) $('sa-editor-heading').textContent = current().name;
                 return true;
@@ -58,7 +75,7 @@
                 failed = true; lastFailed = {action, payload}; showError(error.message || 'Falha de conexão. Mantenha a página aberta e tente salvar novamente.', false, true); return false;
             }
         });
-        queue = work.catch(() => false).finally(() => { pending--; updateStatus(); });
+        queue = work.catch(() => false).finally(() => { pending--; if (!pending && loading.open) loading.close(); updateStatus(); });
         return work;
     }
     function editorPayload() {
@@ -110,6 +127,7 @@
     function occurrenceTeamSelect(item) {
         const selectedActivities = item.teams.flatMap(team => team.activities.map(activity => activity.name));
         const select = dom('details', 'sa-quick-teams' + (selectedActivities.length ? ' has-teams' : ''));
+        select.dataset.occurrenceId = item.id;
         const summary = dom('summary', '', selectedActivities.length ? selectedActivities.join(', ') : 'Selecionar atividades');
         summary.title = selectedActivities.join(', ');
         summary.setAttribute('aria-label', `Selecionar atividades para ${item.name}, ${fmtDate(item.date)}, ${item.time}`);
@@ -134,26 +152,31 @@
         });
         if (!choiceCount) menu.append(dom('p', '', 'Nenhuma atividade cadastrada nas equipes.'));
         if (item.teams.length) menu.append(dom('p', 'sa-quick-hint', 'As equipes já vinculadas permanecem no culto; edite a ocorrência para removê-las.'));
-        const apply = button('Aplicar atividades', 'org-btn-primary', async () => {
-            const chosen = new Set(Array.from(menu.querySelectorAll('input:checked'), input => Number(input.value)));
-            apply.disabled = true;
-            if (!await flush()) { apply.disabled = false; return; }
+        menu.addEventListener('change', async event => {
+            if (!event.target.matches('input[type=checkbox]')) return;
+            const inputs = root.querySelectorAll('.sa-quick-menu input');
+            inputs.forEach(input => { input.disabled = true; });
+            if (!await flush()) { inputs.forEach(input => { input.disabled = false; }); return; }
             const occurrence = state.occurrences.find(row => row.id === item.id);
-            if (!occurrence) { apply.disabled = false; return; }
+            if (!occurrence) { inputs.forEach(input => { input.disabled = false; }); return; }
             const teams = occurrence.teams.map(row => ({
                 team_id: row.team_id, member_count: row.member_count, minimum_mentors: row.minimum_mentors,
                 activity_ids: Array.from(menu.querySelectorAll('input:checked')).filter(input => Number(input.dataset.teamId) === row.team_id).map(input => Number(input.value)), notes: row.notes,
             }));
             state.teams.filter(team => !occurrence.teams.some(row => row.team_id === team.id)).forEach(team => {
-                const activity_ids = team.activities.filter(activity => chosen.has(activity.id)).map(activity => activity.id);
+                const activity_ids = Array.from(menu.querySelectorAll('input:checked')).filter(input => Number(input.dataset.teamId) === team.id).map(input => Number(input.value));
                 if (activity_ids.length) teams.push({team_id: team.id, member_count: 2, activity_ids, notes: ''});
             });
-            if (!await send('save_occurrence', {occurrence_id: occurrence.id, name: occurrence.name, date: occurrence.date, time: occurrence.time, notes: occurrence.notes, teams})) apply.disabled = false;
+            if (!await send('save_occurrence', {occurrence_id: occurrence.id, name: occurrence.name, date: occurrence.date, time: occurrence.time, notes: occurrence.notes, teams})) {
+                event.target.checked = !event.target.checked;
+                inputs.forEach(input => { input.disabled = false; });
+            }
         });
-        apply.disabled = !choiceCount; menu.append(apply); select.append(menu);
+        select.append(menu);
         return select;
     }
     function renderCalendar() {
+        const openQuickId = root.querySelector('.sa-quick-teams[open]')?.dataset.occurrenceId;
         const grid = $('sa-calendar'); grid.replaceChildren();
         const ordered = [...state.occurrences].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
         if (!ordered.some(item => !item.teams.some(team => team.activities.length))) $('sa-teams-required').hidden = true;
@@ -170,6 +193,10 @@
         });
         const agenda = $('sa-agenda-list'); agenda.replaceChildren(); let lastDate;
         ordered.forEach(item => { if (lastDate !== item.date) { agenda.append(dom('h3', 'sa-list-date', fmtDate(item.date))); lastDate = item.date; } const row = dom('div', 'sa-list-row'); row.append(occurrenceButton(item, true), occurrenceTeamSelect(item)); agenda.append(row); });
+        if (openQuickId) {
+            const openSelect = Array.from(agenda.querySelectorAll('.sa-quick-teams')).find(node => node.dataset.occurrenceId === openQuickId);
+            if (openSelect) openSelect.open = true;
+        }
         if (!ordered.length) agenda.append(dom('p', 'sa-empty', 'Nenhuma ocorrência neste planejamento. Adicione um culto ou evento.'));
         $('sa-summary').textContent = `${ordered.length} ocorrência${ordered.length === 1 ? '' : 's'} · ${new Set(ordered.flatMap(item => item.teams.map(team => team.team_id))).size} equipes`;
         const warnings = $('sa-warnings');
@@ -243,7 +270,7 @@
         const choices = dom('div', 'sa-batch-list');
         state.occurrences.filter(item => item.id !== occurrence.id).forEach(item => { const label = dom('label', 'sa-check-label'), checkbox = dom('input'); checkbox.type = 'checkbox'; checkbox.value = item.id; checkbox.dataset.batch = ''; label.append(checkbox, dom('span', '', `${fmtDate(item.date)} · ${item.time} · ${item.name}`)); choices.append(label); }); batch.append(choices); form.append(batch);
         form.append(button('Remover ocorrência do planejamento', 'sa-editor-remove', async () => {
-            if (!window.confirm('Retirar esta ocorrência do planejamento? O evento original da agenda será preservado.')) return;
+            if (!await window.ScheduleConfirm({title: 'Retirar ocorrência?', message: 'A ocorrência será retirada do planejamento. O evento original da agenda será preservado.', action: 'Retirar ocorrência'})) return;
             if (!await flush()) return;
             if (await send('remove_occurrence', {occurrence_id: occurrence.id})) { selected = null; $('sa-editor-dialog').close(); }
         }));
@@ -254,7 +281,7 @@
         const step = state.current_step;
         root.querySelectorAll('[data-step]').forEach(node => { if (Number(node.dataset.step) === step) node.setAttribute('aria-current', 'step'); else node.removeAttribute('aria-current'); });
         $('sa-planning').hidden = step !== 1; $('sa-availability').hidden = step !== 2; $('sa-generation').hidden = step !== 3;
-        $('sa-prev').hidden = step === 1; $('sa-next').hidden = step === 3;
+        $('sa-prev').hidden = step === 1; $('sa-next').hidden = step === 3; $('sa-publish').hidden = step !== 3;
     }
     async function navigate(step) {
         if (!await flush()) return;
@@ -266,11 +293,47 @@
             return;
         }
         $('sa-teams-required').hidden = true;
-        if (step === 3 && state.availability.summary.warnings.length && !window.confirm('Há pendências de disponibilidade ou acompanhamento no resumo. Deseja prosseguir mantendo esses avisos? Nenhuma disponibilidade desconhecida será confirmada.')) return;
-        await send('navigate', {step});
+        if (step === 3 && state.availability.summary.warnings.length) {
+            const dialog = $('sa-pending-dialog');
+            if (dialog.open) return;
+            dialog.returnValue = '';
+            const warnings = state.availability.summary.warnings;
+            $('sa-pending-count').textContent = `${warnings.length} ${warnings.length === 1 ? 'pendência' : 'pendências'}`;
+            $('sa-pending-list').replaceChildren(...warnings.map(warning => dom('li', '', warning)));
+            const confirmed = await new Promise(resolve => {
+                dialog.addEventListener('close', () => resolve(dialog.returnValue === 'continue'), {once: true});
+                dialog.showModal();
+            });
+            if (!confirmed) return;
+        }
+        if (!await send('navigate', {step})) return;
+        if (step === 3 && (!state.generation.generated || state.generation.stale)) {
+            $('sg-status').textContent = 'Gerando sugestões com base no planejamento e nas disponibilidades…';
+            const generated = await send('generate', {confirmed: true});
+            $('sg-status').textContent = generated
+                ? 'Sugestões geradas e salvas em rascunho. Revise as composições e pendências.'
+                : 'Não foi possível gerar as sugestões. Revise o aviso e tente novamente.';
+        }
     }
     root.querySelectorAll('[data-step]').forEach(node => node.addEventListener('click', () => navigate(Number(node.dataset.step))));
     $('sa-prev').addEventListener('click', () => navigate(state.current_step - 1)); $('sa-next').addEventListener('click', () => navigate(state.current_step + 1));
+    $('sa-publish').addEventListener('click', async () => {
+        if (!await flush()) return;
+        const generation = state.generation;
+        if (!generation.generated || generation.stale) { showError('Gere sugestões atualizadas antes de criar a escala.'); return; }
+        const pending = generation.summary.pending;
+        const message = pending
+            ? `Ainda ${pending === 1 ? 'há 1 vaga pendente' : `há ${pending} vagas pendentes`}. Ao criar, a escala ficará visível para os integrantes com essas vagas em aberto.`
+            : 'A escala ficará visível para os integrantes após a criação.';
+        const dialog = $('sg-publish-dialog');
+        if (dialog.open) return;
+        $('sg-publish-message').textContent = message; dialog.returnValue = '';
+        const confirmed = await new Promise(resolve => {
+            dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), {once: true});
+            dialog.showModal();
+        });
+        if (confirmed) await send('publish', {confirmed: true, confirmed_pending: pending});
+    });
     root.querySelectorAll('[data-view]').forEach(node => node.addEventListener('click', () => { view = node.dataset.view; root.querySelectorAll('[data-view]').forEach(item => item.setAttribute('aria-pressed', String(item === node))); renderCalendar(); }));
     root.querySelectorAll('[data-close-dialog]').forEach(node => node.addEventListener('click', () => node.closest('dialog').close()));
     $('sa-editor-dialog').addEventListener('cancel', event => { event.preventDefault(); closeEditor(); });
@@ -331,8 +394,8 @@
     $('sa-discard').addEventListener('click', () => { if (!blocked && !failed) { clearTimeout(timer); $('sa-discard-dialog').showModal(); } });
     $('sa-discard-dialog').addEventListener('close', () => { if (dirty && !leaving) scheduleSave(); });
     $('sa-confirm-discard').addEventListener('click', async () => { clearTimeout(timer); dirty = false; $('sa-confirm-discard').disabled = true; if (!await send('discard', {confirmed: true})) { $('sa-confirm-discard').disabled = false; $('sa-discard-dialog').close(); } });
-    $('sa-reload').addEventListener('click', () => { if (window.confirm('Recarregar o rascunho? Alterações locais ainda não salvas serão descartadas.')) { leaving = true; window.location.reload(); } });
-    $('sa-retry').addEventListener('click', async () => { failed = false; if (!lastFailed) return; const retry = lastFailed; if (retry.action === 'save_occurrence') { dirty = true; await flush(); } else if (retry.action === 'save_availability') await availabilityUI.retrySave(retry.payload); else if (retry.action === 'clear_availability') { if (await send(retry.action, retry.payload)) availabilityUI.cleared(retry.payload); } else await send(retry.action, retry.payload); });
+    $('sa-reload').addEventListener('click', async () => { if (await window.ScheduleConfirm({title: 'Recarregar rascunho?', message: 'Alterações locais ainda não salvas serão descartadas.', action: 'Recarregar'})) { leaving = true; window.location.reload(); } });
+    $('sa-retry').addEventListener('click', async () => { failed = false; if (!lastFailed) return; const retry = lastFailed; if (retry.action === 'save_occurrence' && dirty) { await flush(); } else if (retry.action === 'save_availability') await availabilityUI.retrySave(retry.payload); else if (retry.action === 'clear_availability') { if (await send(retry.action, retry.payload)) availabilityUI.cleared(retry.payload); } else await send(retry.action, retry.payload); });
     window.addEventListener('beforeunload', event => { if (!leaving && (dirty || availabilityUI?.isDirty() || generationUI?.isDirty() || pending || failed)) { event.preventDefault(); event.returnValue = ''; } });
     availabilityUI = window.ScheduleAvailabilityUI.create({getState: () => state, onSave: payload => send('save_availability', payload), onClear: payload => send('clear_availability', payload), onDirty: updateStatus, goToPlanning: () => navigate(1)});
     generationUI = window.ScheduleGenerationUI.create({getState: () => state, onDirty: updateStatus,
@@ -340,7 +403,7 @@
         onRemoveObsolete: assignment_id => send('remove_obsolete_assignment', {assignment_id}),
         onGenerate: async () => {
             if (!await flush()) return false;
-            if (!window.confirm('Gerar sugestões para todo o mês? Designações desbloqueadas serão recalculadas; as bloqueadas serão preservadas. A escala continuará em rascunho.')) return false;
+            if (!await window.ScheduleConfirm({title: 'Regenerar sugestões?', message: 'As designações não fixadas serão recalculadas. As fixadas serão preservadas e a escala continuará em rascunho.', action: 'Regenerar sugestões'})) return false;
             return send('generate', {confirmed: true});
         }});
     generationUI.render(state);

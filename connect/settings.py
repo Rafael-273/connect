@@ -195,6 +195,7 @@ OPENAI_TRANSCRIPTION_MODEL = os.getenv(
     'OPENAI_TRANSCRIPTION_MODEL',
     'whisper-1',
 )
+MANUAL_AUDIO_MAX_UPLOAD_MB = max(1, int(os.getenv('MANUAL_AUDIO_MAX_UPLOAD_MB', '128')))
 
 # Mídia Externa. O modelo de tradução é escolhido pelo fluxo que usa AIService;
 # apenas o modelo de transcrição é centralizado na variável acima.
@@ -210,6 +211,7 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 # Keep it off the main pipeline queue so a user can start processing while its
 # optional browser preview is still being generated.
 CELERY_TASK_ROUTES = {
+    'external_media.analyze_source_take': {'queue': 'media_analysis'},
     'external_media.create_project_preview': {'queue': 'media_previews'},
     'external_media.create_timeline_review_proxy': {'queue': 'media_previews'},
     'external_media.create_subtitle_review_preview': {'queue': 'media_previews'},
@@ -252,6 +254,10 @@ EXTERNAL_MEDIA_FFMPEG_PRESET = os.getenv('EXTERNAL_MEDIA_FFMPEG_PRESET', 'veryfa
 EXTERNAL_MEDIA_RENDER_PRESET = os.getenv('EXTERNAL_MEDIA_RENDER_PRESET', 'superfast')
 EXTERNAL_MEDIA_INTERMEDIATE_PRESET = os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_PRESET', 'superfast')
 EXTERNAL_MEDIA_INTERMEDIATE_CRF = int(os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_CRF', 22))
+# Full-quality render checkpoints; independent from editor playback proxies.
+EXTERNAL_MEDIA_RENDER_CACHE_ENABLED = os.getenv('EXTERNAL_MEDIA_RENDER_CACHE_ENABLED', 'true').lower() in {'1', 'true', 'yes'}
+EXTERNAL_MEDIA_RENDER_CACHE_TTL_SECONDS = int(os.getenv('EXTERNAL_MEDIA_RENDER_CACHE_TTL_SECONDS', 604800))
+EXTERNAL_MEDIA_RENDER_CACHE_MAX_FILE_BYTES = int(os.getenv('EXTERNAL_MEDIA_RENDER_CACHE_MAX_FILE_BYTES', 2 * 1024 ** 3))
 # Mantém a renderização final rápida em máquinas multi-core sem abrir encodes
 # demais e deixar o computador sem responsividade.
 EXTERNAL_MEDIA_ASSEMBLY_WORKERS = int(os.getenv('EXTERNAL_MEDIA_ASSEMBLY_WORKERS', 2))
@@ -304,6 +310,14 @@ EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS = float(
     os.getenv('EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS', 2)
 )
 CELERY_BEAT_SCHEDULE = {
+    'recover-source-take-analysis': {
+        'task': 'external_media.recover_source_analysis',
+        'schedule': timedelta(minutes=5),
+    },
+    'cleanup-render-checkpoints': {
+        'task': 'external_media.cleanup_render_checkpoints',
+        'schedule': timedelta(hours=24),
+    },
     'cleanup-external-media-workspaces': {
         'task': 'external_media.cleanup_workspaces',
         'schedule': timedelta(hours=1),
@@ -448,3 +462,7 @@ LOGGING = {
         'PIL': {'level': 'WARNING'},
     },
 }
+
+# Optional preparation; a dedicated media_analysis worker isolates Whisper from previews.
+EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED = os.getenv('EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED', 'true').lower() == 'true'
+EXTERNAL_MEDIA_TAKE_PADDING_MS = max(0, min(1000, int(os.getenv('EXTERNAL_MEDIA_TAKE_PADDING_MS', '180'))))

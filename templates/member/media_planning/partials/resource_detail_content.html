@@ -1,0 +1,24 @@
+<div data-resource-detail{% if is_media_leader %} data-edit-url="{% url 'media_resource_edit' resource.pk %}"{% endif %}>
+    <input type="hidden" data-resource-csrf value="{{ csrf_token }}">
+    <div class="org-card p-4 space-y-3 text-sm">
+        <div><span class="text-gray-400 text-xs">Categoria</span><div class="font-medium">{{ resource.get_category_display }}</div></div>
+        {% if resource.url %}<div><span class="text-gray-400 text-xs">URL</span><div><a href="{{ resource.url }}" target="_blank" rel="noopener noreferrer" class="org-link break-all">{{ resource.url }}</a></div></div>{% endif %}
+        {% if resource.email_username %}<div><span class="text-gray-400 text-xs">E-mail / usuário</span><div>{{ resource.email_username }}</div></div>{% endif %}
+        {% if resource.responsible %}<div><span class="text-gray-400 text-xs">Responsável</span><div>{{ resource.responsible.name }}</div></div>{% endif %}
+        {% if resource.subscription_type %}<div><span class="text-gray-400 text-xs">Assinatura</span><div>{{ resource.get_subscription_type_display }}</div></div>{% endif %}
+        {% if resource.renewal_date %}<div><span class="text-gray-400 text-xs">Renovação</span><div>{{ resource.renewal_date|date:"d/m/Y" }}</div></div>{% endif %}
+        {% if resource.notes %}<div><span class="text-gray-400 text-xs">Observações</span><div class="break-words">{{ resource.notes|linebreaksbr }}</div></div>{% endif %}
+        <div><span class="text-gray-400 text-xs">Equipes com acesso</span><div>{% for team in resource.access_teams.all %}{{ team.name }}{% if not forloop.last %}, {% endif %}{% empty %}Apenas líderes{% endfor %}</div></div>
+    </div>
+    <div class="org-card p-4 mt-4">
+        <h3 class="font-bold text-sm mb-2"><i class="fas fa-lock" aria-hidden="true"></i> Credenciais</h3>
+        {% if has_credential %}
+        <p class="text-xs text-emerald-600 mb-2">Senha cadastrada</p>
+        <button type="button" data-resource-reveal="{% url 'media_resource_credential_reveal' resource.pk %}" aria-expanded="false" class="org-btn-secondary text-xs mb-3">Revelar senha</button>
+        <div data-resource-secret class="hidden bg-gray-50 rounded-lg p-3 text-sm font-mono break-all whitespace-pre-wrap"></div>
+        <p data-resource-reveal-error class="hidden text-xs text-red-600 mt-2" role="alert"></p>
+        {% else %}
+        <p class="text-xs text-gray-400 mb-2">Nenhuma credencial cadastrada.</p>
+        {% endif %}
+    </div>
+</div>

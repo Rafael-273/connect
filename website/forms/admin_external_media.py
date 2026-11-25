@@ -13,6 +13,7 @@ from ..models.external_media import (
     MasteringProfile,
     MediaTemplate,
     MediaTemplateBlock,
+    TemplateBrollAsset,
     MediaTemplatePlugin,
     MediaTemplateVersion,
     OverlayPreset,
@@ -157,7 +158,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
     )
     duck_voice_activation_db = forms.DecimalField(
         label='Sensibilidade da voz (dB)', min_value=-96, max_value=0,
-        decimal_places=0, max_digits=3, required=False,
+        decimal_places=1, max_digits=4, required=False,
         help_text='Falas abaixo deste nível não reduzem a música.',
     )
     duck_attack_ms = forms.IntegerField(label='Attack (ms)', min_value=10, max_value=5000, required=False)
@@ -718,6 +719,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
 
 
 class AdminMediaTemplateBlockForm(forms.ModelForm):
+    brolls_raw = forms.CharField(label='B-rolls padrões', required=False, widget=forms.HiddenInput())
     overlay_definitions_raw = forms.CharField(
         label='Elementos visuais automáticos',
         required=False,
@@ -764,6 +766,12 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
                 'overlay_definitions_raw',
                 json.dumps(instance.overlay_definitions or [], indent=2, ensure_ascii=False),
             )
+            if instance.pk:
+                initial.setdefault('brolls_raw', json.dumps([
+                    {'id': item.pk, 'description': item.description, 'name': item.original_filename,
+                     'url': item.file.url if item.file else ''}
+                    for item in instance.default_brolls.all()
+                ], ensure_ascii=False))
         super().__init__(*args, **kwargs)
         self.fields['key'].required = False
         self.fields['allows_multiple'].required = False
@@ -869,7 +877,59 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
             if not isinstance(schema, dict):
                 self.add_error('overlay_definitions_raw', f'Os campos do overlay {index} precisam ser um objeto.')
         cleaned_data['_overlay_definitions'] = definitions
+        try:
+            brolls = json.loads(cleaned_data.get('brolls_raw') or '[]')
+            if not isinstance(brolls, list):
+                raise ValueError
+            existing = {str(item.pk): item for item in self.instance.default_brolls.all()} if self.instance.pk else {}
+            seen = set()
+            for item in brolls:
+                if not isinstance(item, dict) or not isinstance(item.get('description'), str) or not item['description'].strip() or len(item['description']) > 500:
+                    raise ValueError
+                if item.get('id'):
+                    key = str(item['id'])
+                    if key not in existing or key in seen:
+                        raise ValueError
+                    seen.add(key)
+                else:
+                    key = item.get('upload')
+                    if not isinstance(key, str) or not key.isalnum() or key in seen:
+                        raise ValueError
+                    seen.add(key)
+                    upload = self.files.get(self.add_prefix(f'broll-{key}'))
+                    if not upload:
+                        raise forms.ValidationError(f'Selecione novamente o arquivo "{str(item.get("name") or "B-roll")[:255]}".')
+                    from .external_media import ProjectBrollAssetForm
+                    upload_form = ProjectBrollAssetForm(files={'file': upload})
+                    if not upload_form.is_valid():
+                        raise forms.ValidationError(upload_form.errors['file'])
+            cleaned_data['_brolls'] = brolls
+        except forms.ValidationError as exc:
+            self.add_error('brolls_raw', exc)
+        except (TypeError, ValueError):
+            self.add_error('brolls_raw', 'Confira os arquivos e informe uma descrição para cada B-roll.')
         return cleaned_data
+
+    def save_brolls(self):
+        from safedelete.models import HARD_DELETE
+        if self.add_prefix('brolls_raw') not in self.data:
+            return
+        entries = self.cleaned_data.get('_brolls', [])
+        existing = {str(item.pk): item for item in self.instance.default_brolls.all()}
+        kept = set()
+        for position, entry in enumerate(entries):
+            if entry.get('id'):
+                item = existing[str(entry['id'])]
+                kept.add(str(item.pk))
+            else:
+                upload = self.files[self.add_prefix(f"broll-{entry['upload']}")]
+                item = TemplateBrollAsset(block=self.instance, file=upload, original_filename=upload.name)
+            item.description = entry['description'].strip()
+            item.position = position
+            item.save()
+        for key, item in existing.items():
+            if key not in kept:
+                item.delete(force_policy=HARD_DELETE)
 
     def save(self, commit=True):
         if not (self.cleaned_data.get('name') or '').strip():

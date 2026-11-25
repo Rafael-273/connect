@@ -3,6 +3,7 @@
     <span class="demand-task-order">{{ forloop.counter }}</span>
     <button type="button"
             class="demand-task-check"
+            {% if task.status == "in_review" or task.has_active_delivery_requirements and task.status != "completed" %}disabled{% endif %}
             data-task-toggle="{{ task.pk }}"
             data-status="{% if task.status == 'completed' %}completed{% else %}pending{% endif %}"
             aria-label="{% if task.status == 'completed' %}Marcar como pendente{% else %}Marcar como concluída{% endif %}"
@@ -18,6 +19,9 @@
                         data-title="{{ task.title }}"
                         data-description="{{ task.description|default:'' }}"
                         data-assigned-to="{{ task.assigned_to_id|default:'' }}"
+                        data-content-type="{{ task.content.content_type }}"
+                        data-delivery-formats="{% for requirement in task.delivery_requirements.all %}{% if requirement.active %}{{ requirement.format }},{% endif %}{% endfor %}"
+                        data-delivery-other="{% for requirement in task.delivery_requirements.all %}{% if requirement.active and requirement.format == 'other' %}{{ requirement.label }}{% endif %}{% endfor %}"
                         data-due-date="{{ task.due_date|date:'Y-m-d\\TH:i'|default:'' }}"
                         data-status="{{ task.status }}" aria-label="Editar etapa {{ task.title }}" title="Editar etapa">
                     <i class="fas fa-pen"></i>
@@ -64,7 +68,7 @@
         <div class="demand-task-desc{% if not task.description %} demand-task-desc--compact{% endif %}" data-task-desc-wrap="{{ task.pk }}">
             {% if task.description %}
             <div class="demand-task-desc-view" data-task-desc-view="{{ task.pk }}">
-                <p class="demand-task-desc-text">{{ task.description|urlize }}</p>
+                <p class="demand-task-desc-text">{{ task.description|striptags|urlize }}</p>
                 <button type="button" class="demand-task-desc-link" data-task-desc-edit="{{ task.pk }}">
                     <i class="fas fa-pen" aria-hidden="true"></i>
                     <span>Editar observação</span>
@@ -86,5 +90,6 @@
                 </div>
             </form>
         </div>
+        {% if task.has_active_delivery_requirements %}<div class="demand-task-delivery-action">{% if task.status == 'in_review' %}<span class="demand-review-status">Em revisão</span>{% endif %}<a href="{% url 'media_delivery_review' task.pk %}" data-open-delivery-review class="demand-review-link"><i class="fas fa-folder-open" aria-hidden="true"></i> {% if task.status == 'in_review' %}Revisar entregas{% else %}Ver entregas{% endif %}</a></div>{% endif %}
     </div>
 </div>

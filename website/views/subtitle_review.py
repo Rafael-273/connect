@@ -303,7 +303,7 @@ class PublicSubtitleReviewView(PublicSubtitleReviewMixin, View):
         review = SubtitleReviewSession.objects.select_related(
             'job__subtitle_style',
             'job__translated_subtitle_style',
-            'project__template_version__preset',
+            'project__template_version__preset', 'project__free_preset',
         ).get(pk=review.pk)
         tracks = list(review.job.subtitle_tracks.filter(
             language__in=review.languages,
@@ -319,7 +319,7 @@ class PublicSubtitleReviewView(PublicSubtitleReviewMixin, View):
                 cue.saved_suggestion = existing.get(cue.pk)
                 cues.append(cue)
             cue_groups.append((track, cues))
-        preset = review.project.template_version.preset
+        preset = review.project.editor_settings.preset
         source_language = review.job.original_language
         output_languages = review.job.output_languages or review.languages
         caption_styles = {

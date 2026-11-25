@@ -9,7 +9,8 @@ function harness(fetch){
     class AudioContext{async decodeAudioData(){decodes++;return {duration:4,getChannelData:()=>new Float32Array([.1,.3,.8,.2])}}}
     const context=vm.createContext({URL,Float32Array,fetch,location:{href:'https://editor.test/preview/'},
         window:{AudioContext,ConnectCachedMedia:{waitFor:async url=>{const result=await fetch(url,{credentials:'same-origin'});if(!result.ok)throw new Error('network');return result.json()}},ConnectEditorView:{waveformWindow:()=>({offset:0,width:100,from:0,to:1})}},
-        musicController:{setSourceDuration(){}},requestTimelineRender(){},
+        musicController:{setSourceDuration(){}},requestTimelineRender(){},isIOSPreview:false,
+        editorScroller:{getBoundingClientRect:()=>({}),classList:{contains:()=>false}},
         performance:{now:()=>0},frameLatest:()=>()=>{},document:{getElementById:()=>({getBoundingClientRect:()=>({})})},setTimeout:callback=>{callback();return 0},
     });
     vm.runInContext(source,context);return {context,get decodes(){return decodes}};
@@ -46,7 +47,7 @@ test('failure from a replaced music download cannot erase the new clip waveform'
     const {context}=harness();let reject;
     context.loadMusicWaveform=()=>new Promise((resolve,no)=>{reject=no});
     const classes=new Set(['has-real-waveform']),canvas={};
-    const clip={isConnected:true,querySelector:()=>canvas,getBoundingClientRect:()=>({height:30}),classList:{add:value=>classes.add(value),remove:value=>classes.delete(value)}};
+    const clip={isConnected:true,querySelector:()=>canvas,getBoundingClientRect:()=>({height:30,width:100}),closest:()=>null,classList:{add:value=>classes.add(value),remove:value=>classes.delete(value)}};
     context.clip=clip;context.observeWaveform(clip,'old');vm.runInContext('visibleWaveforms.add(clip);paintVisibleWaveforms()',context);
     context.observeWaveform(clip,'new');const current=clip._waveform;
     reject(new Error('old download'));await tick();

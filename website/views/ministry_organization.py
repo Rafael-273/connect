@@ -1,17 +1,22 @@
 """Organization pages shared by every ministry and the legacy media entry points."""
 from django.contrib import messages
+from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from django.http import JsonResponse
+from django.utils import timezone
+from datetime import timedelta
+from pathlib import Path
+import uuid
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views import View
 
 from website.forms.media_organization import MediaSubTeamForm, MediaSubTeamMembershipForm
 from website.forms.ministry_manual import MinistryManualForm
-from website.models import Ministry, MinistryMembership, MediaSubTeam, MediaSubTeamMembership, MinistryManual
+from website.models import Ministry, MinistryMembership, MediaSubTeam, MediaSubTeamMembership, MinistryManual, ManualGenerationJob
 from website.services.ministry_organization import media_ministry
 from website.services.ministry_organization import get_media_membership as _get_media_membership
 
@@ -25,9 +30,6 @@ class MinistryOrganizationIndex(LoginRequiredMixin, View):
     login_url = 'member_login'
 
     def get(self, request):
-        member = getattr(request.user, 'member', None)
-        if member and _get_media_membership(member):
-            return redirect('media_organization')
         return redirect('member_dashboard')
 
 
@@ -130,7 +132,7 @@ class MinistryOrganizationMixin(LoginRequiredMixin):
 
     def manuals(self):
         qs = MinistryManual.objects.filter(ministry=self.ministry).select_related('sub_team', 'created_by')
-        return qs if self.can_manage else qs.filter(is_active=True)
+        return qs if self.can_manage else qs.filter(is_active=True, is_draft=False)
 
 
 class MinistryTeamList(MinistryOrganizationMixin, View):
@@ -289,6 +291,8 @@ class MinistryTeamMemberRemove(MinistryOrganizationMixin, View):
 
 class MinistryManualList(MinistryOrganizationMixin, View):
     def get(self, request, ministry_id):
+        # Remove expired audio on access, without requiring a scheduler.
+        ManualGenerationJob.objects.filter(updated_at__lt=timezone.now() - timedelta(days=1)).delete()
         teams = MediaSubTeam.objects.filter(ministry=self.ministry)
         if not self.can_manage:
             teams = teams.filter(is_active=True)
@@ -300,14 +304,28 @@ class MinistryManualList(MinistryOrganizationMixin, View):
         query = request.GET.get('q', '').strip()
         if query:
             manuals = manuals.filter(Q(title__icontains=query) | Q(summary__icontains=query))
+        selected_manual_id = request.GET.get('selected', '')
+        selected_manual = manuals.filter(pk=selected_manual_id).first() if selected_manual_id.isdigit() else None
         return render(request, 'member/ministry_organization/manuals.html', self.context(
             manuals=manuals, teams=teams, selected_team=selected, query=query, section='manuals',
+            selected_manual=selected_manual,
+            manual_audio_max_mb=settings.MANUAL_AUDIO_MAX_UPLOAD_MB,
+            form=MinistryManualForm(ministry=self.ministry),
+            jobs=ManualGenerationJob.objects.filter(ministry=self.ministry, created_by=request.user).exclude(status='completed').defer('audio', 'transcript').order_by('-created_at'),
         ))
 
 
 class MinistryManualDetail(MinistryOrganizationMixin, View):
     def get(self, request, ministry_id, pk):
         manual = get_object_or_404(self.manuals(), pk=pk)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'title': manual.title,
+                'team': manual.sub_team.name if manual.sub_team else 'Todo o ministério',
+                'summary': manual.summary,
+                'html': manual.safe_content,
+                'status': 'Rascunho' if manual.is_draft else ('Publicado' if manual.is_active else 'Arquivado'),
+            })
         return render(request, 'member/ministry_organization/manual.html', self.context(manual=manual, section='manuals'))
 
 
@@ -322,11 +340,13 @@ class MinistryManualEdit(MinistryOrganizationMixin, View):
 
     def get(self, request, ministry_id, pk=None):
         manual = get_object_or_404(self.manuals(), pk=pk) if pk else None
-        initial = {}
-        if request.GET.get('team', '').isdigit():
-            initial['sub_team'] = self.team(request.GET['team']).pk
-        form = MinistryManualForm(instance=manual, ministry=self.ministry, initial=initial)
-        return self.render_form(request, form, manual)
+        if manual and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'title': manual.title, 'summary': manual.summary, 'content': manual.content,
+                                 'sub_team': manual.sub_team_id, 'is_active': manual.is_active,
+                                 'is_draft': manual.is_draft})
+        if manual:
+            return redirect(f"{reverse('ministry_manual_list', args=[ministry_id])}?edit={manual.pk}")
+        return redirect(f"{reverse('ministry_manual_list', args=[ministry_id])}?create=1")
 
     def post(self, request, ministry_id, pk=None):
         manual = get_object_or_404(self.manuals(), pk=pk) if pk else None
@@ -335,10 +355,76 @@ class MinistryManualEdit(MinistryOrganizationMixin, View):
             obj = form.save(commit=False)
             if not obj.pk:
                 obj.created_by = request.user
+            if request.POST.get('publication') in ('draft', 'publish'):
+                obj.is_draft = request.POST['publication'] == 'draft'
+                if request.POST['publication'] == 'publish':
+                    obj.is_active = True
             obj.save()
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'url': reverse('ministry_manual_list', args=[ministry_id])})
             messages.success(request, 'Manual salvo.')
             return redirect('ministry_manual_detail', ministry_id=ministry_id, pk=obj.pk)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'errors': form.errors.get_json_data()}, status=400)
         return self.render_form(request, form, manual)
+
+
+class MinistryManualGeneration(MinistryOrganizationMixin, View):
+    manage_only = True
+
+    def post(self, request, ministry_id):
+        upload = request.FILES.get('audio')
+        if upload is None:
+            return JsonResponse({'error': 'Selecione um arquivo de áudio.'}, status=400)
+        if upload.size <= 0:
+            return JsonResponse({'error': 'O arquivo de áudio está vazio.'}, status=400)
+        if upload.size > settings.MANUAL_AUDIO_MAX_UPLOAD_MB * 1024 * 1024:
+            size_mb = upload.size / (1024 * 1024)
+            return JsonResponse({'error': f'O arquivo tem {size_mb:.1f} MB e ultrapassa o limite de {settings.MANUAL_AUDIO_MAX_UPLOAD_MB} MB.'}, status=400)
+        if Path(upload.name).suffix.lower() not in {'.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm'}:
+            return JsonResponse({'error': 'Formato não aceito. Use MP3, MP4, MPEG, MPGA, M4A, WAV ou WebM.'}, status=400)
+        job = ManualGenerationJob.objects.create(
+            ministry=self.ministry, created_by=request.user, filename=Path(upload.name).name[:255], audio=upload.read(),
+        )
+        return self.enqueue(job)
+
+    @staticmethod
+    def enqueue(job):
+        from website.services.manual_jobs import enqueue_manual
+        try:
+            enqueue_manual(job.pk, str(job.run_token))
+        except Exception:
+            job.status = 'error'
+            job.error = 'Não foi possível iniciar o processamento. Tente novamente.'
+            ManualGenerationJob.objects.filter(pk=job.pk, run_token=job.run_token).update(status=job.status, error=job.error, updated_at=timezone.now())
+        return JsonResponse({'id': job.pk, 'status': job.status, 'error': job.error})
+
+
+class MinistryManualGenerationStatus(MinistryOrganizationMixin, View):
+    manage_only = True
+
+    def job(self, request, pk):
+        return get_object_or_404(ManualGenerationJob.objects.defer('audio', 'transcript'), pk=pk, ministry=self.ministry, created_by=request.user)
+
+    def get(self, request, ministry_id, pk):
+        job = self.job(request, pk)
+        return JsonResponse({'status': job.status, 'error': job.error,
+                             'retryable': job.status == 'error' or (job.status in ('waiting', 'transcribing', 'generating') and job.updated_at < timezone.now() - timedelta(minutes=30)),
+                             'manual_id': job.manual_id})
+
+    def post(self, request, ministry_id, pk):
+        job = self.job(request, pk)
+        stale = job.updated_at < timezone.now() - timedelta(minutes=30)
+        if job.status != 'error' and not (stale and job.status in ('waiting', 'transcribing', 'generating')):
+            return JsonResponse({'error': 'Esta tarefa ainda está em andamento.'}, status=409)
+        new_token = uuid.uuid4()
+        updated = ManualGenerationJob.objects.filter(pk=job.pk, status=job.status, run_token=job.run_token).update(
+            status='waiting', error='', run_token=new_token, updated_at=timezone.now(),
+        )
+        if not updated:
+            return JsonResponse({'error': 'Esta tarefa já foi atualizada.'}, status=409)
+        job.status, job.error, job.run_token = 'waiting', '', new_token
+        return MinistryManualGeneration.enqueue(job)
 
 
 class MinistryManualArchive(MinistryOrganizationMixin, View):
@@ -348,7 +434,18 @@ class MinistryManualArchive(MinistryOrganizationMixin, View):
         manual = get_object_or_404(self.manuals(), pk=pk)
         manual.is_active = False
         manual.save(update_fields=['is_active', 'update_at'])
-        messages.success(request, 'Manual arquivado. Ele pode ser reativado na edição.')
+        messages.success(request, 'Manual arquivado. Ele pode ser reativado ao ser publicado novamente.')
+        return redirect('ministry_manual_list', ministry_id=ministry_id)
+
+
+class MinistryManualDelete(MinistryOrganizationMixin, View):
+    manage_only = True
+
+    def post(self, request, ministry_id, pk):
+        from safedelete.models import SOFT_DELETE
+        manual = get_object_or_404(self.manuals(), pk=pk)
+        manual.delete(force_policy=SOFT_DELETE)
+        messages.success(request, 'Manual excluído.')
         return redirect('ministry_manual_list', ministry_id=ministry_id)
 
 
@@ -361,3 +458,21 @@ class MinistryManualPreview(MinistryOrganizationMixin, View):
         if len(content) > 200000:
             return JsonResponse({'error': 'O conteúdo deve ter até 200.000 caracteres.'}, status=400)
         return JsonResponse({'html': sanitize_manual_content(content)})
+
+
+class MinistryManualFormat(MinistryOrganizationMixin, View):
+    manage_only = True
+
+    def post(self, request, ministry_id):
+        from website.ai import AIServiceError
+        from website.services.manual_formatting import format_manual
+        from website.utils.manual_content import sanitize_manual_content
+
+        content = request.POST.get('content', '')
+        try:
+            html = format_manual(content)
+        except ValueError as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        except AIServiceError:
+            return JsonResponse({'error': 'Não foi possível formatar com IA. Seu conteúdo foi preservado.'}, status=502)
+        return JsonResponse({'html': html, 'changed': html != sanitize_manual_content(content)})

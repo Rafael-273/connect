@@ -28,6 +28,7 @@ class AudioAnalysisService:
         clipping = true_peak is not None and true_peak >= -0.05
         metrics = {
             'integrated_lufs': loudness,
+            'silent': data.get('input_i') == '-inf' and data.get('input_tp') == '-inf',
             'true_peak_dbtp': true_peak,
             'loudness_range_lu': lra,
             'threshold_lufs': threshold,

@@ -78,6 +78,7 @@ class AIService:
         model: str | None = None,
         max_output_tokens: int | None = None,
         safety_identifier: str | None = None,
+        response_schema: dict[str, Any] | None = None,
     ) -> str:
         """Generate text through the OpenAI Responses API.
 
@@ -101,6 +102,11 @@ class AIService:
             request["max_output_tokens"] = max_output_tokens
         if safety_identifier:
             request["safety_identifier"] = safety_identifier
+        if response_schema is not None:
+            request["text"] = {"format": {
+                "type": "json_schema", "name": "manual", "strict": True,
+                "schema": response_schema,
+            }}
 
         try:
             response = self.client.responses.create(**request)
@@ -111,7 +117,7 @@ class AIService:
         except AIServiceError:
             raise
         except Exception as exc:
-            logger.exception("Falha ao gerar texto com o modelo %s", request["model"])
+            logger.error("Falha ao gerar texto com o modelo %s", request["model"])
             raise AIServiceError("Não foi possível gerar a resposta de IA.") from exc
 
     def transcribe(
@@ -123,6 +129,7 @@ class AIService:
         language: str = "pt",
         prompt: str | None = None,
         model: str | None = None,
+        allow_empty: bool = False,
     ) -> str:
         """Transcribe an uploaded file, filesystem path or in-memory audio bytes."""
         audio_file, should_close = self._prepare_audio(
@@ -141,13 +148,13 @@ class AIService:
         try:
             response = self.client.audio.transcriptions.create(**request)
             text = (response.text or "").strip()
-            if not text:
+            if not text and not allow_empty:
                 raise AIServiceError("A OpenAI retornou uma transcrição vazia.")
             return text
         except AIServiceError:
             raise
         except Exception as exc:
-            logger.exception(
+            logger.error(
                 "Falha ao transcrever áudio com o modelo %s", request["model"]
             )
             raise AIServiceError("Não foi possível transcrever o áudio.") from exc
@@ -164,6 +171,7 @@ class AIService:
         language: str | None = 'pt',
         prompt: str | None = None,
         model: str | None = None,
+        allow_empty: bool = False,
     ) -> list[TranscriptionSegment]:
         """Transcribe audio with immutable segment timestamps (Whisper verbose JSON)."""
         audio_file, should_close = self._prepare_audio(
@@ -203,7 +211,7 @@ class AIService:
                 end_ms = max(start_ms + 1, round(float(value.get('end', 0)) * 1000))
                 if text:
                     segments.append(TranscriptionSegment(start_ms, end_ms, text, granularity))
-            if not segments:
+            if not segments and not allow_empty:
                 raise AIServiceError('A OpenAI retornou uma transcrição sem segmentos.')
             return segments
         except AIServiceError:

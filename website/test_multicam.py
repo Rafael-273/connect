@@ -7,17 +7,19 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest import skipUnless
 from unittest.mock import Mock, patch
+from uuid import uuid4
 
 import numpy as np
 from django.conf import settings
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 from website.external_media.multicam import AudioSynchronizer, MulticamService, MulticamRenderService
 from website.external_media.canonical import SourceManifestBuilder
 from website.external_media.preview import TimelineRevisionService
 from website.external_media.ffmpeg_runner import FFmpegRunner
+from website.external_media.media_input import RemoteMediaSource
 from website.models.external_media import ProjectBlockMedia
 from website.test_editor_persistence import EditorFixture
 
@@ -89,6 +91,21 @@ class AudioSyncTests(SimpleTestCase):
 
 
 class CameraDecisionTests(SimpleTestCase):
+    def test_long_conversation_distributes_takes_beyond_initial_minutes(self):
+        manifest, clips = fixture()
+        duration = 23 * 60_000
+        for source in manifest['sources']:
+            source['duration_ms'] = duration + 2000
+        manifest['sources'][1]['metadata']['multicam_alignment']['validated_until_primary_ms'] = duration
+        clips[0].update(source_out_ms=duration, timeline_out_ms=duration)
+        words = [{'start_ms': time, 'end_ms': time + 1000, 'text': 'Pensamento.'}
+                 for time in range(0, duration, 10_000)]
+        project = SimpleNamespace(public_id='fa554b69-2fbc-413f-9860-223585b6fc9e', configuration={'multicam_words': words})
+        operations = MulticamService.propose(project, manifest, {'clips': clips, 'sequence': {'duration_ms': duration}})
+        self.assertGreater(len(operations), 2)
+        self.assertGreater(operations[-1]['source_in_ms'], 20 * 60_000)
+        self.assertTrue(all(right['source_in_ms'] >= left['source_out_ms'] for left, right in zip(operations, operations[1:])))
+
     def test_automatic_selection_limit_scales_with_duration(self):
         self.assertEqual(MulticamService.automatic_selection_limit({'sequence': {'duration_ms': 3 * 60_000}}), 2)
         self.assertEqual(MulticamService.automatic_selection_limit({'sequence': {'duration_ms': 25 * 60_000}}), 12)
@@ -263,6 +280,31 @@ class CameraPersistenceTests(EditorFixture, TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(self.project.timeline_revisions.count(), count)
 
+    def test_editor_camera_retry_and_approval_pin_the_same_manual_revision(self):
+        url = reverse('external_media_project_preview_camera', args=[self.project.public_id])
+        body = json.dumps({'camera_source_id': self.side_id, 'start_ms': 1000, 'end_ms': 5000, 'offset_ms': 200})
+        headers = {'HTTP_X_EDITOR_VERSION': str(self.base), 'HTTP_X_EDITOR_OPERATION': str(uuid4())}
+        response = self.client.post(url, body, content_type='application/json', **headers)
+        self.assertEqual(response.status_code, 200, response.content)
+        count = self.project.timeline_revisions.count()
+        retried = self.client.post(url, body, content_type='application/json', **headers)
+        self.assertEqual(retried.json(), response.json())
+        self.assertEqual(self.project.timeline_revisions.count(), count)
+        self.project.refresh_from_db()
+        expected = self.project.current_timeline_revision
+        approve_url = reverse('external_media_project_preview_approve', args=[self.project.public_id])
+        headers = {'HTTP_X_EDITOR_VERSION': str(response.json()['editorial_version']), 'HTTP_X_EDITOR_OPERATION': str(uuid4())}
+        with patch('website.views.external_media.ExternalMediaProjectRenderView._enqueue') as enqueue, self.captureOnCommitCallbacks(execute=True):
+            approved = self.client.post(approve_url, '{}', content_type='application/json', **headers)
+            self.assertEqual(approved.status_code, 200, approved.content)
+            duplicate = self.client.post(approve_url, '{}', content_type='application/json', **headers)
+            self.assertEqual(duplicate.json(), approved.json())
+        enqueue.assert_called_once_with(self.project.pk)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.approved_timeline_revision_id, expected.pk)
+        self.assertEqual(self.project.current_timeline_revision_id, expected.pk)
+        self.assertEqual(self.project.approved_timeline_revision.timeline['camera_segments'][0]['source_in_ms'], 1200)
+
     def test_direct_upload_groups_are_present(self):
         self.project.block_media.update(block=None)
         manifest = SourceManifestBuilder.build(self.project)
@@ -330,6 +372,67 @@ class MulticamFFmpegTests(SimpleTestCase):
     def run_media(self, *args):
         return subprocess.run([settings.FFMPEG_BINARY, '-v', 'error', '-y', *map(str, args)], check=True, capture_output=True).stdout
 
+    @override_settings(USE_S3=True)
+    def test_s3_multicam_stages_each_intermediate_and_cleans_up_on_failure(self):
+        segment = {'camera_source_id': 'side', 'source_in_ms': 0, 'source_out_ms': 1000,
+                   'start_ms': 0, 'end_ms': 1000, 'rate': 1}
+        revision = SimpleNamespace(timeline={'camera_segments': [segment] * 9},
+                                   source_manifest={'sources': [{'id': 'side'}]}, edit_decision_set={})
+        project = SimpleNamespace(public_id='test')
+        original = RemoteMediaSource('https://example.invalid/master', size_bytes=4)
+        for fail in (False, True):
+            with self.subTest(fail=fail), TemporaryDirectory() as directory:
+                output = Path(directory) / 'output.mp4'
+                storage, runner = Mock(), Mock()
+                storage.ffmpeg_input.return_value = 'https://example.invalid/camera'
+                staged = RemoteMediaSource('https://example.invalid/pass', size_bytes=4)
+
+                def stage(path, namespace):
+                    self.assertEqual(path.read_bytes(), b'pass')
+                    path.unlink()
+                    return staged, 'temporary-pass'
+
+                storage.stage_temporary.side_effect = stage
+                commands = []
+
+                def render(command):
+                    commands.append(command)
+                    if len(commands) == 2 and fail:
+                        raise RuntimeError('render failed')
+                    Path(command[-1]).write_bytes(b'pass')
+
+                runner.run.side_effect = render
+                with patch.object(SourceManifestBuilder, 'resolve_field', return_value=Mock()), \
+                     patch('website.external_media.workspace.DiskCapacityGuard.require_capacity'):
+                    if fail:
+                        with self.assertRaisesMessage(RuntimeError, 'render failed'):
+                            MulticamRenderService(runner, storage).apply(project, revision, original, output, 160, 120)
+                    else:
+                        self.assertEqual(MulticamRenderService(runner, storage).apply(
+                            project, revision, original, output, 160, 120), output)
+                        self.assertTrue(output.exists())
+                self.assertEqual([command[3] for command in commands], [original, staged])
+                self.assertFalse((Path(directory) / 'multicam-pass-0.mp4').exists())
+                storage.delete_temporary.assert_called_once_with('temporary-pass')
+
+    def test_multicam_checks_capacity_before_starting_a_pass(self):
+        from website.external_media.workspace import InsufficientWorkspaceCapacity
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / 'master.mp4'
+            source.write_bytes(b'video')
+            segment = {'camera_source_id': 'side', 'source_in_ms': 0, 'source_out_ms': 1000,
+                       'start_ms': 0, 'end_ms': 1000, 'rate': 1}
+            revision = SimpleNamespace(timeline={'camera_segments': [segment]},
+                                       source_manifest={'sources': [{'id': 'side'}]}, edit_decision_set={})
+            runner = Mock()
+            with patch('website.external_media.workspace.DiskCapacityGuard.require_capacity',
+                       side_effect=InsufficientWorkspaceCapacity('Sem espaço')) as guard, \
+                 patch.object(SourceManifestBuilder, 'resolve_field', return_value=Mock()):
+                with self.assertRaises(InsufficientWorkspaceCapacity):
+                    MulticamRenderService(runner, Mock()).apply(None, revision, source, Path(directory) / 'out.mp4', 160, 120)
+            guard.assert_called_once()
+            runner.run.assert_not_called()
+
     def test_different_fps_picture_changes_audio_identical_and_shared_renderer(self):
         with TemporaryDirectory() as folder:
             folder = Path(folder)
@@ -358,6 +461,35 @@ class MulticamFFmpegTests(SimpleTestCase):
             self.assertIn('MulticamRenderService', inspect.getsource(ProjectProxyService.build_timeline_review_proxy))
             self.assertIn('MulticamRenderService', inspect.getsource(ExternalMediaProjectPipeline._prepare_final_master))
 
+    def test_secondary_frames_cannot_extend_the_master_duration(self):
+        with TemporaryDirectory() as folder:
+            folder = Path(folder)
+            main, side, output = folder / 'main.mp4', folder / 'side.mp4', folder / 'out.mp4'
+            self.run_media('-f', 'lavfi', '-i', 'color=red:s=160x120:r=30:d=4',
+                           '-f', 'lavfi', '-i', 'sine=frequency=440:duration=4', '-c:v', 'libx264', '-c:a', 'aac', '-shortest', main)
+            self.run_media('-f', 'lavfi', '-i', 'color=blue:s=160x120:r=30:d=4', '-c:v', 'libx264', side)
+            # Legacy/inconsistent timing can retime a secondary past the base EOF.
+            segment = {'camera_source_id': 'side', 'source_in_ms': 0, 'source_out_ms': 1000,
+                       'start_ms': 1000, 'end_ms': 2000, 'rate': .01}
+            revision = SimpleNamespace(timeline={'camera_segments': [segment], 'sequence': {'duration_ms': 4000}},
+                                       source_manifest={'sources': [{'id': 'side'}]})
+            with patch.object(SourceManifestBuilder, 'resolve_field', return_value=side):
+                MulticamRenderService(FFmpegRunner(), SimpleNamespace(ffmpeg_input=lambda field: side)).apply(None, revision, main, output, 160, 120)
+            frames = self.run_media('-i', output, '-an', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-')
+            self.assertEqual(len(frames) // (160 * 120 * 3), 120)
+            self.assertEqual(self.run_media('-i', main, '-vn', '-c:a', 'copy', '-f', 'adts', '-'),
+                             self.run_media('-i', output, '-vn', '-c:a', 'copy', '-f', 'adts', '-'))
+
+    def test_out_of_bounds_camera_fails_before_reading_media(self):
+        revision = SimpleNamespace(timeline={'sequence': {'duration_ms': 4000}, 'camera_segments': [
+            {'start_ms': 1000, 'end_ms': 5000}]})
+        runner, storage = Mock(), Mock()
+        from website.external_media.exceptions import ExternalMediaError
+        with self.assertRaises(ExternalMediaError):
+            MulticamRenderService(runner, storage).apply(None, revision, 'input', 'output', 160, 120)
+        runner.run.assert_not_called()
+        storage.ffmpeg_input.assert_not_called()
+
     def test_audio_extraction_resamples_and_missing_audio_fails_safely(self):
         with TemporaryDirectory() as folder:
             folder = Path(folder)
@@ -370,8 +502,80 @@ class MulticamFFmpegTests(SimpleTestCase):
             with self.assertRaises(ExternalMediaError):
                 AudioSynchronizer.extract(silent_video, folder / 'missing.wav', FFmpegRunner())
 
+    def test_ten_camera_selections_across_batches_preserve_every_frame_and_master_audio(self):
+        with TemporaryDirectory() as folder:
+            folder = Path(folder)
+            main, side, output = folder / 'main.mp4', folder / 'side.mp4', folder / 'output.mp4'
+            self.run_media('-f', 'lavfi', '-i', 'color=red:s=160x120:r=30:d=4.2',
+                           '-f', 'lavfi', '-i', 'sine=frequency=440:duration=4.2',
+                           '-c:v', 'libx264', '-c:a', 'aac', '-shortest', main)
+            # An extra camera without audio is valid after manual alignment.
+            self.run_media('-f', 'lavfi', '-i', 'color=blue:s=160x120:r=25:d=4.2', '-c:v', 'libx264', side)
+            manifest, clips = fixture()
+            clips[0].update(source_out_ms=4200, timeline_out_ms=4200)
+            operations = [MulticamService.selection(manifest, reference_id='main', camera_id='side',
+                          start=200 + index * 400, end=400 + index * 400, offset=0) for index in range(10)]
+            _, segments = MulticamService.compose(manifest, operations, clips, 'fa554b69-2fbc-413f-9860-223585b6fc9e')
+            revision = SimpleNamespace(timeline={'camera_segments': segments, 'sequence': {'duration_ms': 4200}},
+                                       source_manifest=manifest, edit_decision_set={'operations': operations})
+            renderer = MulticamRenderService(FFmpegRunner(), SimpleNamespace(ffmpeg_input=lambda field: side))
+            with patch.object(SourceManifestBuilder, 'resolve_field', return_value=side):
+                renderer.apply(SimpleNamespace(), revision, main, output, 160, 120)
+            raw = self.run_media('-i', output, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-')
+            frames = np.frombuffer(raw, np.uint8).reshape(-1, 120, 160, 3).mean(axis=(1, 2))
+            self.assertEqual(len(frames), 126)
+            for index, rgb in enumerate(frames):
+                secondary = any(item['start_ms'] <= index * 1000 / 30 < item['end_ms'] for item in segments)
+                self.assertGreater(rgb[2 if secondary else 0], 200, (index, rgb))
+            self.assertEqual(self.run_media('-i', main, '-vn', '-c:a', 'copy', '-f', 'adts', '-'),
+                             self.run_media('-i', output, '-vn', '-c:a', 'copy', '-f', 'adts', '-'))
+            self.assertFalse(list(folder.glob('multicam-pass-*.mp4')))
+
+    def test_two_extra_cameras_with_manual_offset_and_drift_render_in_the_correct_intervals(self):
+        with TemporaryDirectory() as folder:
+            folder = Path(folder)
+            main, side, other, output = [folder / name for name in ('main.mp4', 'side.mp4', 'other.mp4', 'output.mp4')]
+            self.run_media('-f', 'lavfi', '-i', 'color=red:s=160x120:r=30:d=4',
+                           '-f', 'lavfi', '-i', 'sine=frequency=440:duration=4',
+                           '-c:v', 'libx264', '-c:a', 'aac', '-shortest', main)
+            for path, color, fps in ((side, 'blue', 24), (other, 'lime', 25)):
+                self.run_media('-f', 'lavfi', '-i', f'color={color}:s=160x120:r={fps}:d=4.2', '-c:v', 'libx264', path)
+            manifest, clips = fixture()
+            manifest['sources'].append({'id': 'other', 'duration_ms': 4200, 'trim': {'start_ms': 0}, 'metadata': {}})
+            manifest['multicam_groups'][0]['source_ids'].append('other')
+            clips[0].update(source_out_ms=4000, timeline_out_ms=4000)
+            operations = [
+                MulticamService.selection(manifest, reference_id='main', camera_id='side', start=0, end=1000, offset=200),
+                MulticamService.selection(manifest, reference_id='main', camera_id='other', start=1000, end=2000, offset=-200, rate=1.0005),
+                MulticamService.selection(manifest, reference_id='main', camera_id='side', start=3000, end=4000, offset=0),
+            ]
+            _, segments = MulticamService.compose(manifest, operations, clips, 'fa554b69-2fbc-413f-9860-223585b6fc9e')
+            self.assertEqual(segments[1]['source_in_ms'], 800)
+            revision = SimpleNamespace(timeline={'camera_segments': segments, 'sequence': {'duration_ms': 4000}},
+                                       source_manifest=manifest, edit_decision_set={'operations': operations})
+            renderer = MulticamRenderService(FFmpegRunner(), SimpleNamespace(ffmpeg_input=lambda field: field))
+            with patch.object(SourceManifestBuilder, 'resolve_field', side_effect=lambda project, source: side if source['id'] == 'side' else other):
+                renderer.apply(SimpleNamespace(), revision, main, output, 160, 120)
+            raw = self.run_media('-i', output, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-')
+            frames = np.frombuffer(raw, np.uint8).reshape(-1, 120, 160, 3).mean(axis=(1, 2))
+            self.assertEqual(len(frames), 120)
+            for index, rgb in enumerate(frames):
+                channel = 2 if index < 30 or index >= 90 else 1 if index < 60 else 0
+                self.assertGreater(rgb[channel], 200, (index, rgb))
+            self.assertEqual(self.run_media('-i', main, '-vn', '-c:a', 'copy', '-f', 'adts', '-'),
+                             self.run_media('-i', output, '-vn', '-c:a', 'copy', '-f', 'adts', '-'))
+
 class CameraEndToEndTests(EditorFixture, TestCase):
     def test_approved_preview_and_final_render_have_identical_camera_boundaries(self):
+        self.assert_camera_delivery()
+
+    def test_automatically_added_camera_renders_the_approved_selection(self):
+        self.assert_camera_delivery(origin='AUTO')
+
+    def test_ai_camera_edited_manually_and_split_by_speech_cut_renders_the_approved_revision(self):
+        self.assert_camera_delivery(origin='AI', manual_edit=True, speech_cut=True)
+
+    def assert_camera_delivery(self, origin='USER', manual_edit=False, speech_cut=False):
         from django.core.files import File
         from website.external_media.preview import ProjectProxyService
         from website.external_media.services import ExternalMediaProjectPipeline
@@ -390,7 +594,10 @@ class CameraEndToEndTests(EditorFixture, TestCase):
             main = self.project.block_media.first()
             with (directory / 'red.mp4').open('rb') as handle:
                 main.file.save('main.mp4', File(handle))
-            with (directory / 'red.mp4').open('rb') as handle:
+            # Simulate a review master with the wrong picture and audio clock.
+            # The cut preview must resolve its media from the immutable clips.
+            review_base = 'blue.mp4' if speech_cut else 'red.mp4'
+            with (directory / review_base).open('rb') as handle:
                 self.project.render_job.original_video.save('review-source.mp4', File(handle))
             side = ProjectBlockMedia.objects.create(project=self.project, block=main.block, position=1, camera_order=2,
                 camera_role='SECONDARY', camera_key='side', duration_ms=10000, original_filename='side.mp4')
@@ -402,25 +609,73 @@ class CameraEndToEndTests(EditorFixture, TestCase):
             current.source_manifest = manifest
             current.save(update_fields=['source_manifest'])
             side_id = next(item['id'] for item in manifest['sources'] if item['source_reference'] == str(side.pk))
-            revision = TimelineRevisionService.update_camera(self.project, self.member, {
-                'camera_source_id': side_id, 'start_ms': 1000, 'end_ms': 5000, 'offset_ms': 0})
+            if origin == 'USER':
+                revision = TimelineRevisionService.update_camera(self.project, self.member, {
+                    'camera_source_id': side_id, 'start_ms': 1000, 'end_ms': 5000, 'offset_ms': 0})
+                expected_frames = [(15, 0), (30, 2), (149, 2), (150, 0), (180, 0)]
+            else:
+                reference_id = manifest['multicam_groups'][0]['reference_source_id']
+                self.project.configuration = {**self.project.configuration,
+                    'multicam_alignments': {side_id: {'status': 'ALIGNED', 'offset_ms': 0, 'rate': 1.,
+                        'reference_source_id': reference_id, 'validated_until_primary_ms': 10000}},
+                    'multicam_words': [{'start_ms': 100, 'end_ms': 900, 'text': 'Mudou.'},
+                        {'start_ms': 1300, 'end_ms': 1600, 'text': 'Mas'},
+                        {'start_ms': 9000, 'end_ms': 9700, 'text': 'tempo.'},
+                        {'start_ms': 10100, 'end_ms': 10400, 'text': 'Continuamos'}]}
+                if origin == 'AI':
+                    # Deterministic editorial response; no external AI call.
+                    self.project.configuration['multicam_editorial_review'] = {'status': 'REVIEWED', 'selections': [
+                        {'pause_id': 'pause-1100', 'camera_id': side_id, 'confidence': .95, 'reason': 'Transição de pensamento'}]}
+                self.project.save(update_fields=['configuration'])
+                revision = TimelineRevisionService._create(self.project, SourceManifestBuilder.build(self.project),
+                    current.edit_decision_set, 'Proposta automática de teste', self.member)
+                selection = next(item for item in revision.edit_decision_set['operations'] if item['type'] == 'camera_selection')
+                self.assertEqual(selection['origin'], origin)
+                self.assertEqual([(item['start_ms'], item['end_ms']) for item in revision.timeline['camera_segments']], [(1100, 9900)])
+                expected_frames = [(15, 0), (32, 0), (33, 2), (296, 2), (297, 0)]
+                if manual_edit:
+                    revision = TimelineRevisionService.update_camera(self.project, self.member, {
+                        'id': selection['id'], 'camera_source_id': side_id, 'start_ms': 2000, 'end_ms': 8000, 'offset_ms': 100})
+                    changed = next(item for item in revision.edit_decision_set['operations'] if item['id'] == selection['id'])
+                    self.assertEqual(changed['origin'], 'USER')
+                    self.assertEqual(changed['alignment']['status'], 'MANUAL')
+                    expected_frames = [(59, 0), (60, 2), (239, 2), (240, 0), (270, 0)]
+            if speech_cut:
+                revision = TimelineRevisionService.create_manual_cut(self.project, self.member, 3000, 5000)
+                self.assertEqual([(item['start_ms'], item['end_ms'], item['source_in_ms']) for item in revision.timeline['camera_segments']],
+                                 [(2000, 3000, 2100), (3000, 6000, 5100)])
+                expected_frames = [(59, 0), (60, 2), (89, 2), (90, 2), (179, 2), (180, 0), (210, 0)]
             preview = ProjectProxyService.build_timeline_review_proxy(self.project.pk, revision.pk)
             self.assertEqual(preview.status, 'READY')
             self.assertIn('MULTICAM', preview.metadata['rendered_layers'])
             self.project.refresh_from_db()
-            self.project.approved_timeline_revision = revision
+            approved = TimelineRevisionService.approve(self.project, self.member)
+            self.assertEqual(approved.pk, revision.pk)
+            self.project.refresh_from_db()
             self.project.configuration = {**self.project.configuration,
+                'proxy_pipeline': True,
                 'analysis_source_duration_ms': 10000,
                 'analysis_source_block_ranges': [{'block_key': 'video', 'start_ms': 0, 'end_ms': 10000}]}
-            self.project.save(update_fields=['approved_timeline_revision', 'configuration'])
-            ExternalMediaProjectPipeline()._prepare_final_master(self.project, directory)
+            self.project.save(update_fields=['configuration'])
+            ExternalMediaProjectPipeline().render(self.project.pk)
+            self.project.refresh_from_db()
             self.project.render_job.refresh_from_db()
+            self.assertEqual(self.project.status, self.project.Status.FINISHED)
+            self.assertEqual(self.project.render_job.rendered_from_timeline_revision, revision.revision)
             delivery = self.project.render_job.original_video
             self.assertTrue(self.project.configuration['quality_report']['ok'])
+            if speech_cut:
+                for args in (['-an', '-f', 'framemd5'], ['-vn', '-f', 'framemd5']):
+                    decoded = [
+                        subprocess.check_output([settings.FFMPEG_BINARY, '-v', 'error', '-i', path, *args, '-'])
+                        for path in (preview.proxy_file.path, delivery.path)
+                    ]
+                    self.assertEqual(decoded[0], decoded[1])
             for path in (preview.proxy_file.path, delivery.path):
                 info = subprocess.check_output([settings.FFPROBE_BINARY, '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=r_frame_rate,avg_frame_rate,nb_frames,duration,start_time', '-of', 'json', path]).decode()
                 self.assertEqual(json.loads(info)['streams'][0]['r_frame_rate'], '30/1')
-                for frame_number, channel in [(15, 0), (30, 2), (149, 2), (150, 0), (180, 0)]:
+                self.assertEqual(int(json.loads(info)['streams'][0]['nb_frames']), 240 if speech_cut else 300)
+                for frame_number, channel in expected_frames:
                     raw = subprocess.check_output([settings.FFMPEG_BINARY, '-v', 'error', '-i', path,
                         '-vf', f'select=eq(n\\,{frame_number})', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'])
                     rgb = np.frombuffer(raw, np.uint8).reshape(-1, 3).mean(axis=0)

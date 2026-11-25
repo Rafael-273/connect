@@ -101,6 +101,28 @@ class GenerationIntegrationTests(TestCase):
         self.assertTrue(all(p['locked'] for p in after['people']))
         self.assertEqual(DivisionMember.objects.filter(occurrence_team__isnull=False).count(), 10)
 
+    def test_publish_requires_review_and_makes_schedule_visible(self):
+        from website.services.schedule_visibility import member_visible_schedules
+        from website.models import MonthlySchedule
+
+        self.assertEqual(self.post('publish', confirmed=True, confirmed_pending=0).status_code, 400)
+        self.confirm_all()
+        self.assertEqual(self.post('generate', confirmed=True).status_code, 200)
+        pending = self.data['generation']['summary']['pending']
+        self.assertEqual(self.post('publish', confirmed=True, confirmed_pending=pending + 1).status_code, 409)
+        self.assertFalse(member_visible_schedules(MonthlySchedule.objects.filter(pk=self.state.schedule_id)).exists())
+        response = self.post('publish', confirmed=True, confirmed_pending=pending)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['published'])
+        self.state.refresh_from_db()
+        self.assertEqual(self.state.status, 'published')
+        snapshot = self.state.generation_report['publication_snapshot']
+        self.assertEqual(snapshot['summary']['pending'], pending)
+        self.assertEqual(snapshot['schema_version'], 1)
+        self.assertTrue(snapshot['rows'])
+        self.assertTrue(snapshot['summary']['people'])
+        self.assertTrue(member_visible_schedules(MonthlySchedule.objects.filter(pk=self.state.schedule_id)).exists())
+
     def test_manual_invalid_same_day_and_two_trainees_are_refused(self):
         self.confirm_all()
         rows = self.data['generation']['rows']

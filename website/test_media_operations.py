@@ -433,6 +433,31 @@ class MediaOperationsTests(TestCase):
         self.assertEqual(task.title, 'Designer')
         self.assertEqual(task.assigned_to_id, user.pk)
 
+    def test_task_description_card_strips_html_tags(self):
+        content = self.generate()
+        task = MediaTask.objects.create(
+            content=content,
+            assigned_to=self.user,
+            title='Conferir vídeo',
+            description='<p>Verificar o vídeo <strong>antes do culto</strong>.</p>',
+        )
+
+        response = self.client.get(reverse('media_demand_detail_page', args=[content.pk]))
+        self.assertContains(
+            response,
+            '<p class="demand-task-desc-text">Verificar o vídeo antes do culto.</p>',
+            html=True,
+        )
+
+        response = self.client.post(
+            reverse('media_task_update_description', args=[task.pk]),
+            {'description': '<p>Texto <em>atualizado</em>.</p>'},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Texto atualizado.', response.json()['description_html'])
+        self.assertNotIn('&lt;p&gt;', response.json()['description_html'])
+
     def test_member_cannot_change_event_dates(self):
         MinistryMembership.objects.filter(member=self.member).update(role='member')
         response = self.client.post(reverse('media_event_update', args=[self.event.pk]), {'event-title': 'Não alterar', 'event-event_date': '2027-01-01'})

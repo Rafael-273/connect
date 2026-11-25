@@ -41,6 +41,17 @@ class MinistryOrganizationTests(TestCase):
     def url(self, name, **kwargs):
         return reverse(name, kwargs={'ministry_id': self.ministry.pk, **kwargs})
 
+    def test_organization_navigation_returns_to_home(self):
+        self.client.force_login(self.user)
+        home = reverse('member_dashboard')
+        for name in ('media_organization', 'ministry_organization_index'):
+            self.assertRedirects(self.client.get(reverse(name)), home, fetch_redirect_response=False)
+        for url in (self.url('ministry_team_list'), self.url('ministry_manual_list'), reverse('media_resource_list')):
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, f'href="{home}"')
+            self.assertNotContains(response, f'href="{reverse("media_organization")}"')
+
     def test_team_names_are_unique_within_ministry(self):
         self.assertEqual(MediaSubTeam.objects.filter(name='Recepção').count(), 2)
         with self.assertRaises(IntegrityError), transaction.atomic():
@@ -454,6 +465,27 @@ class MinistryDemandTests(TestCase):
         response = self.client.get(reverse('media_content_list'))
         self.assertContains(response, self.team.name)
         self.assertNotContains(response, self.foreign_team.name)
+
+    def test_hub_hides_completed_items_by_default_and_can_show_them(self):
+        open_content = MediaContent.objects.create(
+            title='Demanda em aberto', content_type='artwork', status='pending',
+        )
+        completed_content = MediaContent.objects.create(
+            title='Demanda concluída', content_type='artwork', status='approved',
+        )
+
+        self.client.force_login(self.user)
+        default_response = self.client.get(reverse('media_content_list'))
+        default_items = [item for month in default_response.context['sidebar_months'] for item in month['items']]
+        default_ids = {item['pk'] for item in default_items if item['type'] == 'free'}
+        self.assertIn(open_content.pk, default_ids)
+        self.assertNotIn(completed_content.pk, default_ids)
+
+        completed_response = self.client.get(reverse('media_content_list'), {'status': 'completed'})
+        completed_items = [item for month in completed_response.context['sidebar_months'] for item in month['items']]
+        completed_ids = {item['pk'] for item in completed_items if item['type'] == 'free'}
+        self.assertIn(completed_content.pk, completed_ids)
+        self.assertNotIn(open_content.pk, completed_ids)
 
     def test_hub_search_finds_event_from_its_nested_demand_and_task(self):
         import datetime

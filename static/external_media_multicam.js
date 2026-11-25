@@ -3,6 +3,26 @@
     'use strict';
     const at = (segments, time) => (segments || []).find(item => item.start_ms <= time && time < item.end_ms);
     const sourceTime = (segment, time) => (segment.source_in_ms + (time - segment.start_ms) * segment.rate) / 1000;
+    function formatTime(ms) {
+        const value = Math.max(0, Math.round(Number(ms) || 0));
+        return `${String(Math.floor(value / 60000)).padStart(2, '0')}:${String(Math.floor(value / 1000) % 60).padStart(2, '0')}.${String(value % 1000).padStart(3, '0')}`;
+    }
+    function parseTime(value) {
+        const match = String(value).trim().match(/^(\d+):([0-5]\d)(?:[.,](\d{1,3}))?$/);
+        if (!match) throw new Error('Use minutos:segundos, por exemplo 02:53.570.');
+        return Number(match[1]) * 60000 + Number(match[2]) * 1000 + Number((match[3] || '').padEnd(3, '0'));
+    }
+    function needsManualAlignment(timeline, cameraId, endMs) {
+        const alignment = (timeline.cameras || []).find(camera => String(camera.id) === String(cameraId))?.alignment || {};
+        const clip = (timeline.clips || []).find(item => item.timeline_in_ms < endMs && endMs <= item.timeline_out_ms);
+        const sourceEnd = clip ? Number(clip.source_in_ms) + endMs - Number(clip.timeline_in_ms) : endMs;
+        return alignment.status !== 'ALIGNED' || sourceEnd > Number(alignment.validated_until_primary_ms || 0);
+    }
+    function movableTransform(values) {
+        const result = {...values};
+        if (Number(result.scale ?? 1) <= 1 && (Math.abs(Number(result.x || 0)) > 0 || Math.abs(Number(result.y || 0)) > 0)) result.scale = 1.1;
+        return result;
+    }
     function create(options) {
         const {panel, stage, getTimeline, getTime, save, seek, editor: showEditor = true} = options;
         let mainVideo;
@@ -20,6 +40,10 @@
         const filter = document.createElementNS(filterSvg.namespaceURI, 'filter'); filter.id = filterId;
         const matrix = document.createElementNS(filterSvg.namespaceURI, 'feColorMatrix'); matrix.setAttribute('type', 'matrix');
         filter.append(matrix); filterSvg.append(filter); stage.append(filterSvg);
+        let editorOpen = !options.newOnly;
+        panel.addEventListener('toggle', () => {
+            if (options.newOnly && !panel.open) { editorOpen = false; panel.hidden = true; }
+        });
         let signature = '', currentId = null, hasFrame = false, correctingSeek = false;
         const element = (tag, text, parent) => { const node = document.createElement(tag); if (text) node.textContent = text; if (parent) parent.append(node); return node; };
         const visualAdjustment = (timeline, segment) => {
@@ -77,9 +101,15 @@
             const choice = element('select', '', cameraField); choice.setAttribute('aria-label', 'Câmera');
             available.forEach(camera => { const option = element('option', camera.label, choice); option.value = camera.id; });
             if (segment) choice.value = segment.camera_source_id;
-            const input = (label, value, step) => { const wrapper = element('label', label, fields), node = element('input', '', wrapper); wrapper.className = 'multicam-field'; node.type = 'number'; node.value = String(value); node.step = step; node.required = true; return node; };
-            const start = input('Início (s)', ((segment?.start_ms ?? getTime()) / 1000).toFixed(3), '.001');
-            const end = input('Fim (s)', ((segment?.end_ms ?? Math.min(getTime() + 6000, timeline.sequence.duration_ms)) / 1000).toFixed(3), '.001');
+            const timeInput = (label, value) => {
+                const wrapper = element('label', label, fields); wrapper.className = 'multicam-field';
+                const node = element('input', '', wrapper); node.type = 'text'; node.value = formatTime(value); node.placeholder = 'mm:ss.mmm'; node.required = true;
+                const mark = element('button', 'Marcar na agulha', wrapper); mark.type = 'button'; mark.className = 'multicam-button';
+                mark.onclick = () => { node.value = formatTime(getTime()); };
+                return node;
+            };
+            const start = timeInput('Início (min:seg)', segment?.start_ms ?? getTime());
+            const end = timeInput('Fim (min:seg)', segment?.end_ms ?? Math.min(getTime() + 6000, timeline.sequence.duration_ms));
             const alignmentFor = () => (timeline.cameras || []).find(camera => camera.id === choice.value)?.alignment;
             const advanced = element('details', '', form); advanced.className = 'multicam-advanced';
             const advancedSummary = element('summary', 'Ajustar sincronização manualmente', advanced);
@@ -87,6 +117,9 @@
             const advancedInput = (label, value, step) => { const wrapper = element('label', label, advancedFields), node = element('input', '', wrapper); wrapper.className = 'multicam-field'; node.type = 'number'; node.value = String(value); node.step = step; node.required = true; return node; };
             const offset = advancedInput('Deslocamento (ms)', alignmentFor()?.offset_ms ?? 0, '1');
             const drift = advancedInput('Drift (ppm)', Math.round((alignmentFor()?.rate ?? 1) * 1000000 - 1000000), '1'); drift.min = '-1000'; drift.max = '1000';
+            const confirmationLabel = element('label', '', form); confirmationLabel.className = 'multicam-alignment';
+            const confirmation = element('input', '', confirmationLabel); confirmation.type = 'checkbox';
+            confirmationLabel.append(document.createTextNode(' Confirmo usar o deslocamento e o drift acima neste take após revisar a sincronização.'));
             let manual = Boolean(segment && (timeline.decisions || []).find(item => item.id === segment.id)?.alignment?.status === 'MANUAL');
             const hint = element('small', '', form); hint.className = 'multicam-alignment';
             const describe = () => { const alignment = alignmentFor(), operation = (timeline.decisions || []).find(item => item.id === segment?.id); if (operation?.alignment?.status === 'MANUAL' && operation.camera_source_id === choice.value) { hint.textContent = 'Alinhamento manual aplicado.'; return; } hint.textContent = alignment?.status === 'ALIGNED' ? `Confiança acústica: ${Math.round(alignment.confidence * 100)}% · validada até ${(alignment.validated_until_primary_ms / 1000).toFixed(1)} s da gravação principal` : 'Sincronização requer ajuste manual.'; };
@@ -97,18 +130,18 @@
                 if (operation?.alignment) { offset.value = operation.alignment.offset_ms; drift.value = Math.round((operation.alignment.rate - 1) * 1000000); }
             }
             offset.oninput = drift.oninput = () => { manual = true; };
-            choice.onchange = () => { manual = false; offset.value = alignmentFor()?.offset_ms ?? 0; drift.value = Math.round(((alignmentFor()?.rate ?? 1) - 1) * 1000000); describe(); };
+            choice.onchange = () => { manual = false; confirmation.checked = false; offset.value = alignmentFor()?.offset_ms ?? 0; drift.value = Math.round(((alignmentFor()?.rate ?? 1) - 1) * 1000000); describe(); };
             const actions = element('div', '', form); actions.className = 'multicam-actions';
             const button = element('button', segment ? 'Salvar alterações' : 'Adicionar alternância', actions);
             button.type = 'submit'; button.className = 'multicam-button multicam-button--primary';
-            form.onsubmit = event => { event.preventDefault(); const payload = {camera_source_id: choice.value, start_ms: Math.round(Number(start.value) * 1000), end_ms: Math.round(Number(end.value) * 1000)}; if (segment) payload.id = segment.id; if (manual) { payload.offset_ms = Number(offset.value); payload.rate = 1 + Number(drift.value) / 1000000; } submit(payload, button); };
+            form.onsubmit = event => { event.preventDefault(); let startMs, endMs; try { startMs = parseTime(start.value); endMs = parseTime(end.value); if (endMs <= startMs || endMs > timeline.sequence.duration_ms) throw new Error('O fim deve ser posterior ao início e estar dentro do vídeo.'); } catch (error) { status.textContent = error.message; return; } if (!manual && !confirmation.checked && needsManualAlignment(timeline, choice.value, endMs)) { advanced.open = true; status.textContent = 'Este trecho não tem sincronização automática validada. Revise o deslocamento e o drift e marque a confirmação para adicionar o take.'; confirmation.focus(); return; } const payload = {camera_source_id: choice.value, start_ms: startMs, end_ms: endMs}; if (segment) payload.id = segment.id; if (manual || confirmation.checked) { payload.offset_ms = Number(offset.value); payload.rate = 1 + Number(drift.value) / 1000000; } submit(payload, button); };
             if (segment) {
                 const jump = element('button', 'Ver na timeline', actions); jump.type = 'button'; jump.className = 'multicam-button'; jump.onclick = () => seek(segment.start_ms);
                 const remove = element('button', 'Remover alternância', actions); remove.type = 'button'; remove.className = 'multicam-button multicam-button--danger'; remove.onclick = () => submit({id: segment.id, delete: true}, remove);
             }
         }
         function render() {
-            const timeline = getTimeline(); panel.hidden = !showEditor || !(timeline.cameras || []).length;
+            const timeline = getTimeline(); panel.hidden = !showEditor || !editorOpen || !(timeline.cameras || []).length;
             if (!showEditor) return;
             const next = JSON.stringify([timeline.camera_segments, timeline.cameras, timeline.edit_decision_set]);
             if (next === signature) return;
@@ -118,7 +151,7 @@
                 const previous = selections.get(item.id);
                 selections.set(item.id, previous ? {...previous, start_ms: Math.min(previous.start_ms, item.start_ms), end_ms: Math.max(previous.end_ms, item.end_ms)} : item);
             });
-            selections.forEach(editor);
+            if (!options.newOnly) selections.forEach(editor);
             editor(null);
         }
         function sync() {
@@ -128,15 +161,15 @@
             if (!segment) {
                 image.hidden = true;
                 image.pause();
-                currentId = null;
                 hasFrame = false;
                 correctingSeek = false;
                 return;
             }
             const camera = timeline.cameras.find(item => item.id === segment.camera_source_id);
-            if (!camera?.url) { image.hidden = true; return; }
+            if (!camera?.url) { image.hidden = true; image.pause(); return; }
             applyVisualAdjustment(timeline, segment);
-            const id = `${segment.id}:${segment.start_ms}:${camera.url}`;
+            // Editorial segment identity does not change the underlying media.
+            const id = camera.url;
             if (currentId !== id) {
                 image.hidden = true;
                 hasFrame = false;
@@ -146,13 +179,20 @@
                 image.load();
             }
             const target = sourceTime(segment, time);
+            const paused = mainVideo.paused || mainVideo.seeking;
+            const tolerance = paused ? 1 / Number(timeline.sequence?.fps || 30) : .25;
             // Seeking a video element on every playback tick makes some browsers
             // briefly reveal the principal track. Correct only meaningful drift and
             // wait for the first decoded frame before displaying the camera.
-            if (image.readyState >= 1 && !correctingSeek && Math.abs(image.currentTime - target) > .25) {
+            if (image.readyState >= 1 && !correctingSeek && !image.seeking && Math.abs(image.currentTime - target) > tolerance) {
                 correctingSeek = true;
+                if (paused) hasFrame = false;
                 image.currentTime = target;
             }
+            // Zero (or an already presented target) needs no seek, so seeked
+            // may never fire. Readiness is about the current target, not an event.
+            if (image.readyState >= 2 && !image.seeking && Math.abs(image.currentTime - target) <= tolerance) hasFrame = true;
+            if (paused && (!hasFrame || image.seeking || correctingSeek)) { image.hidden = true; image.pause(); return; }
             if (!hasFrame) return;
             image.hidden = false;
             image.playbackRate = mainVideo.playbackRate * segment.rate;
@@ -168,21 +208,26 @@
         setMainVideo(options.mainVideo);
         image.addEventListener('loadedmetadata', sync);
         image.addEventListener('loadeddata', sync);
-        image.addEventListener('seeked', () => { correctingSeek = false; hasFrame = true; sync(); });
+        image.addEventListener('seeked', () => { correctingSeek = false; sync(); });
         image.addEventListener('error', () => { image.hidden = true; status.textContent = 'Câmera indisponível no preview. Aguarde o proxy ou tente novamente.'; });
         render();
         function focusSelection(selectionId) {
             render();
-            panel.open = true;
+            editorOpen = true; panel.hidden = false; panel.open = true;
             const form = body.querySelector(`[data-camera-selection-id="${CSS.escape(String(selectionId))}"]`);
             if (form) {
                 form.scrollIntoView({block: 'center', behavior: 'smooth'});
                 form.querySelector('input, select, button')?.focus({preventScroll: true});
             } else panel.scrollIntoView({block: 'start', behavior: 'smooth'});
         }
-        return {render, sync, focusSelection, setMainVideo};
+        function addAtPlayhead() {
+            editorOpen = true; signature = ''; render(); panel.open = true;
+            const details = body.querySelector('.multicam-new');
+            if (details) { details.open = true; details.scrollIntoView({block: 'center', behavior: 'smooth'}); details.querySelector('select')?.focus({preventScroll: true}); }
+        }
+        return {render, sync, focusSelection, setMainVideo, addAtPlayhead};
     }
-    const api = {at, sourceTime, create};
+    const api = {at, sourceTime, create, formatTime, parseTime, needsManualAlignment, movableTransform};
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     else root.ConnectMulticam = api;
 })(typeof window !== 'undefined' ? window : globalThis);

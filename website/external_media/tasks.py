@@ -41,6 +41,67 @@ from .workspace import JobWorkspace, MediaWorkspaceGarbageCollector
 logger = logging.getLogger(__name__)
 
 
+@shared_task(bind=True, name='external_media.analyze_source_take', max_retries=2,
+             soft_time_limit=6600, time_limit=6900)
+def analyze_source_take(self, media_id):
+    from .take_suggestions import analyze_source
+    try:
+        analyze_source(media_id)
+    except Exception as exc:
+        if self.request.id:
+            raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+        raise
+
+
+def enqueue_source_analysis(media_id):
+    """Optional dispatch failures must never invalidate an upload preview."""
+    from .render_workflow import enqueue_video_work
+    item = ProjectBlockMedia.objects.select_related('project').filter(pk=media_id).first()
+    if not item:
+        return
+    enabled = (
+        item.project.editor_settings.subtitles_enabled if item.project.is_free
+        else settings.EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED and not item.editor_only
+    )
+    if not enabled:
+        ProjectBlockMedia.objects.filter(pk=media_id).update(take_analysis_status='unavailable')
+        return
+    try:
+        if settings.RENDER_WORKFLOW_ENABLED:
+            enqueue_video_work('take-analysis', media_id)
+        else:
+            analyze_source_take.delay(media_id)
+    except Exception:
+        ProjectBlockMedia.objects.filter(pk=media_id).update(take_analysis_status='error')
+        logger.exception('take_analysis_enqueue_failed media=%s', media_id)
+
+
+@shared_task(name='external_media.recover_source_analysis')
+def recover_source_analysis():
+    """Recover expired leases after a killed worker; never backfill historical uploads."""
+    from website.models import SourceTakeAnalysis
+    from datetime import timedelta
+    from django.db.models import Q
+
+    eligible = Q(project__template_version__isnull=True, project__configuration__automatic_captions=True)
+    if settings.EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED:
+        eligible |= Q(project__status='DRAFT', project__template_version__isnull=False, editor_only=False)
+    cutoff = timezone.now() - timedelta(hours=2)
+    # A worker may be killed while hashing, before it can associate a cache.
+    for item_id in ProjectBlockMedia.objects.filter(
+        eligible, preview_status='READY', take_analysis__isnull=True,
+        take_analysis_status__in=['pending', 'running'], update_at__lt=cutoff,
+    ).values_list('pk', flat=True)[:20]:
+        if ProjectBlockMedia.objects.filter(pk=item_id, update_at__lt=cutoff).update(update_at=timezone.now()):
+            enqueue_source_analysis(item_id)
+    for cache_id in SourceTakeAnalysis.objects.filter(status='running', lease_until__lt=timezone.now()).values_list('pk', flat=True)[:20]:
+        item = ProjectBlockMedia.objects.filter(eligible, take_analysis_id=cache_id).first()
+        if not item:
+            continue
+        if SourceTakeAnalysis.objects.filter(pk=cache_id, status='running', lease_until__lt=timezone.now()).update(status='pending', lease=None, lease_until=None):
+            enqueue_source_analysis(item.pk)
+
+
 @shared_task(name='external_media.create_preview_artifact', autoretry_for=())
 def create_preview_artifact(artifact_id, lease):
     from .preview_artifacts import PreviewArtifactService
@@ -61,6 +122,15 @@ def prepare_external_media(self, job_id):
 @shared_task(bind=True, autoretry_for=(), name='external_media.render_outputs')
 def render_external_media(self, job_id):
     ExternalMediaPipeline().render_outputs(job_id)
+
+
+@shared_task(name='external_media.cleanup_render_checkpoints')
+def cleanup_render_checkpoints():
+    from io import StringIO
+    from django.core.management import call_command
+    output = StringIO()
+    call_command('cleanup_render_checkpoints', apply=True, stdout=output)
+    return output.getvalue().splitlines()[-1:]
 
 
 @shared_task(name='external_media.cleanup_workspaces')
@@ -98,7 +168,9 @@ def create_project_preview(self, media_id):
         ) as workspace:
             preview = workspace.file('proxy', 'preview.mp4')
             source = media_input.get_ffmpeg_input()
-            VideoAssemblyService().create_proxy(source, preview)
+            assembly = VideoAssemblyService()
+            assembly.create_proxy(source, preview)
+            item.duration_ms = assembly._duration_ms(source)
             with preview.open('rb') as handle:
                 item.preview_file.save('preview.mp4', File(handle), save=False)
             try:
@@ -117,7 +189,7 @@ def create_project_preview(self, media_id):
                 logger.warning('project_media_thumbnail_failed media=%s', item.pk, exc_info=True)
         item.preview_status = ProjectBlockMedia.PreviewStatus.READY
         item.preview_error = ''
-        item.save(update_fields=['preview_file', 'thumbnail', 'preview_status', 'preview_error', 'update_at'])
+        item.save(update_fields=['preview_file', 'thumbnail', 'duration_ms', 'preview_status', 'preview_error', 'update_at'])
     except Exception as exc:
         item.preview_status = ProjectBlockMedia.PreviewStatus.ERROR
         item.preview_error = str(exc)[:255]
@@ -158,12 +230,15 @@ def create_project_broll_preview(self, asset_id):
             estimated_bytes=media_input.workspace_estimate(needs_proxy=True),
         ) as workspace:
             preview = workspace.file('proxy', 'preview.mp4')
-            VideoAssemblyService().create_proxy(media_input.get_ffmpeg_input(), preview)
+            source = media_input.get_ffmpeg_input()
+            assembly = VideoAssemblyService()
+            asset.duration_ms = assembly._duration_ms(source)
+            assembly.create_proxy(source, preview)
             with preview.open('rb') as handle:
                 asset.preview_file.save('preview.mp4', File(handle), save=False)
         asset.preview_status = ProjectBrollAsset.PreviewStatus.READY
         asset.preview_error = ''
-        asset.save(update_fields=['preview_file', 'preview_status', 'preview_error', 'update_at'])
+        asset.save(update_fields=['preview_file', 'preview_status', 'preview_error', 'duration_ms', 'update_at'])
     except Exception as exc:
         asset.preview_status = ProjectBrollAsset.PreviewStatus.ERROR
         asset.preview_error = str(exc)[:255]

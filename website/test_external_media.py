@@ -15,11 +15,12 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from asgiref.sync import async_to_sync
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, RequestFactory, SimpleTestCase, TestCase, override_settings
+from django.test import AsyncRequestFactory, Client, RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from safedelete.models import HARD_DELETE
@@ -269,6 +270,47 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
                 text='Vamos adorar ao Senhor.',
             ),
         ]
+
+    def test_ass_fits_long_lines_without_changing_short_caption_size(self):
+        self.style.font_name = 'Montserrat'
+        self.style.font_size = 72
+        self.style.max_characters = 200
+        self.style.max_lines = 1
+        service = SubtitleService()
+        long_text = 'Uma legenda muito longa com palavras que não devem ultrapassar as laterais do vídeo ' * 3
+        self.assertLess(service._fit_horizontal_scale(long_text, self.style, 1080), 100)
+        self.assertEqual(service._fit_horizontal_scale('Legenda curta', self.style, 1080), 100)
+        self.cues[0].text = long_text
+        self.cues[0].save(update_fields=['text'])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'captions.ass'
+            service.write_ass(self.track, path, self.style, 1080, 1920)
+            rows = [line for line in path.read_text(encoding='utf-8-sig').splitlines() if line.startswith('Dialogue:')]
+        self.assertIn(r'\fscx', rows[0])
+        self.assertNotIn(r'\fscx', rows[-1])
+        self.assertIn('Uma legenda muito longa', rows[0])
+
+    def test_dual_ass_fits_long_lines_in_every_visual_layer(self):
+        self.style.font_name = 'Montserrat'
+        self.style.font_size = 72
+        self.style.background_enabled = True
+        self.style.background_height_percent = 70
+        self.style.shadow = 3
+        self.cues[0].text = 'Uma legenda muito longa que precisa caber na tela ' * 6
+        self.cues[0].save(update_fields=['text'])
+        translated = SubtitleTrack.objects.create(job=self.job, language='en')
+        SubtitleCue.objects.create(track=translated, cue_index=1, start_ms=1200, end_ms=4800, text='Short translation')
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'dual.ass'
+            SubtitleService().write_dual_ass([self.track, translated], path, self.style, 1080, 1920)
+            rows = [line for line in path.read_text(encoding='utf-8-sig').splitlines() if line.startswith('Dialogue:')]
+        original = [row for row in rows if ',Original' in row and 'Uma legenda muito longa' in row]
+        self.assertGreaterEqual(len(original), 2)
+        scales = [row.split(r'\fscx', 1)[1].split('}', 1)[0] for row in original]
+        self.assertEqual(len(set(scales)), 1)
+        translated_rows = [row for row in rows if ',Translated' in row]
+        self.assertTrue(translated_rows)
+        self.assertTrue(all(r'\fscx' not in row for row in translated_rows))
 
     def test_translation_preserves_every_timestamp(self):
         ai = Mock()
@@ -1068,6 +1110,148 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
             name='Projeto de agosto', template_version=self.version, created_by=self.member,
         )
 
+    def test_dashboard_open_uses_editor_only_for_projects_awaiting_review(self):
+        review = self.make_project()
+        review.status = ExternalMediaProject.Status.AWAITING_REVIEW
+        review.save(update_fields=['status'])
+        draft = ExternalMediaProject.objects.create(
+            name='Rascunho', template_version=self.version, created_by=self.member,
+            status=ExternalMediaProject.Status.DRAFT,
+        )
+        response = self.client.get(reverse('external_media_dashboard'))
+        preview = reverse('external_media_project_preview', args=[review.public_id])
+        detail = reverse('external_media_project_detail', args=[draft.public_id])
+        self.assertContains(response, f'href="{preview}" class="media-project-open"')
+        self.assertContains(response, f'href="{detail}" class="media-project-open"')
+
+    def test_project_explains_why_generate_is_blocked_even_with_uploaded_video(self):
+        project = self.make_project()
+        ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mp4',
+            file=SimpleUploadedFile('take.mp4', b'video'),
+        )
+        self.version.lut_file.name = 'missing-template-grade.cube'
+        self.version.save(update_fields=['lut_file'])
+        url = reverse('external_media_project_detail', args=[project.public_id])
+        response = self.client.get(url)
+        self.assertContains(response, 'take.mp4')
+        self.assertContains(response, 'O arquivo LUT do template não está disponível.')
+        self.assertContains(response, 'aria-describedby="project-validation-errors"')
+        self.version.lut_file = ''
+        self.version.save(update_fields=['lut_file'])
+        response = self.client.get(url)
+        self.assertNotContains(response, 'id="project-validation-errors"')
+        self.assertContains(response, 'Gerar vídeo')
+
+    def make_default_scene(self, key, order):
+        block = MediaTemplateBlock.objects.create(
+            version=self.version, key=key, name=key, order=order,
+            default_video=SimpleUploadedFile(f'{key}.mp4', b'default-video'),
+        )
+        self.addCleanup(block.default_video.delete, save=False)
+        return block
+
+    def test_reorder_visible_scenes_preserves_hidden_default_scenes(self):
+        project = self.make_project()
+        opening = self.make_default_scene('opening', 0)
+        closing = self.make_default_scene('closing', 2)
+        custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=1)
+        template_media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='template.mp4',
+            file=SimpleUploadedFile('template.mp4', b'template'),
+        )
+        custom_media = ProjectBlockMedia.objects.create(
+            project=project, custom_block=custom, position=1, original_filename='custom.mp4',
+            file=SimpleUploadedFile('custom.mp4', b'custom'),
+        )
+        original_order = [f't-{opening.pk}', f't-{self.block.pk}', f'c-{custom.pk}', f't-{closing.pk}']
+        project.configuration = {'block_order': original_order, 'other_setting': True}
+        project.save(update_fields=['configuration', 'update_at'])
+        detail_url = reverse('external_media_project_detail', args=[project.public_id])
+        page = self.client.get(detail_url)
+        self.assertEqual([item['definition'].pk for item in page.context['blocks']], [self.block.pk, custom.pk])
+
+        response = self.client.post(
+            reverse('external_media_project_custom_block_reorder', args=[project.public_id]),
+            {'item_ids[]': [f'c-{custom.pk}', f't-{self.block.pk}']},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        expected = [f't-{opening.pk}', f'c-{custom.pk}', f't-{self.block.pk}', f't-{closing.pk}']
+        self.assertEqual(project.configuration, {'block_order': expected, 'other_setting': True})
+        page = self.client.get(detail_url)
+        self.assertEqual([item['definition'].pk for item in page.context['blocks']], [custom.pk, self.block.pk])
+        manifest = SourceManifestBuilder.build(project)
+        self.assertEqual(
+            [item['id'] for item in manifest['sources']],
+            [f'template-default-{opening.pk}', f'project-media-{custom_media.pk}',
+             f'project-media-{template_media.pk}', f'template-default-{closing.pk}'],
+        )
+
+    def test_reorder_visible_scenes_without_previous_order_keeps_default_slots(self):
+        project = self.make_project()
+        opening = self.make_default_scene('opening', 0)
+        custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=1)
+
+        response = self.client.post(
+            reverse('external_media_project_custom_block_reorder', args=[project.public_id]),
+            {'item_ids[]': [f'c-{custom.pk}', f't-{self.block.pk}']},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.configuration['block_order'], [f't-{opening.pk}', f'c-{custom.pk}', f't-{self.block.pk}'])
+
+    def test_reorder_still_accepts_the_complete_scene_list(self):
+        project = self.make_project()
+        custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=1)
+        url = reverse('external_media_project_custom_block_reorder', args=[project.public_id])
+        order = [f'c-{custom.pk}', f't-{self.block.pk}']
+        response = self.client.post(url, {'item_ids[]': order})
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.configuration['block_order'], order)
+
+        opening = self.make_default_scene('opening', 0)
+        order = [f't-{self.block.pk}', f't-{opening.pk}', f'c-{custom.pk}']
+        response = self.client.post(url, {'item_ids[]': order})
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.configuration['block_order'], order)
+
+    def test_reorder_requires_default_scenes_whose_files_are_missing(self):
+        project = self.make_project()
+        missing = MediaTemplateBlock.objects.create(
+            version=self.version, key='missing', name='Missing', order=2,
+            default_video='missing/default.mp4',
+        )
+        url = reverse('external_media_project_custom_block_reorder', args=[project.public_id])
+        response = self.client.post(url, {'item_ids[]': [f't-{self.block.pk}']})
+        self.assertEqual(response.status_code, 400)
+        order = [f't-{missing.pk}', f't-{self.block.pk}']
+        response = self.client.post(url, {'item_ids[]': order})
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.configuration['block_order'], order)
+
+    def test_reorder_rejects_invalid_or_incomplete_visible_scene_lists(self):
+        project = self.make_project()
+        self.make_default_scene('opening', 0)
+        custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=1)
+        url = reverse('external_media_project_custom_block_reorder', args=[project.public_id])
+        invalid_orders = [
+            [], [f'c-{custom.pk}'], [f't-{self.block.pk}'],
+            [f't-{self.block.pk}', f'c-{custom.pk}', f'c-{custom.pk}'],
+            [f't-{self.block.pk}', f'c-{custom.pk}', 'c-999999'],
+        ]
+        for order in invalid_orders:
+            with self.subTest(order=order):
+                response = self.client.post(url, {'item_ids[]': order})
+                self.assertEqual(response.status_code, 400)
+                project.refresh_from_db()
+                self.assertNotIn('block_order', project.configuration or {})
+
     def test_source_manifest_resolves_custom_blocks_and_configured_order(self):
         project = self.make_project()
         custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=2)
@@ -1286,6 +1470,29 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
             (5000, 6000),
         )
         media.delete(force_policy=HARD_DELETE)
+
+    def test_restoring_manual_cut_recovers_speech_used_to_duck_music(self):
+        project = self.make_project()
+        ProjectBlockMedia.objects.create(
+            project=project, block=self.block, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=10000,
+        )
+        project.render_job = self.make_job()
+        project.save(update_fields=['render_job'])
+        track = SubtitleTrack.objects.create(job=project.render_job, language='pt', is_source=True)
+        speech = SubtitleCue.objects.create(
+            track=track, cue_index=1, start_ms=2100, end_ms=2800, text='Fala restaurada',
+        )
+        TimelineRevisionService.ensure_initial(project, self.member)
+        cut = TimelineRevisionService.create_manual_cut(project, self.member, 2000, 3000)
+        self.assertFalse(cut.timeline['captions'])
+
+        decision = next(item for item in cut.edit_decision_set['operations'] if item['type'] == 'remove_segment')
+        restored = TimelineRevisionService.mutate_decision(project, self.member, decision['id'], False)
+        self.assertEqual([(item['id'], item['start_ms'], item['end_ms']) for item in restored.timeline['captions']],
+                         [(speech.pk, 2100, 2800)])
+        speech.refresh_from_db()
+        self.assertIsNone(speech.deleted)
 
     def test_preview_subtitle_timing_and_delete_are_undoable(self):
         project = self.make_project()
@@ -3563,6 +3770,40 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(plugin.configuration['top_margin'], 0.05)
 
 
+    def test_template_accepts_existing_voice_activation_decimal(self):
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(duck_voice_activation_db='-48.0'),
+        )
+        self.assertEqual(response.status_code, 302)
+        self.version.refresh_from_db()
+        self.assertEqual(self.version.audio_mixing_config['voice_activation_db'], -48.0)
+
+    def test_template_validation_summary_shows_all_forms_and_scene_errors(self):
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(name='', preset='999999', **{
+                'blocks-TOTAL_FORMS': '1', 'blocks-INITIAL_FORMS': '1',
+                'blocks-0-id': '999999', 'blocks-0-name': 'Cena inválida',
+                'blocks-0-key': 'cena', 'blocks-0-order': '1',
+            }),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Não foi possível salvar. Revise os itens abaixo:')
+        self.assertContains(response, 'Template — Nome')
+        self.assertContains(response, 'Configuração — Preset de renderização')
+        self.assertContains(response, 'Cena 1')
+        self.assertContains(response, 'href="#scene-1"')
+
+    def test_template_validation_summary_reports_missing_formset_management_data(self):
+        data = self._version_edit_payload()
+        del data['blocks-TOTAL_FORMS']
+        response = self.client.post(reverse('admin_external_media_version_edit', args=[self.version.pk]), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Cenas:')
+        self.assertContains(response, 'blocks-TOTAL_FORMS')
+
+
 class ExternalMediaRetryTests(ExternalMediaFixtureMixin, TestCase):
     def setUp(self):
         super().setUp()
@@ -3759,6 +4000,66 @@ class OffContextDetectionTests(SimpleTestCase):
 
 class ProtectedFileResponseRangeTests(SimpleTestCase):
     @override_settings(USE_S3=True)
+    def test_asgi_explicit_download_streams_s3_as_attachment(self):
+        file = Mock()
+        file.name = 'video.mp4'
+        file.storage.location = 'private_media'
+        file.storage.bucket_name = 'test-bucket'
+        body = Mock()
+        body.iter_chunks.return_value = iter([b'first', b'second'])
+        file.storage.connection.meta.client.get_object.return_value = {'Body': body, 'ContentLength': 11}
+        request = AsyncRequestFactory().get('/asset?download=1')
+        response = protected_file_response(request, file, force_stream=True)
+
+        async def consume():
+            return [chunk async for chunk in response.streaming_content]
+
+        try:
+            self.assertTrue(response.is_async)
+            self.assertIn('attachment', response['Content-Disposition'])
+            self.assertEqual(async_to_sync(consume)(), [b'first', b'second'])
+            file.storage.url.assert_not_called()
+            file.open.assert_not_called()
+        finally:
+            response.close()
+        body.close.assert_called()
+
+    @override_settings(USE_S3=True)
+    def test_s3_download_redirects_to_signed_attachment(self):
+        file = Mock()
+        file.name = 'video.mp4'
+        file.storage.url.return_value = 'https://storage.example/video'
+        response = protected_file_response(RequestFactory().get('/asset?download=1'), file)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, 'https://storage.example/video')
+        self.assertIn('attachment', file.storage.url.call_args.kwargs['parameters']['ResponseContentDisposition'])
+        file.open.assert_not_called()
+
+    @override_settings(USE_S3=False)
+    def test_asgi_file_and_range_are_streamed_asynchronously(self):
+        with tempfile.TemporaryDirectory() as directory:
+            storage = FileSystemStorage(location=directory)
+            payload = b'0123456789' * 2000
+            name = storage.save('video.mp4', ContentFile(payload))
+            field = SimpleNamespace(name=name, size=len(payload), open=lambda mode: storage.open(name, mode))
+            factory = AsyncRequestFactory()
+
+            async def consume(response):
+                return [chunk async for chunk in response.streaming_content]
+
+            for request, expected in ((factory.get('/asset'), payload),
+                                      (factory.get('/asset', headers={'range': 'bytes=4-8'}), payload[4:9])):
+                response = protected_file_response(request, field)
+                try:
+                    self.assertTrue(response.is_async)
+                    chunks = async_to_sync(consume)(response)
+                    self.assertEqual(b''.join(chunks), expected)
+                    if len(expected) == len(payload):
+                        self.assertGreater(len(chunks), 1)
+                finally:
+                    response.close()
+
+    @override_settings(USE_S3=True)
     def test_waveform_streams_protected_bytes_instead_of_redirecting_to_storage(self):
         file = Mock(name='audio')
         file.name = 'music.wav'
@@ -3858,31 +4159,6 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         command = runner.run.call_args.args[0]
         self.assertIn('trim=start=1.250:end=8.250,setpts=PTS-STARTPTS', command[command.index('-vf') + 1])
         self.assertIn('atrim=start=1.250:end=8.250,asetpts=PTS-STARTPTS', command[command.index('-af') + 1])
-
-    def test_revision_proxy_filters_concatenate_cuts_and_manual_transform(self):
-        revision = SimpleNamespace(
-            source_manifest={'sources': [{
-                'id': 'take-1', 'duration_ms': 10_000, 'metadata': {'render_enabled': True},
-            }]},
-            timeline={'clips': [{
-                'asset_id': 'take-1', 'source_in_ms': 0, 'source_out_ms': 3000,
-            }, {
-                'asset_id': 'take-1', 'source_in_ms': 5000, 'source_out_ms': 10_000,
-            }]},
-            edit_decision_set={'operations': [{
-                'type': 'reframe', 'source_id': 'take-1', 'enabled': True,
-                'metadata': {'manual_transform': {'scale': 1.25, 'x': .2, 'y': -.3}},
-            }]},
-        )
-
-        filters, count = ProjectProxyService._timeline_review_filters(revision, None)
-
-        self.assertEqual(count, 2)
-        self.assertIn('trim=start=0.000:end=3.000', ';'.join(filters))
-        self.assertIn('trim=start=5.000:end=10.000', ';'.join(filters))
-        self.assertIn('crop=trunc(iw/1.25000/2)*2', ';'.join(filters))
-        self.assertIn('concat=n=2:v=1:a=1', ';'.join(filters))
-        self.assertEqual(ProjectProxyService._timeline_review_duration_ms(revision), 8000)
 
     def test_preview_proxy_rejects_delayed_audio_stream(self):
         runner = Mock()
@@ -5132,8 +5408,10 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         commands = [call.args[0] for call in runner.run.call_args_list]
         graphs = [command[command.index('-filter_complex') + 1] for command in commands]
         self.assertTrue(all(command.count('-i') <= 3 for command in commands))
-        self.assertEqual(sum(graph.count('atrim=') for graph in graphs), 10)
-        self.assertNotIn('atrim=', graphs[-1])
+        source_trims = re.findall(r'atrim=start=([\d.]+):end=([\d.]+)', ';'.join(graphs[:4]))
+        self.assertEqual(source_trims, [(f'{start / 1000:.3f}', f'{end / 1000:.3f}') for start, end in intervals])
+        batch_trims = re.findall(r'atrim=start=([\d.]+):end=([\d.]+)', graphs[-1])
+        self.assertEqual(batch_trims, [('0.000', '1.800'), ('0.000', '0.200')])
         first_pass_inputs = [command[index + 1] for command in commands[:4]
                              for index, value in enumerate(command) if value == '-i']
         self.assertEqual(first_pass_inputs, [str(path) for path in paths])
@@ -5202,11 +5480,11 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertEqual(len(unique_jobs), 2)
         self.assertEqual(len(outputs), 2)
         self.assertEqual(indexes, [0, 0, 1])
-        self.assertEqual((unique_jobs[0]['trim_start_ms'], unique_jobs[0]['trim_end_ms']), (120, 590))
-        self.assertEqual((unique_jobs[1]['trim_start_ms'], unique_jobs[1]['trim_end_ms']), (40, 100))
+        self.assertEqual((unique_jobs[0]['trim_start_ms'], unique_jobs[0]['trim_end_ms']), (100, 590))
+        self.assertEqual((unique_jobs[1]['trim_start_ms'], unique_jobs[1]['trim_end_ms']), (0, 100))
         self.assertEqual(
             [(item['source_index'], item['start_ms'], item['end_ms']) for item in translated],
-            [(0, 0, 60), (0, 410, 470), (1, 0, 60)],
+            [(0, 20, 80), (0, 430, 490), (1, 40, 100)],
         )
 
     def test_bounded_normalization_shifts_saved_reframe_plan_to_the_new_clock(self):
@@ -6091,6 +6369,17 @@ class DialogueProcessingUnitTests(SimpleTestCase):
 
 
 class FFmpegRunnerTests(SimpleTestCase):
+    def test_disk_full_message_reports_the_actual_error_before_codec_statistics(self):
+        failure = subprocess.CalledProcessError(1, ['ffmpeg'], stderr=(
+            'av_interleaved_write_frame(): No space left on device\n'
+            + '\n'.join(f'[libx264] statistics {index}' for index in range(20))
+            + '\nConversion failed!\n'
+        ))
+        with patch('website.external_media.ffmpeg_runner.subprocess.run', side_effect=failure):
+            with self.assertRaisesMessage(ExternalMediaError, 'armazenamento temporário') as raised:
+                FFmpegRunner().run(['ffmpeg', '-i', 'input.mp4', 'output.mp4'])
+        self.assertIn('Aumente o espaço disponível', str(raised.exception))
+
     def test_failed_command_includes_a_compact_redacted_diagnostic(self):
         runner = FFmpegRunner()
         failure = subprocess.CalledProcessError(
@@ -6953,7 +7242,7 @@ class AudioNoiseCleanupUnitTests(SimpleTestCase):
         remote = RemoteMediaSource('https://example.test/source.mp4', storage_name='temporary/source.mp4')
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'output.mp4'
-            with patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')):
+            with patch.object(service, '_extract_audio'), patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')):
                 result = service.apply(remote, output, [decision])
 
         self.assertIs(result.path, remote)
@@ -6969,7 +7258,7 @@ class AudioNoiseCleanupUnitTests(SimpleTestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'output.mp4'
             source = Path(directory) / 'source.mp4'
-            with patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')):
+            with patch.object(service, '_extract_audio'), patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')):
                 result = service.apply(source, output, [decision])
 
         self.assertEqual(result.metrics['applied'], 0)
@@ -7066,24 +7355,23 @@ class BrollUnitTests(SimpleTestCase):
         self.assertEqual(PreviewCompositionService._source_to_timeline(5000, cuts), 4000)
         self.assertEqual(PreviewCompositionService._source_to_timeline(8000, cuts), 6500)
 
-    def test_fallback_uses_semantic_cue_and_qr_as_overlay(self):
+    def test_semantic_candidate_can_keep_qr_as_overlay(self):
         asset = SimpleNamespace(
             public_id='00000000-0000-0000-0000-000000000010',
-            media_type='IMAGE', description='QR inscrição conferência',
-            original_filename='inscricao.png', duration_ms=4000,
-            defaults={}, custom_block_id=None,
+            media_type='IMAGE', description='QR inscrição conferência', duration_ms=4000,
+            defaults={}, custom_block_id=None, block_id=1, trim_start_ms=0, trim_end_ms=None,
             block=SimpleNamespace(key='cta'),
         )
-        decision = BrollTimelineService._fallback_decision(
-            asset, {'cta': (10000, 30000)}, [
-                {'start_ms': 11000, 'end_ms': 13000, 'text': 'Bem-vindos ao evento'},
-                {'start_ms': 21000, 'end_ms': 23000, 'text': 'Faça sua inscrição na conferência'},
-            ], {**BrollTimelineService.DEFAULTS}, 0,
+        ranges = {'cta': (10000, 30000)}
+        decisions = BrollTimelineService._select_candidates(
+            [asset], [{'asset_id': asset.public_id, 'allowed_range_ms': ranges['cta']}],
+            [{'start_ms': 21000, 'end_ms': 23000, 'text': 'Faça sua inscrição na conferência'}],
+            {'placements': [{'asset_id': asset.public_id, 'start_ms': 21000, 'end_ms': 25000,
+                             'display_mode': 'OVERLAY', 'confidence': .9}]},
+            ranges, BrollTimelineService.DEFAULTS, [],
         )
-        self.assertEqual(decision['display_mode'], 'OVERLAY')
-        self.assertEqual(decision['start_ms'], 21000)
-        self.assertLessEqual(decision['end_ms'], 30000)
-        self.assertEqual(decision['type'], 'BROLL')
+        self.assertEqual([(item['display_mode'], item['start_ms'], item['end_ms']) for item in decisions],
+                         [('OVERLAY', 21000, 25000)])
 
     def test_renderer_builds_approved_image_overlay_command(self):
         asset = SimpleNamespace(

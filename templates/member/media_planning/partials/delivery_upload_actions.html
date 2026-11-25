@@ -1,0 +1,4 @@
+<div class="delivery-item-actions flex flex-wrap gap-2 mt-3">
+    <label class="org-btn-secondary delivery-action cursor-pointer"><i class="fas fa-upload" aria-hidden="true"></i><span>Enviar arquivo</span><input type="file" data-delivery-upload class="sr-only" aria-label="Enviar arquivo para {{ requirement.label }}" accept="{% if delivery_video %}.mp4,.mov,.webm{% else %}.png,.jpg,.jpeg,.webp,.gif,.pdf,.psd{% endif %}"></label>
+    {% if delivery_video %}<button type="button" class="org-btn-secondary delivery-action" data-delivery-editor><i class="fas fa-film" aria-hidden="true"></i><span>Selecionar projeto do Editor</span></button>{% endif %}
+</div>

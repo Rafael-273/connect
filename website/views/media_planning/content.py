@@ -1,3 +1,5 @@
+from django.db import transaction
+from django.core.exceptions import ValidationError
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -58,6 +60,9 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
         filter_kind = request.GET.get('kind', 'all')
         if filter_kind not in ('all', 'events', 'free'):
             filter_kind = 'all'
+        filter_status = request.GET.get('status', 'open')
+        if filter_status not in ('open', 'completed', 'all'):
+            filter_status = 'open'
         create_mode = request.GET.get('create', '')
         if create_mode not in ('demand', 'event'):
             create_mode = ''
@@ -75,6 +80,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
                 'sidebar_months': sidebar_months,
                 'selected': '',
                 'filter_kind': filter_kind,
+                'filter_status': filter_status,
                 'filter_q': request.GET.get('q', ''),
                 'filter_responsible': request.GET.get('responsible', ''),
                 'filter_team': request.GET.get('team', ''),
@@ -182,7 +188,9 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
             if event_obj:
                 demand_event_title = event_obj.title
 
+        from website.services.content_deliveries import FORMATS
         ctx = {
+            'delivery_format_choices': FORMATS,
             **nav_context,
             **filters,
             'create_mode': create_mode,
@@ -226,6 +234,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
                 for date in detail['event'].dates.all()
             ] if detail_type == 'event' and detail else [],
             'filter_kind': filter_kind,
+            'filter_status': filter_status,
             'filter_q': request.GET.get('q', ''),
             'filter_responsible': request.GET.get('responsible', ''),
             'filter_team': request.GET.get('team', ''),
@@ -430,13 +439,32 @@ class MediaTaskCreateView(MediaLeaderRequiredMixin, View):
 class MediaTaskUpdateView(MediaMemberRequiredMixin, View):
     """Atualiza uma única etapa a partir do painel de detalhes."""
 
+    @transaction.atomic
     def post(self, request, pk):
         task = get_object_or_404(MediaTask, pk=pk)
+        if request.POST.get('status') == 'in_review' and task.status != 'in_review':
+            messages.error(request, 'A etapa entra em revisão após o envio das entregas obrigatórias.')
+            return redirect(content_hub_url(task.content))
+        if task.status == 'in_review' and request.POST.get('status') != 'in_review':
+            messages.error(request, 'Avalie as entregas para alterar o status desta etapa.')
+            return redirect(content_hub_url(task.content))
+        if request.POST.get('status') == 'completed' and task.status != 'completed' and task.delivery_requirements.filter(active=True, required=True).exists():
+            messages.error(request, 'Aprove as entregas para concluir esta etapa.')
+            return redirect(content_hub_url(task.content))
         form = MediaTaskForm(_task_post_with_datetime(request.POST), instance=task, content=task.content)
         if form.is_valid():
-            task = form.save()
-            sync_content_status_from_tasks(task.content)
-            messages.success(request, f'Etapa "{task.title}" atualizada!')
+            try:
+                with transaction.atomic():
+                    task = form.save()
+                    if request.POST.get('delivery_formats_present') == '1':
+                        from website.services.content_deliveries import configure_requirements
+                        configure_requirements(task, request.POST.getlist('delivery_formats'),
+                                               request.POST.get('delivery_other_format', ''))
+                    sync_content_status_from_tasks(task.content)
+            except ValidationError as exc:
+                messages.error(request, ' '.join(exc.messages))
+            else:
+                messages.success(request, f'Etapa "{task.title}" atualizada!')
         else:
             messages.error(request, 'Não foi possível atualizar a etapa. Verifique os campos.')
 
@@ -471,6 +499,7 @@ class MediaTaskDeleteView(MediaLeaderRequiredMixin, View):
 
 
 class MediaTaskUpdateStatusView(MediaMemberRequiredMixin, View):
+    @transaction.atomic
     def post(self, request, pk):
         task = get_object_or_404(MediaTask, pk=pk)
         new_status = request.POST.get('status', '')
@@ -478,6 +507,14 @@ class MediaTaskUpdateStatusView(MediaMemberRequiredMixin, View):
             new_status = 'pending' if task.status == 'completed' else 'completed'
         valid_statuses = [c[0] for c in TASK_STATUS_CHOICES]
         if new_status in valid_statuses:
+            if task.status == 'in_review' or (new_status in ('completed', 'in_review') and task.delivery_requirements.filter(active=True, required=True).exists()):
+                return JsonResponse({'error': 'Avalie as entregas para alterar o status desta etapa.'}, status=400)
+            if new_status == 'completed':
+                from website.services.content_deliveries import assert_complete
+                try:
+                    assert_complete(task)
+                except ValidationError as exc:
+                    return JsonResponse({'error': ' '.join(exc.messages)}, status=400)
             task.status = new_status
             task.save(update_fields=['status', 'update_at'])
             content_status = sync_content_status_from_tasks(task.content)
@@ -501,15 +538,17 @@ class MediaTaskUpdateStatusView(MediaMemberRequiredMixin, View):
 
 class MediaTaskUpdateDescriptionView(MediaMemberRequiredMixin, View):
     def post(self, request, pk):
-        from django.utils.html import linebreaks, urlize
-        from django.utils.safestring import mark_safe
+        from django.utils.html import linebreaks, strip_tags, urlize
 
         task = get_object_or_404(MediaTask, pk=pk)
         description = request.POST.get('description', '').strip()
         task.description = description
         task.save(update_fields=['description', 'update_at'])
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            html = mark_safe(linebreaks(urlize(description))) if description else ''
+            # Descrições legadas podem conter HTML do editor. Nos cards elas
+            # são apenas um resumo textual, portanto nunca exibimos as tags.
+            plain_description = strip_tags(description)
+            html = linebreaks(urlize(plain_description, autoescape=True), autoescape=True) if description else ''
             return JsonResponse({'description': description, 'description_html': html})
         next_url = request.POST.get('next')
         if next_url:
