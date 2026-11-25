@@ -1,3 +1,4 @@
+from website.services.schedule_visibility import member_visible_schedules
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
@@ -140,6 +141,7 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
                 Q(month=now.month, year=now.year) |
                 Q(month=next_month, year=next_year)
             )
+            .filter(pk__in=member_visible_schedules(MonthlySchedule.objects.all()).values('pk'))
             .select_related('ministry')
             .order_by('year', 'month', 'ministry__name', 'title')
         )

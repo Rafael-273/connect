@@ -1,3 +1,5 @@
+from .assistant_guard import AssistedScheduleWriteGuardMixin
+from website.services.schedule_visibility import member_visible_schedules, can_manage_media_schedules
 from collections import OrderedDict
 from datetime import datetime, timedelta, date
 
@@ -184,7 +186,7 @@ class ScheduleCreateView(LoginRequiredMixin, StaffRequiredMixin, View):
         return redirect('schedule_detail', schedule_id=schedule.id)
 
 
-class ScheduleEditView(LoginRequiredMixin, StaffRequiredMixin, View):
+class ScheduleEditView(LoginRequiredMixin, StaffRequiredMixin, AssistedScheduleWriteGuardMixin, View):
     """Edita uma escala existente (mensal ou semanal)."""
 
     def get(self, request, schedule_id):
@@ -379,6 +381,10 @@ def schedule_print_view(request, schedule_id):
     except Http404:
         messages.warning(request, 'A escala solicitada não foi encontrada. Use a lista de escalas para abrir a versão atual.')
         return redirect('schedule_list')
+
+    if not member_visible_schedules(MonthlySchedule.objects.filter(pk=schedule.pk)).exists():
+        if not can_manage_media_schedules(request.user, schedule.ministry):
+            raise Http404
 
     days = ScheduleDay.objects.filter(
         schedule=schedule,

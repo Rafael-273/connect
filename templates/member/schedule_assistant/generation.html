@@ -1,0 +1,28 @@
+<section id="sa-generation" hidden aria-label="Geração e revisão da escala">
+    <div class="sg-controls-panel">
+        <div class="sg-toggle sg-view-toggle" role="group" aria-label="Modo de visualização"><button type="button" data-sg-view="list" aria-pressed="true">Lista</button><button type="button" data-sg-view="calendar" aria-pressed="false">Calendário</button></div>
+        <details class="sg-filter-menu"><summary><i class="fas fa-sliders-h" aria-hidden="true"></i><span>Filtros</span><span id="sg-filter-indicator" class="sg-filter-indicator" role="status" aria-label="Filtros ativos" hidden></span><span class="sg-filter-arrow" aria-hidden="true"></span></summary><div class="sg-filter-panel">
+        <label for="sg-team">Equipe</label>
+        <select id="sg-team"><option value="">Todas as equipes · visão mensal</option></select>
+        <span class="sg-filter-label">Exibir</span><div class="sg-toggle" role="group" aria-label="Filtrar ocorrências"><button type="button" data-sg-filter="all" aria-pressed="true">Todas</button><button type="button" data-sg-filter="pending" aria-pressed="false">Pendências</button></div>
+        </div></details>
+        <button type="button" class="org-btn-primary" id="sg-generate">Gerar sugestões</button>
+    </div>
+    <div id="sg-calendar" class="sg-calendar" hidden></div>
+    <p id="sg-status" class="sr-only" role="status" aria-live="polite"></p>
+    <div id="sg-stale" class="sa-notice" hidden>Os dados usados na geração mudaram. Revise os bloqueios e gere novamente. As sugestões anteriores permanecem identificadas para revisão.</div>
+    <div id="sg-obsolete" class="sa-notice" hidden></div>
+    <div id="sg-results" class="sg-results"></div>
+    <dialog id="sg-edit-dialog" class="sg-edit-dialog" aria-labelledby="sg-edit-title"><div class="sg-dialog-body"><div class="sg-dialog-heading"><div><p id="sg-edit-context"></p><h2 id="sg-edit-title">Editar integrantes</h2></div><button type="button" id="sg-edit-close" aria-label="Fechar">×</button></div><div id="sg-edit-content"></div></div></dialog>
+    <dialog id="sg-publish-dialog" class="sg-publish-dialog" aria-labelledby="sg-publish-title" aria-describedby="sg-publish-message">
+        <form method="dialog" class="sg-publish-content">
+            <div class="sg-publish-heading"><div><span class="sg-publish-eyebrow">REVISÃO FINAL</span><h2 id="sg-publish-title">Criar escala?</h2></div><button type="submit" value="cancel" class="sg-publish-close" aria-label="Fechar">×</button></div>
+            <p id="sg-publish-message"></p>
+            <div class="sg-publish-reports">
+    <details class="sg-metrics"><summary><span class="sg-metrics-icon" aria-hidden="true"><i class="fas fa-users"></i></span><span class="sg-metrics-title"><strong>Distribuição por integrante</strong><small>Veja como as atuações estão distribuídas</small></span><span class="sg-metrics-chevron" aria-hidden="true"></span></summary><div class="sg-metrics-body"><p>Cultos são contados uma vez por pessoa. Atuações incluem cada equipe em que ela participa.</p><div class="sg-table-scroll"><table><thead><tr><th scope="col">Integrante</th><th scope="col">Cultos</th><th scope="col">Atuações</th><th scope="col">Apto a acompanhar</th></tr></thead><tbody id="sg-people"></tbody></table></div></div></details>
+    <details class="sg-metrics"><summary><span class="sg-metrics-icon" aria-hidden="true"><i class="fas fa-calendar-check"></i></span><span class="sg-metrics-title"><strong>Atuações consecutivas</strong><small>Confira a sequência e os critérios da escala</small></span><span class="sg-metrics-chevron" aria-hidden="true"></span></summary><div class="sg-metrics-body"><p>Integrantes escalados em ocorrências consecutivas da mesma equipe:</p><div id="sg-consecutive" class="sg-consecutive"></div><details class="sg-criteria"><summary>Como as sugestões são calculadas</summary><p>O sistema prioriza preencher vagas válidas e equilibrar a distribuição. Também considera acompanhamento, atuações consecutivas, duplas repetidas, treinamento e histórico anterior. Disponibilidade, vínculo e acompanhamento são obrigatórios.</p><div id="sg-solver"></div></details></div></details>
+            </div>
+            <div class="sa-dialog-actions sg-publish-actions"><button type="submit" value="cancel" class="org-btn-secondary">Voltar à revisão</button><button type="submit" value="confirm" class="org-btn-primary">Criar escala</button></div>
+        </form>
+    </dialog>
+</section>

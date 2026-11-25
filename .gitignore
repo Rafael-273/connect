@@ -3,6 +3,7 @@
 __pycache__/
 .vscode/
 /platform/media
+/.private_content_files/
 
 # Static files
 staticfiles/

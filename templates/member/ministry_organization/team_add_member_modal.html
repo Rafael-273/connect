@@ -1,4 +1,16 @@
 {% if can_manage and member_form %}
+<style>
+    .org-team-modal .member-add-select select { padding:.75rem 2.5rem .75rem .875rem !important; font-size:.875rem !important; line-height:1.5; background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right .875rem center; }
+    .org-team-modal .member-activity-heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:.25rem .75rem; }
+    .org-team-modal .member-activity-hint { margin:.25rem 0 .75rem; color:#7b8494; font-size:.75rem; line-height:1.45; }
+    .org-team-modal .member-activity-list { display:grid; gap:.5rem; max-height:13rem; overflow-y:auto; padding:2px; }
+    .org-team-modal .member-activity-option { display:flex; align-items:center; gap:.75rem; padding:.7rem .8rem; border:1px solid #e5e7eb; border-radius:.75rem; background:#fff; color:#273247; font-size:.8125rem; font-weight:600; cursor:pointer; }
+    .org-team-modal .member-activity-option:has(input:checked) { border-color:#e6b9b6; background:#fff8f7; }
+    .org-team-modal .member-activity-option input { width:1.1rem; height:1.1rem; flex:none; accent-color:#c90905; }
+    .org-team-modal .member-activity-icon { display:grid; place-items:center; width:2rem; height:2rem; flex:none; border-radius:.6rem; background:#fff0ef; color:#c90905; }
+    .org-team-modal .member-activity-name { flex:1; min-width:0; overflow-wrap:anywhere; }
+    .org-team-modal .member-activity-empty { color:#7b8494; font-size:.8rem; }
+</style>
 <div id="org-modal-add-member-{{ team.pk }}"
      class="demands-modal org-team-modal{% if add_member_team_id == team.pk or add_member_open %} active{% endif %}"
      role="dialog"
@@ -31,7 +43,7 @@
             </div>
             {% endif %}
 
-            <div class="modal-section">
+            <div class="modal-section member-add-select">
                 <label class="modal-field-label" for="{{ member_form.member.id_for_label }}">Membro</label>
                 {{ member_form.member }}
                 {% if member_form.member.errors %}
@@ -39,13 +51,31 @@
                 {% endif %}
             </div>
 
-            <div class="modal-section">
+            {% if member_form.experience_level %}
+            <div class="modal-section member-add-select">
+                <label class="modal-field-label" for="{{ member_form.experience_level.id_for_label }}">Classificação de experiência</label>
+                {{ member_form.experience_level }}
+                {{ member_form.experience_level.errors }}
+            </div>
+            {% endif %}
+
+            {% if member_form.roles %}<div class="modal-section">
                 <label class="modal-field-label" for="{{ member_form.roles.id_for_label }}">Funções <span style="font-weight:500;color:#9CA3AF;">(opcional)</span></label>
                 {{ member_form.roles }}
                 {% if member_form.roles.errors %}
                 <p class="text-xs text-red-500 mt-1">{{ member_form.roles.errors.0 }}</p>
                 {% endif %}
-            </div>
+            </div>{% endif %}
+            {% if member_form.activities %}<fieldset class="modal-section">
+                <legend class="modal-field-label">Atividades na equipe <span style="font-weight:500;color:#9CA3AF;">(opcional)</span></legend>
+                <p class="member-activity-hint">Todas vêm selecionadas. Desmarque as que não se aplicam a este membro.</p>
+                <div class="member-activity-list">
+                    {% for choice in member_form.activities %}
+                    <label class="member-activity-option"><span class="member-activity-icon" aria-hidden="true"><i class="fas fa-list-check"></i></span><span class="member-activity-name">{{ choice.choice_label }}</span>{{ choice.tag }}</label>
+                    {% empty %}<p class="member-activity-empty">Nenhuma atividade cadastrada nesta equipe.</p>{% endfor %}
+                </div>
+                {{ member_form.activities.errors }}
+            </fieldset>{% endif %}
 
             <div class="demands-modal-footer">
                 <button type="button" class="org-btn-secondary" data-team-modal-close>Cancelar</button>

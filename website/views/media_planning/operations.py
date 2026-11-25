@@ -12,6 +12,7 @@ from website.forms.media_operations import DemandFiltersForm, EventFiltersForm
 from website.forms.media_planning import MediaEventQuickForm
 from website.models import Event, EventDate
 from website.models.event import MediaEventOrganization
+from website.services.event_dates import sync_event_dates
 from website.services.event_media_integration import media_eligible_events
 from website.services.demands_hub import DONE_STATUSES, content_hub_url
 from website.services.media_operations import filtered_demands
@@ -126,11 +127,7 @@ class MediaEventUpdateView(MediaLeaderRequiredMixin, View):
                 update_fields.extend(['end_date', 'end_time'])
             event.save(update_fields=list(dict.fromkeys(update_fields)))
             if should_update_extra_dates:
-                EventDate.objects.filter(event=event).delete()
-                EventDate.objects.bulk_create([
-                    EventDate(event=event, event_date=row['event_date'], event_time=row['event_time'])
-                    for row in extra_dates
-                ])
+                sync_event_dates(event, extra_dates)
         except ValidationError as exc:
             form.add_error(None, ' '.join(exc.messages))
             return self.response(request, event, form, status=400)

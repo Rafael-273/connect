@@ -1,0 +1,10 @@
+{% if is_media_ministry %}
+    {% with activities=membership.activities.all %}
+        {% for activity in activities %}{{ activity.name }}{% if not forloop.last %}, {% endif %}{% empty %}Membro da equipe{% endfor %}
+    {% endwith %}
+    {% with roles=membership.roles.all %}{% if roles %} · Funções anteriores: {% for role in roles %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}{% endwith %}
+{% else %}
+    {% with roles=membership.roles.all %}
+        {% for role in roles %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% empty %}Membro da equipe{% endfor %}
+    {% endwith %}
+{% endif %}

@@ -72,3 +72,11 @@ def media_team_user_map():
     for team_id, user_id in pairs:
         result[str(team_id)].append(str(user_id))
     return result
+
+
+def get_media_membership(member):
+    """Active media participation shared by organization and planning access gates."""
+    return MinistryMembership.objects.filter(
+        member=member, ministry=media_ministry(), ministry__is_active=True,
+        member__is_active=True, is_active=True,
+    ).select_related('ministry').first()

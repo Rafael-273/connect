@@ -1,0 +1,23 @@
+<div class="demands-modal-header-accent">
+    <div class="demands-modal-header">
+        <div class="demands-modal-header-main">
+            <span class="demands-modal-icon" aria-hidden="true"><i class="fas {% if is_service %}fa-calendar-check{% else %}fa-list-check{% endif %}"></i></span>
+            <div>
+                <p class="demands-modal-eyebrow">{{ team.name }}</p>
+                <h2 id="team-default-modal-title" class="demands-modal-title">{% if is_edit %}Editar{% else %}Nova{% endif %} {{ title|lower }}</h2>
+                <p class="demands-modal-subtitle">{% if is_service %}Defina em qual culto a equipe atuará.{% else %}Cadastre uma responsabilidade compartilhada da equipe.{% endif %}</p>
+            </div>
+        </div>
+        <button type="button" class="demands-modal-close" data-team-modal-close aria-label="Fechar"><i class="fas fa-times"></i></button>
+    </div>
+</div>
+<form id="team-default-modal-form" method="post" action="{{ request.path }}" class="demands-modal-form" novalidate>
+    {% csrf_token %}
+    <div class="demands-modal-body space-y-4">
+        {% include 'member/ministry_organization/form_fields.html' %}
+    </div>
+    <div class="demands-modal-footer">
+        <button type="button" class="org-btn-secondary" data-team-modal-close>Cancelar</button>
+        <button type="submit" class="org-btn-primary">Salvar</button>
+    </div>
+</form>

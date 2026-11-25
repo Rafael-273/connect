@@ -199,6 +199,13 @@ textarea {
 {% endblock %}
 
 {% block content %}
+{% if schedule.assistant_state.status == 'draft' %}
+<div class="mx-4 my-4 p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-900">
+    <strong>Rascunho do Assistente de Escalas</strong>
+    <p class="text-sm mt-1">Este planejamento ainda não possui uma escala publicada.</p>
+    <a class="inline-block mt-2 font-bold underline" href="{% url 'media_schedule_assistant' schedule.assistant_state.pk %}">Continuar planejamento na Secretaria da Mídia</a>
+</div>
+{% endif %}
 <div class="flex min-h-screen bg-gray-50">
     {% include 'parciais/admin_sidebar.html' %}
     {% include 'parciais/messages.html' %}
