@@ -15,7 +15,7 @@
     const root = document.getElementById('schedule-assistant');
     if (!root) return;
     let state = JSON.parse(document.getElementById('schedule-assistant-data').textContent);
-    let selected = null, view = 'calendar', queue = Promise.resolve(), timer = null;
+    let selected = null, view = 'list', queue = Promise.resolve(), timer = null;
     let availabilityUI = null, generationUI = null;
     let dirty = false, pending = 0, blocked = false, failed = false, lastFailed = null, leaving = false;
     const $ = id => document.getElementById(id), status = $('sa-save-status');
@@ -98,17 +98,51 @@
         node.setAttribute('aria-pressed', String(selected === item.id));
         const time = dom('time', 'sa-occurrence-time', item.time); time.dateTime = item.date + 'T' + item.time;
         const content = dom('span'); content.append(dom('strong', 'sa-occurrence-name', item.name));
-        const teams = dom('span', 'sa-occurrence-teams'); item.teams.forEach(team => teams.append(teamTag(team)));
-        if (!item.teams.length) teams.append(dom('span', 'sa-team-empty', 'Sem equipes'));
-        content.append(teams);
+        const teams = dom('span', 'sa-occurrence-teams');
+        if (!list) item.teams.forEach(team => teams.append(teamTag(team)));
+        if (!item.teams.length) teams.append(dom('span', 'sa-team-empty', 'Equipe não definida'));
+        if (teams.childElementCount) content.append(teams);
         const activities = [...new Set(item.teams.flatMap(team => team.activities.map(activity => activity.name)))];
         if (activities.length) content.append(dom('span', 'sa-occurrence-activities', activities.join(' · ')));
         if (item.availability_review_required) content.append(dom('span', 'sa-review-tag', 'Revisar'));
         node.append(time, content); return node;
     }
+    function occurrenceTeamSelect(item) {
+        const select = dom('details', 'sa-quick-teams' + (item.teams.length ? ' has-teams' : ''));
+        const summary = dom('summary', '', item.teams.length ? item.teams.map(team => team.name).join(', ') : 'Adicionar equipes');
+        summary.setAttribute('aria-label', `Selecionar equipes para ${item.name}, ${fmtDate(item.date)}, ${item.time}`);
+        select.append(summary);
+        const menu = dom('div', 'sa-quick-menu');
+        menu.append(dom('strong', '', 'Selecione as equipes'));
+        const choices = new Map(state.teams.map(team => [team.id, team]));
+        item.teams.forEach(team => { if (!choices.has(team.team_id)) choices.set(team.team_id, {id: team.team_id, name: team.name}); });
+        choices.forEach(team => {
+            const assigned = item.teams.some(existing => existing.team_id === team.id);
+            const label = dom('label', 'sa-quick-option'), checkbox = dom('input');
+            checkbox.type = 'checkbox'; checkbox.value = team.id; checkbox.checked = assigned;
+            label.append(checkbox, dom('span', '', team.name)); menu.append(label);
+        });
+        if (!choices.size) menu.append(dom('p', '', 'Nenhuma equipe cadastrada.'));
+        const apply = button('Aplicar equipes', 'org-btn-primary', async () => {
+            const chosen = new Set(Array.from(menu.querySelectorAll('input:checked'), input => Number(input.value)));
+            apply.disabled = true;
+            if (!await flush()) { apply.disabled = false; return; }
+            const occurrence = state.occurrences.find(row => row.id === item.id);
+            if (!occurrence) { apply.disabled = false; return; }
+            const teams = occurrence.teams.filter(row => chosen.has(row.team_id)).map(row => ({
+                team_id: row.team_id, member_count: row.member_count, minimum_mentors: row.minimum_mentors,
+                activity_ids: row.activities.map(activity => activity.id), notes: row.notes,
+            }));
+            state.teams.filter(team => chosen.has(team.id) && !occurrence.teams.some(row => row.team_id === team.id)).forEach(team => teams.push({team_id: team.id, member_count: 2, activity_ids: team.activities.map(activity => activity.id), notes: ''}));
+            if (!await send('save_occurrence', {occurrence_id: occurrence.id, name: occurrence.name, date: occurrence.date, time: occurrence.time, notes: occurrence.notes, teams})) apply.disabled = false;
+        });
+        apply.disabled = !choices.size; menu.append(apply); select.append(menu);
+        return select;
+    }
     function renderCalendar() {
         const grid = $('sa-calendar'); grid.replaceChildren();
         const ordered = [...state.occurrences].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+        if (!ordered.some(item => !item.teams.length)) $('sa-teams-required').hidden = true;
         const today = new Intl.DateTimeFormat('en-CA', {timeZone: 'America/Sao_Paulo'}).format(new Date());
         const allDays = calendarDays(state.year, state.month);
         // Keep the calendar visually compact: render only the complete weeks
@@ -121,13 +155,13 @@
             grid.append(cell);
         });
         const agenda = $('sa-agenda-list'); agenda.replaceChildren(); let lastDate;
-        ordered.forEach(item => { if (lastDate !== item.date) { agenda.append(dom('h3', 'sa-list-date', fmtDate(item.date))); lastDate = item.date; } agenda.append(occurrenceButton(item, true)); });
+        ordered.forEach(item => { if (lastDate !== item.date) { agenda.append(dom('h3', 'sa-list-date', fmtDate(item.date))); lastDate = item.date; } const row = dom('div', 'sa-list-row'); row.append(occurrenceButton(item, true), occurrenceTeamSelect(item)); agenda.append(row); });
         if (!ordered.length) agenda.append(dom('p', 'sa-empty', 'Nenhuma ocorrência neste planejamento. Adicione um culto ou evento.'));
         $('sa-summary').textContent = `${ordered.length} ocorrência${ordered.length === 1 ? '' : 's'} · ${new Set(ordered.flatMap(item => item.teams.map(team => team.team_id))).size} equipes`;
         const legend = $('sa-legend'); legend.replaceChildren(); const unique = new Map();
         ordered.forEach(item => item.teams.forEach(team => unique.set(team.team_id, team)));
         unique.forEach(team => { const node = dom('span', 'sa-legend-item'), dot = dom('span', 'sa-dot'); dot.style.backgroundColor = team.color; node.append(dot, dom('span', '', team.name)); legend.append(node); });
-        if (!unique.size) legend.append(dom('span', '', 'Selecione um culto para incluir suas equipes.'));
+        if (!unique.size) legend.append(dom('span', '', 'Selecione as equipes em cada culto ou evento.'));
         const warnings = $('sa-warnings');
         if (warnings) {
             warnings.hidden = !state.warnings.length;
@@ -159,7 +193,7 @@
         const fieldset = dom('fieldset'); fieldset.append(dom('legend', '', 'Atividades compartilhadas'));
         const checks = dom('div', 'sa-team-activities');
         activities.forEach(activity => { const label = dom('label', 'sa-check-label'), check = dom('input'); check.type = 'checkbox'; check.value = activity.id; check.dataset.activity = ''; check.checked = team.activities.some(item => item.id === activity.id); label.append(check, dom('span', '', activity.name)); checks.append(label); });
-        if (!activities.size) checks.append(dom('span', '', 'Nenhuma atividade cadastrada para esta equipe.'));
+        if (!activities.size) checks.append(dom('span', 'sa-team-muted', 'Nenhuma atividade cadastrada.'));
         fieldset.append(checks); card.append(fieldset);
         const note = dom('label', 'sa-stack', 'Observações da equipe'), area = dom('textarea'); area.rows = 2; area.maxLength = 5000; area.dataset.teamNotes = ''; area.value = team.notes; note.append(area); card.append(note); return card;
     }
@@ -182,16 +216,18 @@
     function renderEditor() {
         const occurrence = current(), editor = $('sa-editor'); if (!occurrence) return; editor.replaceChildren();
         const heading = dom('header', 'sa-editor-head'), title = dom('h3', '', occurrence.name); title.id = 'sa-editor-heading'; title.tabIndex = -1;
-        const headingCopy = dom('div'); headingCopy.append(title, dom('p', '', occurrence.source_label ? 'Agenda: ' + occurrence.source_label : 'Ocorrência adicional · somente neste planejamento'));
+        const headingCopy = dom('div'); headingCopy.append(dom('span', 'sa-editor-eyebrow', 'DETALHES DA OCORRÊNCIA'), title, dom('p', '', occurrence.source_label ? 'Agenda: ' + occurrence.source_label : 'Ocorrência adicional · somente neste planejamento'));
         const close = button('×', 'sa-editor-close', closeEditor); close.setAttribute('aria-label', 'Fechar detalhes da ocorrência');
         heading.append(headingCopy, close); editor.append(heading);
         const form = dom('form', 'sa-editor-form'); form.id = 'sa-editor-form'; form.dataset.occurrenceId = occurrence.id;
-        form.addEventListener('submit', event => { event.preventDefault(); flush(); }); form.append(field('Nome da ocorrência', 'name', occurrence.name));
-        const pair = dom('div', 'sa-form-pair'); pair.append(field('Data', 'date', occurrence.date, 'date'), field('Horário', 'time', occurrence.time, 'time')); form.append(pair, field('Observações da ocorrência', 'notes', occurrence.notes, 'textarea'));
-        const teams = dom('section', 'sa-stack sa-teams'); teams.append(dom('h3', '', 'Equipes neste culto'));
-        const cards = dom('div', 'sa-stack'); cards.id = 'sa-team-cards'; occurrence.teams.forEach(team => cards.append(teamCard(team))); teams.append(cards);
+        form.addEventListener('submit', event => { event.preventDefault(); flush(); });
+        const details = dom('section', 'sa-editor-section sa-stack');
+        const detailsHeading = dom('div', 'sa-section-heading'); detailsHeading.append(dom('h3', '', 'Informações gerais'), dom('span', '', 'Alterações salvas automaticamente')); details.append(detailsHeading, field('Nome da ocorrência', 'name', occurrence.name));
+        const pair = dom('div', 'sa-form-pair'); pair.append(field('Data', 'date', occurrence.date, 'date'), field('Horário', 'time', occurrence.time, 'time')); details.append(pair, field('Observações da ocorrência', 'notes', occurrence.notes, 'textarea')); form.append(details);
+        const teams = dom('section', 'sa-editor-section sa-stack sa-teams'); const teamHeading = dom('div', 'sa-section-heading'); teamHeading.append(dom('h3', '', 'Equipes'), dom('span', '', 'Defina a composição de cada equipe')); teams.append(teamHeading);
+        const cards = dom('div', 'sa-team-grid'); cards.id = 'sa-team-cards'; occurrence.teams.forEach(team => cards.append(teamCard(team))); teams.append(cards);
         const add = dom('div', 'sa-add-team'), select = dom('select'); select.id = 'sa-add-team-select'; select.setAttribute('aria-label', 'Equipe para adicionar');
-        add.append(select, button('+', '', () => { const team = state.teams.find(item => item.id === Number(select.value)); if (!team) return; cards.append(teamCard({team_id: team.id, name: team.name, color: team.color, member_count: 2, activities: team.activities, notes: ''})); refreshAddTeams(); scheduleSave(); }));
+        add.append(select, button('+ Adicionar', '', () => { const team = state.teams.find(item => item.id === Number(select.value)); if (!team) return; cards.append(teamCard({team_id: team.id, name: team.name, color: team.color, member_count: 2, activities: team.activities, notes: ''})); refreshAddTeams(); scheduleSave(); }));
         add.lastChild.setAttribute('aria-label', 'Adicionar equipe selecionada'); teams.append(add); form.append(teams);
         const batch = dom('details', 'sa-batch'); batch.append(dom('summary', '', 'Aplicar equipes em outras datas'), dom('p', '', 'A composição, as quantidades, atividades e observações das equipes substituirão as equipes das ocorrências selecionadas. Datas e horários serão mantidos.'));
         const choices = dom('div', 'sa-batch-list');
@@ -212,6 +248,14 @@
     }
     async function navigate(step) {
         if (!await flush()) return;
+        const missing = state.occurrences.filter(item => !item.teams.length);
+        if (step > 1 && missing.length) {
+            const notice = $('sa-teams-required');
+            notice.textContent = `Selecione pelo menos uma equipe em cada culto ou evento para avançar. ${missing.length} ${missing.length === 1 ? 'ocorrência ainda está sem equipe' : 'ocorrências ainda estão sem equipe'}.`;
+            notice.hidden = false; notice.scrollIntoView({behavior: 'smooth', block: 'center'});
+            return;
+        }
+        $('sa-teams-required').hidden = true;
         if (step === 3 && state.availability.summary.warnings.length && !window.confirm('Há pendências de disponibilidade ou acompanhamento no resumo. Deseja prosseguir mantendo esses avisos? Nenhuma disponibilidade desconhecida será confirmada.')) return;
         await send('navigate', {step});
     }
@@ -222,28 +266,65 @@
     $('sa-editor-dialog').addEventListener('cancel', event => { event.preventDefault(); closeEditor(); });
     $('sa-add').addEventListener('click', async () => {
         if (!await flush()) return;
-        const select = $('sa-source'); select.replaceChildren(); const option = dom('option', '', 'Selecione uma ocorrência da agenda'); option.value = ''; select.append(option);
-        const included = new Set(state.occurrences.map(item => item.source_key));
-        state.sources.forEach(item => { const node = dom('option', '', item.label + (included.has(item.key) ? ' · Já incluída' : '')); node.value = item.key; node.disabled = included.has(item.key); select.append(node); });
         const events = $('sa-manual-event'); events.replaceChildren();
+        $('sa-event-dates-wrap').hidden = true;
         const unlinked = dom('option', '', 'Somente neste planejamento'); unlinked.value = ''; events.append(unlinked);
         state.events.forEach(item => { const option = dom('option', '', item.label); option.value = item.id; events.append(option); });
         dateBounds($('sa-manual-date')); $('sa-add-dialog').showModal();
     });
+    $('sa-manual-event').addEventListener('change', event => {
+        const selectedEvent = state.events.find(item => String(item.id) === event.target.value);
+        const dates = $('sa-event-dates'); dates.replaceChildren();
+        $('sa-event-dates-wrap').hidden = !selectedEvent || selectedEvent.dates.length < 2;
+        if (!selectedEvent) return;
+        selectedEvent.dates.forEach((item, index) => {
+            const option = dom('option', '', `${item.date.split('-').reverse().join('/')} · ${item.time}`);
+            option.value = String(index); dates.append(option);
+        });
+        $('sa-manual-name').value = selectedEvent.label;
+        $('sa-manual-date').value = selectedEvent.date || '';
+        $('sa-manual-time').value = selectedEvent.time || '';
+    });
+    $('sa-event-dates').addEventListener('change', event => {
+        const selectedEvent = state.events.find(item => String(item.id) === $('sa-manual-event').value);
+        const date = selectedEvent?.dates[Number(event.target.value)];
+        if (date) { $('sa-manual-date').value = date.date; $('sa-manual-time').value = date.time; }
+    });
+    $('sa-add-date').addEventListener('click', () => {
+        const list = $('sa-extra-dates');
+        if (list.children.length >= 30) return;
+        const row = dom('div', 'sa-stack');
+        const pair = dom('div', 'sa-form-pair');
+        for (const [type, labelText] of [['date', 'Data'], ['time', 'Horário']]) {
+            const field = dom('div');
+            const label = dom('label', '', labelText);
+            const input = dom('input'); input.type = type; input.required = true;
+            input.setAttribute('aria-label', labelText + ' adicional');
+            if (type === 'date') dateBounds(input);
+            else input.value = $('sa-manual-time').value;
+            field.append(label, input); pair.append(field);
+        }
+        const remove = button('Remover data', 'sa-text-button', () => row.remove());
+        row.append(pair, remove); list.append(row);
+    });
     async function submitAdd(form, action, payload, predicate) {
         const buttons = $('sa-add-dialog').querySelectorAll('button[type=submit]'); buttons.forEach(node => { node.disabled = true; });
-        try { if (await send(action, payload)) { $('sa-add-dialog').close(); form.reset(); const item = state.occurrences.find(predicate); if (item) await selectOccurrence(item.id); } }
+        try { if (await send(action, payload)) { $('sa-add-dialog').close(); form.reset(); $('sa-extra-dates').replaceChildren(); const item = state.occurrences.find(predicate); if (item) await selectOccurrence(item.id); } }
         finally { buttons.forEach(node => { node.disabled = false; }); }
     }
-    $('sa-source-form').addEventListener('submit', event => { event.preventDefault(); const key = $('sa-source').value; submitAdd(event.currentTarget, 'add_source', {source_key: key}, item => item.source_key === key); });
-    $('sa-manual-form').addEventListener('submit', event => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget)); submitAdd(event.currentTarget, 'add_manual', data, item => item.date === data.date && item.time === data.time && item.name === data.name); });
+    $('sa-manual-form').addEventListener('submit', event => {
+        event.preventDefault();
+        const data = Object.fromEntries(new FormData(event.currentTarget));
+        data.dates = [{date: data.date, time: data.time}, ...Array.from($('sa-extra-dates').children, row => ({date: row.querySelector('input[type=date]').value, time: row.querySelector('input[type=time]').value}))];
+        submitAdd(event.currentTarget, 'add_manual', data, item => item.date === data.date && item.time === data.time && item.name === data.name);
+    });
     $('sa-discard').addEventListener('click', () => { if (!blocked && !failed) { clearTimeout(timer); $('sa-discard-dialog').showModal(); } });
     $('sa-discard-dialog').addEventListener('close', () => { if (dirty && !leaving) scheduleSave(); });
     $('sa-confirm-discard').addEventListener('click', async () => { clearTimeout(timer); dirty = false; $('sa-confirm-discard').disabled = true; if (!await send('discard', {confirmed: true})) { $('sa-confirm-discard').disabled = false; $('sa-discard-dialog').close(); } });
     $('sa-reload').addEventListener('click', () => { if (window.confirm('Recarregar o rascunho? Alterações locais ainda não salvas serão descartadas.')) { leaving = true; window.location.reload(); } });
     $('sa-retry').addEventListener('click', async () => { failed = false; if (!lastFailed) return; const retry = lastFailed; if (retry.action === 'save_occurrence') { dirty = true; await flush(); } else if (retry.action === 'save_availability') await availabilityUI.retrySave(retry.payload); else if (retry.action === 'clear_availability') { if (await send(retry.action, retry.payload)) availabilityUI.cleared(retry.payload); } else await send(retry.action, retry.payload); });
     window.addEventListener('beforeunload', event => { if (!leaving && (dirty || availabilityUI?.isDirty() || generationUI?.isDirty() || pending || failed)) { event.preventDefault(); event.returnValue = ''; } });
-    availabilityUI = window.ScheduleAvailabilityUI.create({getState: () => state, onSave: payload => send('save_availability', payload), onClear: payload => send('clear_availability', payload), onDirty: updateStatus});
+    availabilityUI = window.ScheduleAvailabilityUI.create({getState: () => state, onSave: payload => send('save_availability', payload), onClear: payload => send('clear_availability', payload), onDirty: updateStatus, goToPlanning: () => navigate(1)});
     generationUI = window.ScheduleGenerationUI.create({getState: () => state, onDirty: updateStatus,
         onSave: payload => send('set_assignments', payload),
         onRemoveObsolete: assignment_id => send('remove_obsolete_assignment', {assignment_id}),

@@ -26,6 +26,17 @@
                 </label>
                 {% endfor %}
             </div>
+        {% elif field.name == 'activities' %}
+            <div class="regular-service-options" role="group" aria-label="{{ field.label }}">
+                {% for choice in field %}
+                <label class="regular-service-option">
+                    {{ choice.tag }}
+                    <span class="regular-service-icon" aria-hidden="true"><i class="fas fa-list-check"></i></span>
+                    <span class="regular-service-copy"><strong>{{ choice.choice_label }}</strong></span>
+                    <span class="regular-service-check" aria-hidden="true"><i class="fas fa-check"></i></span>
+                </label>
+                {% empty %}<p class="text-sm text-gray-500">Cadastre uma atividade para vincular a esta atuação.</p>{% endfor %}
+            </div>
         {% else %}
             {{ field }}
         {% endif %}

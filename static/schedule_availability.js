@@ -27,9 +27,10 @@
         constructor(options) {
             this.options = options; this.state = options.getState(); this.teamId = null; this.memberId = null;
             this.dirty = false; this.busy = false; this.blocked = false; this.mode = ''; this.selection = new Set(); this.saving = null;
-            $('av-team').addEventListener('change', () => {
+            $('av-team').addEventListener('change', async () => {
                 const requested = Number($('av-team').value);
-                if (!this.canLeave()) { $('av-team').value = this.teamId; return; }
+                $('av-team').value = this.teamId;
+                if (!await this.canLeave()) return;
                 this.teamId = requested; this.memberId = null; this.render(this.state);
             });
             $('av-search').addEventListener('input', () => this.renderRoster());
@@ -38,16 +39,30 @@
             $('av-notes').addEventListener('input', () => this.markDirty());
             $('av-confirm-review').addEventListener('change', () => this.markDirty());
             $('av-clear').addEventListener('click', () => this.clear());
-            this.closeDialog = () => { if (this.canLeave()) $('av-editor-dialog').close(); };
+            $('av-go-planning').addEventListener('click', async () => {
+                if (!await this.canLeave()) return;
+                $('av-editor-dialog').close();
+                this.options.goToPlanning();
+            });
+            this.closeDialog = async () => { if (await this.canLeave()) $('av-editor-dialog').close(); };
             $('av-close-dialog').addEventListener('click', this.closeDialog);
             $('av-editor-dialog').addEventListener('cancel', event => { event.preventDefault(); this.closeDialog(); });
             this.render(this.state);
         }
         isDirty() { return this.dirty; }
         markDirty() { this.dirty = true; $('av-feedback').textContent = 'Alterações ainda não salvas'; this.renderPreview(); this.options.onDirty(); }
-        canLeave() {
+        async canLeave() {
             if (this.busy || this.blocked) return false;
-            if (this.dirty && !window.confirm('Há alterações de disponibilidade ainda não salvas. Deseja descartá-las para trocar de integrante ou equipe?')) return false;
+            if (this.dirty) {
+                const dialog = $('av-discard-dialog');
+                if (dialog.open) return false;
+                dialog.returnValue = '';
+                const confirmed = await new Promise(resolve => {
+                    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'discard'), {once: true});
+                    dialog.showModal();
+                });
+                if (!confirmed) return false;
+            }
             this.dirty = false; this.options.onDirty(); return true;
         }
         person() { return this.state.availability.roster.find(item => item.team_id === this.teamId && item.member_id === this.memberId); }
@@ -76,8 +91,8 @@
             const container = $('av-members'); container.replaceChildren();
             $('av-roster-count').textContent = `${members.length} integrante${members.length === 1 ? '' : 's'} encontrado${members.length === 1 ? '' : 's'}`;
             members.forEach(person => {
-                const button = action('', () => {
-                    if (!this.canLeave()) return;
+                const button = action('', async () => {
+                    if (!await this.canLeave()) return;
                     this.memberId = person.member_id; this.renderRoster(); this.loadPerson();
                     const dialog = $('av-editor-dialog'); if (!dialog.open) dialog.showModal();
                     $('av-person-name').tabIndex = -1; $('av-person-name').focus({preventScroll: true});
@@ -104,7 +119,10 @@
             $('av-review').hidden = !person.needs_review; $('av-confirm-review').checked = false;
             $('av-notes').value = person.record?.notes || ''; $('av-clear').hidden = !person.record;
             $('av-feedback').textContent = person.record ? 'Informação salva para este mês e esta equipe' : 'Selecione um modo para registrar a informação';
-            $('av-save').disabled = !this.occurrences().length;
+            const hasOccurrences = this.occurrences().length > 0;
+            $('av-no-occurrences').hidden = hasOccurrences;
+            $('av-availability-fields').hidden = !hasOccurrences;
+            $('av-save').disabled = !hasOccurrences;
             $('av-removed').hidden = !person.removed_selections.length;
             $('av-removed').textContent = person.removed_selections.length ? 'Seleções originais fora do planejamento atual, preservadas: ' + person.removed_selections.map(item => `${item.date.slice(8)}/${item.date.slice(5, 7)} às ${item.time} · ${item.name}`).join('; ') + '.' : '';
             this.renderDates(); this.renderPreview();
@@ -114,8 +132,10 @@
             const focused = document.activeElement?.id;
             const occurrences = this.occurrences(), container = $('av-dates'); container.replaceChildren();
             const selectable = this.mode === 'only' || this.mode === 'except';
-            $('av-selection-help').textContent = this.mode === 'only' ? 'Marque as ocorrências em que a pessoa pode servir. As demais serão confirmadas como indisponíveis.' : this.mode === 'except' ? 'Marque as exceções: as ocorrências em que a pessoa não pode servir.' : this.mode === 'all' ? 'Todas as ocorrências atuais serão confirmadas como disponíveis ao salvar.' : 'Escolha um modo. Até salvar, a disponibilidade continua não informada.';
+            $('av-dates-heading').textContent = this.mode === 'only' ? 'Marque quando pode servir' : this.mode === 'except' ? 'Marque quando não pode servir' : 'Datas da equipe neste mês';
+            $('av-selection-help').textContent = this.mode === 'only' ? 'Selecione as datas ou horários informados. Os demais serão registrados como indisponíveis.' : this.mode === 'except' ? 'Selecione apenas as datas ou horários em que a pessoa não pode servir.' : this.mode === 'all' ? 'Todas as datas abaixo serão registradas como disponíveis.' : 'Escolha uma opção acima para informar a disponibilidade.';
             const shortcuts = $('av-shortcuts'); shortcuts.replaceChildren();
+            shortcuts.hidden = !selectable;
             const setSelection = ids => { ids.forEach(id => this.selection.add(id)); this.markDirty(); this.renderDates(); };
             const all = action('Selecionar todas', () => setSelection(occurrences.map(item => item.id)));
             const none = action('Limpar seleção', () => { this.selection.clear(); this.markDirty(); this.renderDates(); });
@@ -126,13 +146,13 @@
             groups.forEach((items, date) => {
                 const card = node('section', 'av-date-card'); const heading = node('label', 'av-date-heading');
                 const day = node('input'); day.id = 'av-day-' + date; day.type = 'checkbox'; day.disabled = !selectable;
-                day.checked = items.every(item => this.selection.has(item.id)); day.indeterminate = !day.checked && items.some(item => this.selection.has(item.id));
+                day.checked = this.mode === 'all' || items.every(item => this.selection.has(item.id)); day.indeterminate = !day.checked && items.some(item => this.selection.has(item.id));
                 day.addEventListener('change', () => { items.forEach(item => { if (day.checked) this.selection.add(item.id); else this.selection.delete(item.id); }); this.markDirty(); this.renderDates(); });
                 heading.append(day, node('strong', '', dateLabel(date))); card.append(heading);
                 items.forEach(item => {
                     const original = person.occurrences.find(cell => cell.occurrence_id === item.id)?.status || 'unknown';
                     const status = this.dirty ? proposedStatus(this.mode, [...this.selection], item.id) : original;
-                    const label = node('label', 'av-occurrence av-' + status); const input = node('input'); input.id = 'av-occurrence-' + item.id; input.type = 'checkbox'; input.checked = this.selection.has(item.id); input.disabled = !selectable;
+                    const label = node('label', 'av-occurrence av-' + status); const input = node('input'); input.id = 'av-occurrence-' + item.id; input.type = 'checkbox'; input.checked = this.mode === 'all' || this.selection.has(item.id); input.disabled = !selectable;
                     input.addEventListener('change', () => { if (input.checked) this.selection.add(item.id); else this.selection.delete(item.id); this.markDirty(); this.renderDates(); });
                     const text = node('span'); text.append(node('strong', '', item.time + ' · ' + item.name));
                     if (original === 'unknown' && person.record) text.append(node('small', 'av-muted', 'Ocorrência ou horário a revisar'));

@@ -247,11 +247,33 @@ def serialize(state):
     from .schedule_generation import serialize_generation
     generation = serialize_generation(state)
     review_ids = set(availability['review_occurrence_ids'])
-    sources, warnings = agenda_occurrences(state.period)
-    sources = [row for row in sources if not _is_standard_regular_agenda_row(row)]
+    agenda_sources, warnings = agenda_occurrences(state.period)
+    sources = [row for row in agenda_sources if not _is_standard_regular_agenda_row(row)]
     occurrences = ScheduleOccurrence.objects.filter(schedule_day__schedule=state.schedule).select_related(
         'schedule_day',
     ).prefetch_related('team_plans')
+    included_event_ids = {occurrence.source_event_id for occurrence in occurrences if occurrence.source_event_id}
+    included_keys = {occurrence.source_key for occurrence in occurrences}
+    included_dates = {(occurrence.source_event_id, occurrence.schedule_day.date.isoformat(),
+                       occurrence.start_time.strftime('%H:%M')) for occurrence in occurrences if occurrence.source_event_id}
+    event_sources = {}
+    for row in agenda_sources:
+        event_sources.setdefault(row['event_id'], []).append(row)
+    event_options = []
+    for event in Event.objects.order_by('title', 'pk'):
+        rows = event_sources.get(event.pk, [])
+        available = [row for row in rows if row['key'] not in included_keys and
+                     (event.pk, row['date'], row['time']) not in included_dates]
+        if (rows and not available) or (not rows and event.pk in included_event_ids):
+            continue
+        date = event.event_date.isoformat() if (event.event_date.year, event.event_date.month) == (state.period.year, state.period.month) else ''
+        time = event.event_time.strftime('%H:%M') if event.event_time else ''
+        event_options.append({
+            'id': event.pk, 'label': event.title,
+            'date': available[0]['date'] if available else date,
+            'time': available[0]['time'] if available else time,
+            'dates': [{'date': row['date'], 'time': row['time']} for row in available],
+        })
     return {
         'id': state.pk, 'schedule_id': state.schedule_id, 'year': state.period.year,
         'month': state.period.month, 'period_label': f'{MONTHS[state.period.month]} de {state.period.year}',
@@ -259,7 +281,7 @@ def serialize(state):
         'updated_at': timezone.localtime(state.update_at).isoformat(),
         'availability_review': state.availability_review, 'availability': availability, 'generation': generation,
         'sources': sources, 'warnings': warnings, 'teams': catalog(state),
-        'events': [{'id': event.pk, 'label': event.title} for event in Event.objects.order_by('title', 'pk')],
+        'events': event_options,
         'occurrences': [
             {'id': occurrence.pk, 'date': occurrence.schedule_day.date.isoformat(),
              'time': occurrence.start_time.strftime('%H:%M'), 'name': occurrence.name,
@@ -395,7 +417,16 @@ def mutate(state_id, ministry, user, payload):
         from .schedule_availability import clear_availability
         clear_availability(state, payload)
     elif action == 'navigate':
-        state.current_step = integer(payload.get('step'), 'Etapa', 1, 3)
+        step = integer(payload.get('step'), 'Etapa', 1, 3)
+        if step > 1:
+            from django.db.models import Exists, OuterRef
+            team_plans = ScheduleOccurrenceTeam.objects.filter(occurrence_id=OuterRef('pk'))
+            missing = ScheduleOccurrence.objects.filter(schedule_day__schedule=schedule).annotate(
+                has_team=Exists(team_plans),
+            ).filter(has_team=False).count()
+            if missing:
+                raise ValidationError(f'Defina pelo menos uma equipe em cada ocorrência antes de avançar. Faltam {missing}.')
+        state.current_step = step
     elif action == 'add_source':
         sources, _ = agenda_occurrences(state.period)
         row = next((item for item in sources if item['key'] == payload.get('source_key')), None)
@@ -406,16 +437,21 @@ def mutate(state_id, ministry, user, payload):
         if not exists:
             _review(state, occurrence, 'Ocorrência adicionada ou restaurada.')
     elif action == 'add_manual':
-        date, time = _date_time(state, payload)
+        date_items = payload.get('dates', [payload])
+        if not isinstance(date_items, list) or not 1 <= len(date_items) <= 31 or not all(isinstance(item, dict) for item in date_items):
+            raise ValidationError('Informe de 1 a 31 datas e horários.')
+        date_times = [_date_time(state, item) for item in date_items]
         name = text(payload.get('name', ''), 'Nome', 255, True)
         notes = text(payload.get('notes', ''), 'Observações', 5000)
-        occurrence = ScheduleOccurrence.objects.filter(
-            schedule_day__schedule=schedule, schedule_day__date=date, start_time=time, name=name,
-        ).first()
-        if occurrence is None:
-            event_id = payload.get('event_id')
-            if event_id:
-                event = get_object_or_404(Event, pk=parse_identifier(event_id, 'Evento'))
+        event_id = payload.get('event_id')
+        event = get_object_or_404(Event, pk=parse_identifier(event_id, 'Evento')) if event_id else None
+        for date, time in date_times:
+            occurrence = ScheduleOccurrence.objects.filter(
+                schedule_day__schedule=schedule, schedule_day__date=date, start_time=time, name=name,
+            ).first()
+            if occurrence is not None:
+                continue
+            if event:
                 occurrence = _import(state, {
                     'key': f'manual:{uuid.uuid4()}', 'event_id': event.pk, 'event_date_id': None,
                     'date': date.isoformat(), 'time': time.isoformat(), 'name': name,

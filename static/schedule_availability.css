@@ -13,6 +13,8 @@
 .av-person { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; padding-bottom: 18px; border-bottom: 1px solid #eceef4; margin-bottom: 20px; }
 .av-person-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .av-person h3 { font-size: 21px; letter-spacing: -.4px; }
+.av-no-occurrences { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 20px; border: 1px solid #eedfca; border-radius: 12px; background: #fffbf5; }
+.av-no-occurrences p { color: #687084; line-height: 1.5; }
 .av-badge { font-size: 10px; font-weight: 700; border: 1px solid currentColor; border-radius: 20px; padding: 5px 10px; white-space: nowrap; }
 .av-available { color: #15805a; }
 .av-unavailable { color: #b73d45; }

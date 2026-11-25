@@ -69,8 +69,8 @@
         display: grid; place-items: center; flex: 0 0 auto; width: 2.5rem; height: 2.5rem;
         border-radius: .75rem; background: rgba(201, 9, 5, .08); color: #C90905;
     }
-    .team-service-time { width: 3.25rem; flex-direction: column; gap: .05rem; font-size: .65rem; font-weight: 800; line-height: 1.1; }
-    .team-service-time i { font-size: .75rem; }
+    .team-service-time { width: 2.75rem; height: 2.75rem; border: 1px solid rgba(201, 9, 5, .09); }
+    .team-service-time i { font-size: 1rem; }
     .team-default-copy { min-width: 0; flex: 1; }
     .team-default-copy strong { display: block; color: #111827; font-size: .9rem; line-height: 1.25; }
     .team-default-copy p { margin: .2rem 0 0; color: #6b7280; font-size: .75rem; line-height: 1.35; }
@@ -121,6 +121,21 @@
     .team-member-info {
         min-width: 0;
         flex: 1;
+    }
+
+    .team-member-classification { flex: 0 0 17rem; max-width: 100%; }
+    .ministry-organization .team-member-classification select {
+        width: 100%;
+        min-width: 0;
+        height: auto;
+        min-height: 2.875rem;
+        padding: .625rem 2.5rem .625rem .875rem !important;
+        font-size: .8125rem !important;
+        line-height: 1.5;
+        background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right .8rem center;
+    }
+    @media (max-width: 520px) {
+        .team-member-classification { flex: 1 1 100%; order: 3; }
     }
 
     .team-member-name {
@@ -466,17 +481,11 @@
                         <p class="team-member-name">{{ membership.member.name }}</p>
                         {% if is_media_ministry %}<p class="text-xs text-gray-600">{{ membership.get_experience_level_display }}</p>{% endif %}
                         <p class="team-member-roles">
-                            {% with roles=membership.roles.all %}
-                            {% if roles %}
-                                {% for role in roles %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
-                            {% else %}
-                                Membro da equipe
-                            {% endif %}
-                            {% endwith %}
+                            {% include 'member/ministry_organization/member_assignments.html' %}
                         </p>
                     </div>
                     {% if is_media_ministry and can_manage %}
-                    <form method="post" action="{% url 'media_team_experience_edit' ministry.pk team.pk membership.pk %}" class="flex flex-wrap">
+                    <form method="post" action="{% url 'media_team_experience_edit' ministry.pk team.pk membership.pk %}" class="team-member-classification">
                         {% csrf_token %}
                         <select name="experience_level" aria-label="Classificação de {{ membership.member.name }}" class="form-input text-xs" onchange="this.form.submit()">
                         {% for value, label in experience_choices %}<option value="{{ value }}" {% if membership.experience_level == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
@@ -485,7 +494,7 @@
                     {% endif %}
                     {% if can_manage %}
                     <div class="team-member-actions">
-                        <a href="{% url 'ministry_team_member_edit' ministry.pk team.pk membership.pk %}" class="team-panel-action" aria-label="Editar membro" title="Editar">
+                        <a href="{% url 'ministry_team_member_edit' ministry.pk team.pk membership.pk %}" data-team-default-modal data-modal-url="{% url 'ministry_team_member_edit' ministry.pk team.pk membership.pk %}" class="team-panel-action" aria-label="Editar membro" title="Editar">
                             <i class="fas fa-pen" aria-hidden="true"></i>
                         </a>
                         <form method="post" action="{% url 'ministry_team_member_remove' ministry.pk team.pk membership.pk %}"
@@ -549,6 +558,7 @@
 {% block org_modals %}
 {% if can_manage and add_member_form %}
 {% include 'member/ministry_organization/team_add_member_modal.html' with member_form=add_member_form return_to='detail' add_member_open=add_member_open %}
+{% if not is_media_ministry %}<div id="team-default-modal" class="org-team-modal demands-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="team-default-modal-title"><div class="demands-modal-backdrop" data-team-modal-close></div><div class="demands-modal-card"><div id="team-default-modal-content"></div></div></div>{% endif %}
 {% endif %}
 <script>
 (function () {

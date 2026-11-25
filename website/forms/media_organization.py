@@ -304,10 +304,11 @@ class MediaRoleForm(forms.ModelForm):
 class MediaSubTeamMembershipForm(forms.ModelForm):
     class Meta:
         model = MediaSubTeamMembership
-        fields = ['member', 'experience_level', 'roles', 'responsibilities', 'is_active']
+        fields = ['member', 'experience_level', 'roles', 'activities', 'responsibilities', 'is_active']
         widgets = {
             'member': forms.Select(attrs={'class': _SELECT}),
             'roles': forms.SelectMultiple(attrs={'class': _SELECT, 'size': 5}),
+            'activities': forms.CheckboxSelectMultiple,
             'responsibilities': forms.Textarea(attrs={'class': _TEXTAREA, 'rows': 3}),
             'is_active': forms.CheckboxInput(attrs={'class': 'rounded'}),
         }
@@ -319,8 +320,16 @@ class MediaSubTeamMembershipForm(forms.ModelForm):
         if sub_team and (sub_team.ministry.code == 'midia_externa' or (sub_team.ministry.name.casefold() == 'mídia externa' and sub_team.ministry == media_ministry())):
             self.fields['experience_level'].required = False
             self.fields['experience_level'].widget.attrs['class'] = _SELECT
+            self.fields.pop('roles')
+            from website.models import MediaTeamActivity
+            from django.db.models import Q
+            existing = self.instance.activities.values_list('pk', flat=True) if self.instance.pk else []
+            self.fields['activities'].queryset = MediaTeamActivity.objects.filter(sub_team=sub_team).filter(Q(is_active=True) | Q(pk__in=existing))
+            if not self.instance.pk and not self.is_bound:
+                self.initial['activities'] = list(self.fields['activities'].queryset.values_list('pk', flat=True))
         else:
             self.fields.pop('experience_level', None)
+            self.fields.pop('activities')
         if self.instance.pk:
             self.fields['member'].disabled = True
         elif not self.is_bound:
@@ -329,7 +338,8 @@ class MediaSubTeamMembershipForm(forms.ModelForm):
         roles_qs = scoped_roles(sub_team.ministry) if sub_team else MediaRole.objects.none()
         if sub_team:
             roles_qs = roles_qs.filter(sub_team__isnull=True) | roles_qs.filter(sub_team=sub_team)
-        self.fields['roles'].queryset = roles_qs.order_by('name')
+        if 'roles' in self.fields:
+            self.fields['roles'].queryset = roles_qs.order_by('name')
 
 
     def clean_experience_level(self):
@@ -442,6 +452,10 @@ class MediaTeamServiceForm(forms.Form):
     )
     member_count = forms.IntegerField(label='Quantidade de integrantes', initial=2, min_value=1, max_value=32767,
                                      widget=forms.NumberInput(attrs={'class': _INPUT, 'min': 1}))
+    activities = forms.ModelMultipleChoiceField(
+        label='Atividades da atuação', queryset=None, widget=forms.CheckboxSelectMultiple,
+        help_text='Selecione as atividades realizadas nos cultos escolhidos.',
+    )
     is_active = forms.BooleanField(label='Ativa', initial=True, required=False)
 
     def __init__(self, *args, sub_team, instance=None, compact=False, **kwargs):
@@ -450,9 +464,14 @@ class MediaTeamServiceForm(forms.Form):
         self.sub_team = sub_team
         self.instance = instance or MediaTeamService(sub_team=sub_team)
         self.compact = compact
-        # Activities are shared responsibilities of the team. New services receive
-        # all active activities while existing links remain untouched on edit.
-        self.default_activities = list(MediaTeamActivity.objects.filter(sub_team=sub_team, is_active=True))
+        from django.db.models import Q
+        linked_ids = list(self.instance.activity_links.values_list('activity_id', flat=True)) if self.instance.pk else []
+        self.fields['activities'].queryset = MediaTeamActivity.objects.filter(sub_team=sub_team).filter(
+            Q(is_active=True) | Q(pk__in=linked_ids),
+        )
+        self.fields['activities'].empty_label = None
+        self.initial['activities'] = linked_ids
+        self.order_fields(['activities', 'regular_services', 'member_count', 'is_active'])
         self.fields['regular_services'].choices = MediaTeamService.REGULAR_SERVICE_CHOICES
         if self.instance.pk:
             # Older agenda-linked defaults stay visible for compatibility and can be
@@ -502,8 +521,13 @@ class MediaTeamServiceForm(forms.Form):
             service.regular_service = key
             service.member_count = self.cleaned_data['member_count']
             service.save()
-            if not service.activity_links.exists():
-                for activity in self.default_activities:
+            selected = {activity.pk: activity for activity in self.cleaned_data['activities']}
+            links = {link.activity_id: link for link in service.activity_links.all()}
+            for activity_id, link in links.items():
+                if activity_id not in selected:
+                    link.delete()
+            for activity_id, activity in selected.items():
+                if activity_id not in links:
                     MediaTeamServiceActivity.objects.create(service=service, activity=activity)
             services.append(service)
         return services[0] if len(services) == 1 else services

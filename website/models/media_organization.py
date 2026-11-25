@@ -159,6 +159,10 @@ class MediaSubTeamMembership(BaseModel):
         related_name='memberships',
         verbose_name='Funções',
     )
+    activities = models.ManyToManyField(
+        'MediaTeamActivity', blank=True, related_name='member_participations',
+        verbose_name='Atividades na equipe',
+    )
     responsibilities = models.TextField(blank=True, verbose_name='Responsabilidades')
     is_active = models.BooleanField(default=True, verbose_name='Ativo')
 

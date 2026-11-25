@@ -40,7 +40,7 @@ class MediaTeamConfigurationTests(TestCase):
         return reverse(name, kwargs={'ministry_id': self.ministry.pk, 'pk': self.team.pk, **kwargs})
 
     def data(self, **overrides):
-        return {'regular_services': ['sunday_19'], 'member_count': 2, 'is_active': 'on', **overrides}
+        return {'regular_services': ['sunday_19'], 'member_count': 2, 'is_active': 'on', 'activities': [self.activity.pk], **overrides}
 
     def create_service(self):
         form = MediaTeamServiceForm(self.data(), sub_team=self.team)
@@ -59,6 +59,24 @@ class MediaTeamConfigurationTests(TestCase):
         self.assertEqual(self.membership.history.first().experience_level, 'mentor')
         self.assertEqual(Member.objects.filter(pk=self.member.pk).count(), 1)
 
+    def test_membership_edit_modal_loads_validates_and_saves(self):
+        url = self.url('ministry_team_member_edit', membership_id=self.membership.pk)
+        headers = {'HTTP_X_REQUESTED_WITH': 'XMLHttpRequest'}
+        response = self.client.get(url, **headers)
+        self.assertContains(response, 'Editar membro')
+        self.assertContains(response, 'team-default-modal-form')
+        self.assertContains(response, 'type="checkbox" name="activities"')
+        self.assertNotContains(response, 'name="is_active"')
+        response = self.client.post(url, {'experience_level': 'invalid', 'is_active': 'on'}, **headers)
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, 'team-default-modal-form', status_code=400)
+        response = self.client.post(url, {'experience_level': 'mentor'}, **headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['success'])
+        self.membership.refresh_from_db()
+        self.assertEqual(self.membership.experience_level, 'mentor')
+        self.assertTrue(self.membership.is_active)
+
     def test_invalid_experience_and_get_do_not_update(self):
         url = self.url('media_team_experience_edit', membership_id=self.membership.pk)
         self.assertEqual(self.client.get(url).status_code, 405)
@@ -74,6 +92,30 @@ class MediaTeamConfigurationTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.save().experience_level, 'mentor')
 
+    def test_member_activities_are_scoped_to_team_and_saved(self):
+        foreign = MediaTeamActivity.objects.create(sub_team=self.second_team, name='Outra atividade')
+        data = {'member': self.member.pk, 'activities': [self.activity.pk], 'is_active': 'on'}
+        form = MediaSubTeamMembershipForm(data, instance=self.membership, sub_team=self.team)
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        self.assertEqual(list(self.membership.activities.values_list('pk', flat=True)), [self.activity.pk])
+        data['activities'] = [foreign.pk]
+        form = MediaSubTeamMembershipForm(data, instance=self.membership, sub_team=self.team)
+        self.assertFalse(form.is_valid())
+
+    def test_new_members_default_to_active_team_activities_but_edits_keep_selection(self):
+        photo = MediaTeamActivity.objects.create(sub_team=self.team, name='Fotografia')
+        inactive = MediaTeamActivity.objects.create(sub_team=self.team, name='Inativa', is_active=False)
+        form = MediaSubTeamMembershipForm(sub_team=self.team)
+        self.assertEqual(set(form.initial['activities']), {self.activity.pk, photo.pk})
+        self.assertNotIn(inactive.pk, form.initial['activities'])
+        self.membership.activities.add(self.activity)
+        form = MediaSubTeamMembershipForm(instance=self.membership, sub_team=self.team)
+        self.assertEqual({activity.pk for activity in form.initial['activities']}, {self.activity.pk})
+        self.membership.activities.clear()
+        form = MediaSubTeamMembershipForm(instance=self.membership, sub_team=self.team)
+        self.assertFalse(form.initial['activities'])
+
     def test_activities_create_edit_order_and_deactivate(self):
         self.client.post(self.url('media_team_activity_create'), {'name': 'Fotografia', 'sort_order': 1, 'is_active': 'on'})
         activity = self.team.activities.get(name='Fotografia')
@@ -87,7 +129,7 @@ class MediaTeamConfigurationTests(TestCase):
 
     def test_headcount_is_for_team_and_defaults_to_two(self):
         photo = MediaTeamActivity.objects.create(sub_team=self.team, name='Fotografia')
-        self.client.post(self.url('media_team_service_create'), self.data())
+        self.client.post(self.url('media_team_service_create'), self.data(activities=[self.activity.pk, photo.pk]))
         service = self.team.service_defaults.get()
         self.assertEqual(service.member_count, 2)
         self.assertEqual(service.activities.count(), 2)
@@ -116,6 +158,18 @@ class MediaTeamConfigurationTests(TestCase):
         self.assertContains(response, 'type="checkbox"', html=False)
         self.assertNotContains(response, self.event.title)
         self.assertNotContains(response, 'Atividades previstas')
+        self.assertContains(response, 'Atividades da atuação')
+
+    def test_activity_selection_is_required_scoped_and_editable(self):
+        photo = MediaTeamActivity.objects.create(sub_team=self.team, name='Fotografia')
+        foreign = MediaTeamActivity.objects.create(sub_team=self.second_team, name='Live')
+        self.assertFalse(MediaTeamServiceForm(self.data(activities=[]), sub_team=self.team).is_valid())
+        self.assertFalse(MediaTeamServiceForm(self.data(activities=[foreign.pk]), sub_team=self.team).is_valid())
+        service = self.create_service()
+        form = MediaTeamServiceForm(self.data(activities=[photo.pk]), instance=service, sub_team=self.team)
+        self.assertTrue(form.is_valid(), form.errors)
+        form.save()
+        self.assertEqual(list(service.activity_links.values_list('activity_id', flat=True)), [photo.pk])
 
     def test_specific_times_and_additional_dates(self):
         first = self.create_service()

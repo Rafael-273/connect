@@ -47,13 +47,17 @@
             </div>
             {% endif %}
 
-            <div class="modal-section">
+            {% if member_form.roles %}<div class="modal-section">
                 <label class="modal-field-label" for="{{ member_form.roles.id_for_label }}">Funções <span style="font-weight:500;color:#9CA3AF;">(opcional)</span></label>
                 {{ member_form.roles }}
                 {% if member_form.roles.errors %}
                 <p class="text-xs text-red-500 mt-1">{{ member_form.roles.errors.0 }}</p>
                 {% endif %}
-            </div>
+            </div>{% endif %}
+            {% if member_form.activities %}<div class="modal-section">
+                <label class="modal-field-label" for="{{ member_form.activities.id_for_label }}">Atividades na equipe (opcional)</label>
+                {{ member_form.activities }}{{ member_form.activities.errors }}
+            </div>{% endif %}
 
             <div class="demands-modal-footer">
                 <button type="button" class="org-btn-secondary" data-team-modal-close>Cancelar</button>

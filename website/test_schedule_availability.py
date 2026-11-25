@@ -368,6 +368,9 @@ class ScheduleAvailabilityTests(TestCase):
         self.assertEqual(ScheduleAvailability.objects.count(), 0)
 
     def test_can_proceed_with_pending_information_without_confirming_it(self):
+        for occurrence in ScheduleOccurrence.objects.filter(schedule_day__schedule=self.state.schedule):
+            if not occurrence.team_plans.exists():
+                ScheduleOccurrenceTeam.objects.create(occurrence=occurrence, sub_team=self.coverage, team_name=self.coverage.name, color='#2563EB')
         self.assertTrue(self.data['availability']['summary']['warnings'])
         self.assertEqual(self.post('navigate', step=3).status_code, 200)
         self.assertFalse(ScheduleAvailability.objects.exists())

@@ -4,8 +4,7 @@
     --sa-border:#e6e8ee;
     color:var(--sa-ink);
     font-size:14px;
-    max-width:1680px;
-    margin:auto;
+    width:100%;
     padding-bottom:92px;
 }
 #schedule-assistant [hidden] {
@@ -154,6 +153,7 @@
     border:0;
     border-radius:0;
 }
+.sa-calendar-section { overflow:visible; }
 .sa-calendar-top {
     padding:17px 18px 10px;
     display:flex;
@@ -328,7 +328,11 @@
     line-height:1.8;
 }
 .sa-editor-head {
-    padding:19px 20px;
+    position:sticky;
+    top:0;
+    z-index:2;
+    background:#fff;
+    padding:20px 24px;
     border-bottom:1px solid #eef0f4;
     display:flex;
     align-items:flex-start;
@@ -337,20 +341,27 @@
 }
 .sa-editor-head>div { min-width:0; }
 .sa-editor-head h3 {
-    font-size:17px;
+    font-size:19px;
     overflow-wrap:anywhere;
 }
+.sa-editor-eyebrow { display:block; margin-bottom:5px; color:#b50905; font-size:10px; font-weight:700; letter-spacing:.08em; }
 .sa-editor-head p {
     font-size:11px;
     color:#9299a7;
     margin-top:4px;
 }
 .sa-editor-form {
-    padding:18px;
+    padding:20px 24px 24px;
     display:flex;
     flex-direction:column;
-    gap:13px;
+    gap:18px;
 }
+.sa-editor-section { padding:18px; border:1px solid #e9ecf1; border-radius:13px; background:#fff; }
+.sa-section-heading { display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:6px 12px; margin-bottom:5px; }
+.sa-section-heading h3 { font-size:14px; font-weight:700; }
+.sa-section-heading span { color:#8490a2; font-size:11px; }
+.sa-team-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.sa-team-muted { color:#8490a2; font-size:11px; }
 .sa-form-pair {
     display:grid;
     grid-template-columns:1fr 1fr;
@@ -374,11 +385,11 @@
     line-height:1.6;
 }
 .sa-team-card {
-    padding:13px;
+    padding:16px;
     border:1px solid #e7eaf0;
     border-left:3px solid var(--team-color);
     border-radius:10px;
-    background:#fdfdfe;
+    background:#fafbfc;
     display:flex;
     flex-direction:column;
     gap:10px;
@@ -390,7 +401,7 @@
     gap:8px;
 }
 .sa-team-card-head strong {
-    font-size:12px;
+    font-size:13px;
 }
 .sa-team-card-head button {
     background:transparent;
@@ -419,9 +430,13 @@
     border:0;
     background:#f1f2f6;
     border-radius:8px;
-    width:36px;
-    height:39px;
-    font-size:20px;
+    width:auto;
+    min-width:112px;
+    height:42px;
+    padding:0 14px;
+    color:#a80b07;
+    font-size:12px;
+    font-weight:700;
 }
 .sa-batch {
     border-top:1px solid #eceef3;
@@ -524,14 +539,26 @@
     font-weight:800;
     padding:12px 0;
 }
+.sa-list-row { display:flex; align-items:center; gap:12px; margin-bottom:8px; padding:6px 10px 6px 0; background:#fafbfe; border:1px solid #e9ecf3; border-radius:11px; }
+#schedule-assistant .sa-quick-teams { position:relative; flex:0 0 230px; width:230px; min-width:0; max-width:40%; }
+.sa-quick-teams summary { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; list-style:none; padding:10px 32px 10px 12px; border:1px solid #e3b1ae; border-radius:9px; background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b50905' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; color:#a80b07; font-size:12px; font-weight:600; cursor:pointer; }
+.sa-quick-teams summary::-webkit-details-marker { display:none; }
+.sa-quick-teams.has-teams summary { border-color:#dce1ea; color:#475569; }
+.sa-quick-menu { position:absolute; z-index:30; top:calc(100% + 6px); right:0; width:260px; max-width:calc(100vw - 48px); max-height:300px; overflow:auto; display:flex; flex-direction:column; gap:8px; padding:14px; border:1px solid #e5e7eb; border-radius:12px; background:#fff; box-shadow:0 12px 30px #20253626; }
+.sa-quick-menu > strong { font-size:12px; }
+.sa-quick-menu > p { color:#687084; font-size:12px; }
+.sa-quick-option { display:flex; align-items:center; gap:8px; padding:6px 2px; cursor:pointer; }
+.sa-quick-menu button { margin-top:4px; }
 .sa-list-occurrence {
-    width:100%;
-    background:#fafbfe;
-    border:1px solid #e9ecf3;
+    flex:1 1 0;
+    min-width:0;
+    width:auto;
+    background:transparent;
+    border:1px solid transparent;
     border-radius:9px;
     text-align:left;
     padding:12px;
-    margin-bottom:8px;
+    margin-bottom:0;
     display:flex;
     align-items:center;
     gap:14px;
@@ -657,6 +684,10 @@
     }
 }
 @media(max-width:600px) {
+    .sa-editor-form { padding:16px; }
+    .sa-editor-head { padding:16px; }
+    .sa-editor-section { padding:14px; }
+    .sa-team-grid { grid-template-columns:1fr; }
     #schedule-assistant {
         font-size:13px;
         padding-bottom:150px;
@@ -783,10 +814,19 @@
     -webkit-box-orient:vertical;
 }
 .sa-team-empty {
-    font-size:9px;
-    color:#9a7881;
+    display:inline-flex;
+    align-items:center;
+    padding:3px 7px;
+    border-radius:6px;
+    background:#fff1ed;
+    font-size:10px;
+    font-weight:600;
+    color:#a34a3a;
 }
 @media(max-width:600px) {
+    .sa-list-row { flex-wrap:wrap; padding:6px; gap:4px; }
+    .sa-list-occurrence { flex-basis:100%; }
+    #schedule-assistant .sa-quick-teams { flex:1 1 100%; width:100%; max-width:none; }
     .sa-occurrence .sa-occurrence-activities {
         display:none;
     }

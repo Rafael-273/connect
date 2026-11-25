@@ -72,7 +72,7 @@ class MinistryOrganizationMixin(LoginRequiredMixin):
             deleted__isnull=True,
             member__is_active=True,
             member__deleted__isnull=True,
-        ).select_related('member').prefetch_related('roles')
+        ).select_related('member').prefetch_related('roles', 'activities')
         teams = MediaSubTeam.objects.filter(ministry=self.ministry)
         if not self.can_manage:
             teams = teams.filter(is_active=True)
@@ -170,7 +170,7 @@ class MinistryTeamDetail(MinistryOrganizationMixin, View):
     def render_team_detail(self, request, team, **extra):
         memberships = team.memberships.filter(
             is_active=True, member__is_active=True, member__deleted__isnull=True,
-        ).select_related('member').prefetch_related('roles')
+        ).select_related('member').prefetch_related('roles', 'activities')
         add_member_form = extra.pop('add_member_form', None)
         if add_member_form is None and self.can_manage:
             add_member_form = MediaSubTeamMembershipForm(
@@ -203,15 +203,20 @@ class MinistryTeamDetail(MinistryOrganizationMixin, View):
 class MinistryTeamMemberEdit(MinistryOrganizationMixin, View):
     manage_only = True
 
-    def render_form(self, request, form, team):
-        return render(request, 'member/ministry_organization/member_form.html', self.context(
+    def render_form(self, request, form, team, status=200):
+        modal = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        template = 'member/ministry_organization/member_form_modal.html' if modal else 'member/ministry_organization/member_form.html'
+        return render(request, template, self.context(
             form=form, team=team, section='teams',
-        ))
+        ), status=status)
 
     def get(self, request, ministry_id, pk, membership_id=None):
         team = self.team(pk)
         membership = get_object_or_404(MediaSubTeamMembership, pk=membership_id, sub_team=team) if membership_id else None
-        return self.render_form(request, MediaSubTeamMembershipForm(instance=membership, sub_team=team), team)
+        form = MediaSubTeamMembershipForm(instance=membership, sub_team=team)
+        if membership_id and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            form.fields.pop('is_active')
+        return self.render_form(request, form, team)
 
     @transaction.atomic
     def post(self, request, ministry_id, pk, membership_id=None):
@@ -229,6 +234,8 @@ class MinistryTeamMemberEdit(MinistryOrganizationMixin, View):
         form = MediaSubTeamMembershipForm(
             request.POST, instance=membership, sub_team=team, prefix=prefix,
         )
+        if membership_id and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            form.fields.pop('is_active')
         if form.is_valid():
             obj = form.save(commit=False)
             if from_modal and membership_id is None:
@@ -240,6 +247,8 @@ class MinistryTeamMemberEdit(MinistryOrganizationMixin, View):
             messages.success(request, 'Participação salva.')
             if not obj.is_active:
                 messages.warning(request, 'As atribuições existentes foram preservadas. Revise os responsáveis das demandas em andamento.')
+            if membership_id and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': True, 'redirect_url': reverse('ministry_team_detail', kwargs={'ministry_id': ministry_id, 'pk': pk})})
             if return_to == 'teams':
                 return redirect('ministry_team_list', ministry_id=ministry_id)
             return redirect('ministry_team_detail', ministry_id=ministry_id, pk=pk)
@@ -252,7 +261,7 @@ class MinistryTeamMemberEdit(MinistryOrganizationMixin, View):
             )
         if return_to == 'detail' and membership_id is None:
             return self.render_team_detail(request, team, add_member_form=form, add_member_open=True)
-        return self.render_form(request, form, team)
+        return self.render_form(request, form, team, status=400 if request.headers.get('X-Requested-With') == 'XMLHttpRequest' else 200)
 
 
 class MinistryTeamMemberRemove(MinistryOrganizationMixin, View):

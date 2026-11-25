@@ -61,6 +61,52 @@ class ScheduleAssistantTests(TestCase):
     def first_evening(self):
         return next(item for item in self.data['occurrences'] if item['source_key'].startswith('regular:sunday_19@'))
 
+    def test_event_defaults_use_first_occurrence_in_planning_month(self):
+        new_event = self.event('Encontro', '2026-11-20', '19:30')
+        events = {event['id']: event for event in self.client.get(self.api).json()['events']}
+        self.assertEqual(events[new_event.pk], {
+            'id': new_event.pk, 'label': 'Encontro', 'date': '2026-11-20', 'time': '19:30',
+            'dates': [{'date': '2026-11-20', 'time': '19:30'}],
+        })
+        recurring = self.event('Encontro semanal', '2025-01-06', '19:00', True)
+        events = {event['id']: event for event in self.client.get(self.api).json()['events']}
+        self.assertEqual(events[recurring.pk]['date'], '2026-11-02')
+        self.assertEqual(events[recurring.pk]['time'], '19:00')
+
+    def test_event_select_excludes_linked_occurrences_until_removed(self):
+        event = self.event('Encontro novo', '2026-11-20', '19:30')
+        self.assertIn(event.pk, [item['id'] for item in self.client.get(self.api).json()['events']])
+        response = self.post('add_manual', event_id=event.pk, name='Encontro novo', date='2026-11-20', time='19:30')
+        self.assertNotIn(event.pk, [item['id'] for item in response.json()['events']])
+        occurrence = next(item for item in response.json()['occurrences'] if item['name'] == 'Encontro novo')
+        response = self.post('remove_occurrence', occurrence_id=occurrence['id'])
+        self.assertIn(event.pk, [item['id'] for item in response.json()['events']])
+
+    def test_multiple_event_dates_remain_available_independently(self):
+        event = self.event('Conferência nova', '2026-11-20', '19:30')
+        EventDate.objects.create(event=event, event_date='2026-11-21', event_time='09:00')
+        events = {item['id']: item for item in self.client.get(self.api).json()['events']}
+        self.assertEqual(events[event.pk]['dates'], [
+            {'date': '2026-11-20', 'time': '19:30'}, {'date': '2026-11-21', 'time': '09:00'},
+        ])
+        response = self.post('add_manual', event_id=event.pk, name='Conferência nova', date='2026-11-20', time='19:30')
+        events = {item['id']: item for item in response.json()['events']}
+        self.assertEqual(events[event.pk]['dates'], [{'date': '2026-11-21', 'time': '09:00'}])
+        response = self.post('add_manual', event_id=event.pk, name='Conferência nova', date='2026-11-21', time='09:00')
+        self.assertNotIn(event.pk, [item['id'] for item in response.json()['events']])
+
+    def test_manual_multiple_dates_create_occurrences_and_validate_together(self):
+        dates = [{'date': '2026-11-20', 'time': '19:30'}, {'date': '2026-11-21', 'time': '09:00'}]
+        response = self.post('add_manual', name='Encontro especial', notes='Preparar equipe', dates=dates)
+        self.assertEqual(response.status_code, 200)
+        added = [item for item in response.json()['occurrences'] if item['name'] == 'Encontro especial']
+        self.assertEqual({(item['date'], item['time'], item['notes']) for item in added}, {
+            ('2026-11-20', '19:30', 'Preparar equipe'), ('2026-11-21', '09:00', 'Preparar equipe'),
+        })
+        response = self.post('add_manual', name='Inválido', dates=[dates[0], {'date': '2026-12-01', 'time': '09:00'}])
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(ScheduleOccurrence.objects.filter(schedule_day__schedule=self.state.schedule, name='Inválido').exists())
+
     def edit(self, item, **overrides):
         return {'occurrence_id': item['id'], 'name': item['name'], 'date': item['date'], 'time': item['time'], 'notes': item['notes'],
                 'teams': [{'team_id': team['team_id'], 'member_count': team['member_count'], 'activity_ids': [activity['id'] for activity in team['activities']], 'notes': team['notes']} for team in item['teams']], **overrides}
@@ -267,6 +313,9 @@ class ScheduleAssistantTests(TestCase):
         self.assertTrue(created); self.assertNotEqual(fresh.schedule_id, self.state.schedule_id)
 
     def test_navigation_persists_but_never_generates_or_publishes(self):
+        for occurrence in ScheduleOccurrence.objects.filter(schedule_day__schedule=self.state.schedule):
+            if not occurrence.team_plans.exists():
+                ScheduleOccurrenceTeam.objects.create(occurrence=occurrence, sub_team=self.team, team_name=self.team.name, color='#2563EB')
         for step in (2, 3, 1):
             self.assertEqual(self.post('navigate', step=step).json()['current_step'], step)
             self.assertEqual(self.client.get(self.api).json()['current_step'], step)
@@ -275,6 +324,16 @@ class ScheduleAssistantTests(TestCase):
         self.state.schedule.refresh_from_db(); self.assertFalse(self.state.schedule.is_published)
         self.assertEqual(DivisionMember.objects.count(), 0)
         self.assertFalse(any(day.members.exists() for day in self.state.schedule.days.all()))
+
+    def test_cannot_advance_until_every_occurrence_has_a_team(self):
+        self.assertEqual(self.post('navigate', step=2).status_code, 400)
+        self.assertEqual(self.post('navigate', step=3).status_code, 400)
+        self.state.refresh_from_db()
+        self.assertEqual(self.state.current_step, 1)
+        for occurrence in ScheduleOccurrence.objects.filter(schedule_day__schedule=self.state.schedule):
+            if not occurrence.team_plans.exists():
+                ScheduleOccurrenceTeam.objects.create(occurrence=occurrence, sub_team=self.team, team_name=self.team.name, color='#2563EB')
+        self.assertEqual(self.post('navigate', step=2).status_code, 200)
 
     def test_availability_review_preserves_unaffected_data_and_team_identity(self):
         self.state.availability_revision = self.state.revision; self.state.save()
@@ -443,7 +502,7 @@ class ScheduleAssistantConcurrencyTests(TransactionTestCase):
         token = serialize(state)['version']
         def update(index):
             try:
-                mutate(state.pk, self.ministry, self.user, {'action': 'navigate', 'step': index + 2, 'version': token})
+                mutate(state.pk, self.ministry, self.user, {'action': 'navigate', 'step': 1, 'version': token})
                 return 200
             except PlanningConflict:
                 return 409
