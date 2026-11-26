@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from django.conf import settings
+from openai import APITimeoutError
 
 from .exceptions import AIConfigurationError, AIServiceError
 
@@ -216,6 +217,9 @@ class AIService:
             return segments
         except AIServiceError:
             raise
+        except APITimeoutError as exc:
+            logger.warning('Tempo esgotado ao transcrever áudio com timestamps (modelo %s)', selected_model)
+            raise AIServiceError('A transcrição demorou mais que o esperado. Tente processar novamente.') from exc
         except Exception as exc:
             logger.exception('Falha ao transcrever áudio com timestamps')
             raise AIServiceError('Não foi possível transcrever o áudio com timestamps.') from exc

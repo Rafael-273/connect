@@ -21,6 +21,18 @@ function harness(options={}){
     const player=new window.ConnectPreviewSource(video,{onLoading:value=>loading.push(value),onError:value=>errors.push(value),releaseFrame:()=>releases++,play:()=>{plays++;player.video.play()},now:()=>clock,setTimer:(callback,delay)=>{const id=++timerId;timers.set(id,{callback,at:clock+delay});return id},clearTimer:id=>timers.delete(id),...options});
     return {player,video,document,loading,errors,timers,advance(ms){const end=clock+ms;while(true){const next=[...timers.entries()].filter(([,entry])=>entry.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;clock=next[1].at;timers.delete(next[0]);next[1].callback()}clock=end},flush(){frames.splice(0).forEach(callback=>callback())},get plays(){return plays},get releases(){return releases}};
 }
+test('explicit loading starts a new iOS media source without restarting same-source seeks',()=>{
+    const h=harness({explicitLoad:true});
+    h.player.seek('a.mp4',0);
+    assert.equal(h.video.loads,1);
+    h.player.seek('a.mp4',1);
+    assert.equal(h.video.loads,1);
+    h.player.seek('b.mp4',0);
+    assert.equal(h.video.loads,2);
+});
+test('default source loading does not add an explicit load on other browsers',()=>{
+    const h=harness();h.player.seek('a.mp4',0);assert.equal(h.video.loads,0);
+});
 test('metadata arriving after repeated same-source scrubs uses the latest time and playback intent',()=>{
     const h=harness();h.player.seek('a.mp4',1,{autoplay:true});h.player.seek('a.mp4',4,{autoplay:false});
     h.video.metadata();assert.equal(h.video.currentTime,4);h.video.frame();h.flush();

@@ -630,7 +630,7 @@
             <p id="delete-project-processing-note" class="hidden text-sm text-amber-800 leading-relaxed mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
                 Este projeto ainda está em processamento ou revisão. A exclusão interrompe o trabalho em andamento.
             </p>
-            <form id="delete-project-form" method="post">
+            <form id="delete-project-form" method="post" data-no-submit-overlay>
                 {% csrf_token %}
                 <div class="media-confirm-actions">
                     <button type="button" class="media-confirm-cancel" data-close-delete-modal>Cancelar</button>
@@ -680,7 +680,7 @@
 
     document.getElementById('apply-filters').addEventListener('click', function() {
         document.getElementById('hidden-status').value = document.getElementById('panel-status').value;
-        document.getElementById('media-filter-form').submit();
+        document.getElementById('media-filter-form').requestSubmit();
     });
 
     (function() {

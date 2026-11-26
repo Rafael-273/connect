@@ -9,6 +9,13 @@
     .media-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 1.25rem; box-shadow: 0 8px 30px rgba(38,2,0,.06); }
     .media-btn { display:inline-flex; align-items:center; justify-content:center; gap:.55rem; border-radius:.8rem; padding:.75rem 1rem; font-weight:800; transition:.2s; }
     .media-btn:hover { transform: translateY(-1px); }
+    .media-loading-overlay { position:fixed; inset:0; z-index:250; display:none; align-items:center; justify-content:center; padding:1rem; background:rgba(15,23,42,.62); backdrop-filter:blur(4px); }
+    .media-loading-overlay.is-active { display:flex; }
+    .media-loading-overlay__card { display:flex; align-items:center; gap:1rem; width:min(100%,22rem); padding:1rem 1.15rem; border-radius:1.1rem; background:#fff; color:#111827; box-shadow:0 24px 70px rgba(15,23,42,.3); }
+    .media-loading-overlay__spinner { width:2.5rem; height:2.5rem; flex:none; display:grid; place-items:center; border-radius:.8rem; background:#fff1f2; color:#c90905; }
+    .media-loading-overlay__title { display:block; font-size:.92rem; font-weight:900; }
+    .media-loading-overlay__hint { display:block; margin-top:.15rem; color:#667085; font-size:.75rem; }
+    body.media-loading { overflow:hidden; }
     .media-toast-stack { position:fixed; z-index:100; top:5.5rem; right:1rem; display:grid; gap:.6rem; width:min(calc(100vw - 2rem),24rem); pointer-events:none; }
     .media-flash { display:flex; align-items:center; justify-content:space-between; gap:.75rem; border:1px solid #bbf7d0; border-radius:.9rem; padding:.8rem .9rem; background:#fff; color:#166534; box-shadow:0 14px 36px rgba(15,23,42,.15); pointer-events:auto; animation:media-toast-in .24s ease-out; transition:opacity .24s ease, transform .24s ease; }
     .media-flash.is-leaving { opacity:0; transform:translateX(1.5rem); }
@@ -91,7 +98,53 @@
 
 <main class="media-shell w-full px-4 sm:px-6 md:px-8 pt-4">{% block media_content %}{% endblock %}</main>
 {% block media_bottom_nav %}{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}{% endblock %}
+<div class="media-loading-overlay" data-media-loading-overlay aria-hidden="true" role="status" aria-live="polite">
+    <div class="media-loading-overlay__card">
+        <span class="media-loading-overlay__spinner" aria-hidden="true"><i class="fas fa-spinner fa-spin"></i></span>
+        <span><strong class="media-loading-overlay__title" data-media-loading-message>Carregando…</strong><small class="media-loading-overlay__hint">Aguarde um instante.</small></span>
+    </div>
+</div>
 <script>
+    (() => {
+        const overlay = document.querySelector('[data-media-loading-overlay]');
+        const message = overlay.querySelector('[data-media-loading-message]');
+        const show = (text) => {
+            message.textContent = text;
+            overlay.classList.add('is-active');
+            overlay.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('media-loading');
+            document.body.setAttribute('aria-busy', 'true');
+        };
+        const hide = () => {
+            overlay.classList.remove('is-active');
+            overlay.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('media-loading');
+            document.body.removeAttribute('aria-busy');
+        };
+        document.addEventListener('click', (event) => {
+            if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+            if (!link || link.hasAttribute('download') || link.hasAttribute('data-no-loading-overlay') || (link.target && link.target !== '_self')) return;
+            const url = new URL(link.href, window.location.href);
+            if (!['http:', 'https:'].includes(url.protocol) || url.origin !== window.location.origin || (url.pathname === location.pathname && url.search === location.search && url.hash)) return;
+            if (window.projectSubmitOverlay) window.projectSubmitOverlay.show('Carregando…');
+            else show('Carregando…');
+        });
+        document.addEventListener('submit', (event) => {
+            const form = event.target;
+            if (!(form instanceof HTMLFormElement) || event.defaultPrevented || window.projectSubmitOverlay || form.matches('[data-no-submit-overlay]')) return;
+            const target = event.submitter?.formTarget || form.target;
+            if (target && target !== '_self') return;
+            if (overlay.classList.contains('is-active')) { event.preventDefault(); return; }
+            show('Processando…');
+        });
+        window.addEventListener('beforeunload', (event) => {
+            if (!event.defaultPrevented) return;
+            hide();
+            window.projectSubmitOverlay?.hide();
+        });
+        window.addEventListener('pageshow', hide);
+    })();
     document.querySelectorAll('[data-auto-dismiss="true"]').forEach((toast) => {
         window.setTimeout(() => {
             toast.classList.add('is-leaving');

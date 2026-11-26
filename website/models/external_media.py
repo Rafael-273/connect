@@ -350,7 +350,8 @@ class ExternalMediaJob(BaseModel):
     def duration_seconds(self):
         if not self.started_at:
             return None
-        end = self.finished_at or self.update_at
+        terminal = self.status in {self.Status.FINISHED, self.Status.ERROR, self.Status.CANCELLED, self.Status.AWAITING_REVIEW}
+        end = (self.finished_at or self.update_at) if terminal else timezone.now()
         return max(0, int((end - self.started_at).total_seconds()))
 
     @property
@@ -1099,6 +1100,7 @@ class ExternalMediaProject(BaseModel):
     current_step = models.CharField(max_length=180, blank=True)
     error_message = models.TextField(blank=True)
     started_at = models.DateTimeField(blank=True, null=True)
+    stage_started_at = models.DateTimeField(blank=True, null=True)
     finished_at = models.DateTimeField(blank=True, null=True)
     celery_task_id = models.CharField(max_length=255, blank=True)
     render_job = models.OneToOneField(
@@ -1156,6 +1158,19 @@ class ExternalMediaProject(BaseModel):
     @property
     def duration_label(self):
         return format_processing_duration(self.duration_seconds)
+
+    @property
+    def stage_duration_seconds(self):
+        start = self.stage_started_at or self.started_at
+        if not start:
+            return None
+        terminal = self.status in {self.Status.FINISHED, self.Status.ERROR, self.Status.CANCELLED, self.Status.AWAITING_REVIEW}
+        end = (self.finished_at or self.update_at) if terminal else timezone.now()
+        return max(0, int((end - start).total_seconds()))
+
+    @property
+    def stage_duration_label(self):
+        return format_processing_duration(self.stage_duration_seconds)
 
     @property
     def duration_minutes(self):

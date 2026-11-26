@@ -634,9 +634,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 <script src="{% static 'external_media_editor_precision.js' %}"></script>
 <script src="{% static 'external_media_editor_state.js' %}"></script>
 <script src="{% static 'external_media_music_transitions.js' %}"></script>
-<script src="{% static 'external_media_preview_audio.js' %}"></script>
+<script src="{% static 'external_media_preview_audio.js' %}?v=20261126-ios-mix"></script>
 <script src="{% static 'external_media_cached_media.js' %}"></script>
-<script src="{% static 'external_media_preview_source.js' %}?v=20261120-ios-preview"></script>
+<script src="{% static 'external_media_preview_source.js' %}?v=20261126-ios-priority"></script>
 <script src="{% static 'external_media_preview_metrics.js' %}"></script>
 <script src="{% static 'external_media_preview_framing.js' %}"></script>
 <script src="{% static 'external_media_timeline_selection.js' %}"></script>
@@ -723,7 +723,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     fitPreviewStage();
     syncInspectorHeight();
     const music = new Audio(); music.loop = true; music.preload = 'auto';
-    const musicController = new window.ConnectPreviewAudio(music);
+    const musicController = new window.ConnectPreviewAudio(music, {useAudioGraph:isIOSPreview});
     if(new URLSearchParams(location.search).get('preview_metrics')==='1'){
         window.connectPreviewMetrics=new window.ConnectPreviewMetrics({getMedia:()=>[...previewStage.querySelectorAll('video'),...musicController.channels,...list.querySelectorAll('audio'),musicPreview]});
         window.addEventListener('connect:preview-transition',event=>window.connectPreviewMetrics.record('transition',event.detail));
@@ -961,7 +961,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const gainDb=Number(timeline.music?.voice_gain_db||0);
         if(video)video.volume=Math.max(0,Math.min(1,10**(Math.min(0,gainDb)/20)));
     }
-    function configureMusic(){musicController.configure(timeline.has_music===false?null:timeline.music);musicController.channels.forEach(channel=>{channel.onloadedmetadata=()=>{requestTimelineRender();if(inspectorSelection?.kind==='music')renderList()}});updateDialogueVolume()}
+    let initialMusicPending=isIOSPreview;
+    function configureMusic(){initialMusicPending=false;musicController.configure(timeline.has_music===false?null:timeline.music);musicController.channels.forEach(channel=>{channel.onloadedmetadata=()=>{requestTimelineRender();if(inspectorSelection?.kind==='music')renderList()}});updateDialogueVolume()}
     function syncMusicPosition(){musicController.sync(timeline.music,globalMs)}
     function updateMusicVolume(){musicController.updateVolume(timeline.music,timeline.sequence.duration_ms,globalMs,timeline.captions)}
     function holdPreviewFrame(){if(!video.videoWidth||!video.videoHeight)return;try{const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext('2d').drawImage(video,0,0);previewStage.style.backgroundImage=`url("${canvas.toDataURL('image/jpeg',.82)}")`;previewStage.style.backgroundSize='cover';previewStage.style.backgroundPosition='center';video.style.opacity='0'}catch(_){}}
@@ -988,14 +989,14 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         }
         lastPreviewFrame={at,time:presentedTime};
     }
-    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{soundtrackClock.setLoading(value);if(loading===value)return;loading=value;if(isIOSPreview)timelinePresentation.setResourcesEnabled(!value);if(!value){requestPreviewRender();if(isIOSPreview)requestWaveformPaint()}},onVideoChange:(next,previous,options)=>{stopPlaybackClock();video=next;soundtrackClock.setVideo(next,options);multicamEditor?.setMainVideo(next);bindVideoEvents(next)},onTransition:reportPreviewTransition,onError:failure=>{document.getElementById('preview-load-error').classList.toggle('hidden',!failure);document.getElementById('preview-load-error-message').textContent=failure?(failure.reason==='timeout'?'O carregamento está demorando. Tente novamente.':'Não foi possível carregar este trecho do vídeo.'):''},frameTolerance:1/Number(timeline.sequence.fps||30),progressTimeoutMs:12000,maxLoadMs:60000,maxTimeoutRetries:1,fallbackPreloadOnTimeout:true,play:requestVideoPlay});
+    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{soundtrackClock.setLoading(value);if(loading===value)return;loading=value;if(isIOSPreview)timelinePresentation.setResourcesEnabled(!value);if(!value){requestPreviewRender();if(isIOSPreview){requestWaveformPaint();if(initialMusicPending)requestAnimationFrame(()=>{if(initialMusicPending){configureMusic();syncMusicPosition()}})}}},onVideoChange:(next,previous,options)=>{stopPlaybackClock();video=next;soundtrackClock.setVideo(next,options);multicamEditor?.setMainVideo(next);bindVideoEvents(next)},onTransition:reportPreviewTransition,onError:failure=>{document.getElementById('preview-load-error').classList.toggle('hidden',!failure);document.getElementById('preview-load-error-message').textContent=failure?(failure.reason==='timeout'?'O carregamento está demorando. Tente novamente.':'Não foi possível carregar este trecho do vídeo.'):''},frameTolerance:1/Number(timeline.sequence.fps||30),progressTimeoutMs:12000,maxLoadMs:60000,maxTimeoutRetries:1,fallbackPreloadOnTimeout:true,explicitLoad:isIOSPreview,play:requestVideoPlay});
     document.addEventListener('visibilitychange',()=>{if(!document.hidden)sourcePlayer.resumeLoad()});
     window.addEventListener('pageshow',event=>{if(event.persisted)sourcePlayer.resumeLoad()});
     function playPendingPreview(){
         // On iOS the play request must happen inside the tap, even if the first frame is still loading.
         if(isIOSPreview&&sourcePlayer.pendingFrameCheck&&sourcePlayer.target?.autoplay&&video.paused)requestVideoPlay();
     }
-    function retryPreview(){sourcePlayer.retry({autoplay:true});playPendingPreview()}
+    function retryPreview(){if(isIOSPreview){musicController.unlock();updateMusicVolume()}sourcePlayer.retry({autoplay:true});playPendingPreview()}
     document.getElementById('preview-load-retry').onclick=retryPreview;
     function warmNextClip(clip){
         if(!clip||useReviewMaster()||(isIOSPreview&&(loading||video.paused)))return;
@@ -1452,6 +1453,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     // after the next take had already become active.
     bindVideoEvents(video);
     function togglePreviewPlayback(){
+        if(isIOSPreview){musicController.unlock();updateMusicVolume()}
         if(sourcePlayer.failure){retryPreview();return}
         if(sourcePlayer.target?.autoplay&&(loading||sourcePlayer.waitingForPreload)){
             sourcePlayer.pause();cancelPlaybackBoundary();musicController.pause();
@@ -3417,7 +3419,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     document.getElementById('mobile-timeline-display').onclick=()=>{
         closeMobileTools(false);timelinePresentation.open(document.getElementById('mobile-tools'));
     };
-    configureMusic();seek(globalMs);renderEditorTimeline();renderReviewProxyStatus();renameVisualMedia();updateEditControls();scheduleRevisionProxyPoll();
+    if(!isIOSPreview)configureMusic();seek(globalMs);if(initialMusicPending&&!loading)configureMusic();renderEditorTimeline();renderReviewProxyStatus();renameVisualMedia();updateEditControls();scheduleRevisionProxyPoll();
     requestAnimationFrame(()=>{renderList();enhanceReframeClipboard();renderEditorTimeline()});
 })();
 </script>

@@ -27,6 +27,7 @@ from django.db import transaction
 from django.utils import timezone
 from safedelete.models import HARD_DELETE
 from PIL import ImageFont
+from openai import APITimeoutError
 
 from website.ai import AIServiceError, TranscriptionSegment, get_ai_service
 from website.models.external_media import (
@@ -206,6 +207,7 @@ class AudioExtractor:
 
 
 class TranscriptionService:
+    TIMEOUT_RETRY_CHUNK_SECONDS = 120
     PROMPT = (
         'Sermão cristão evangélico. Preserve nomes próprios, '
         'referências bíblicas e termos teológicos com pontuação natural.'
@@ -230,22 +232,41 @@ class TranscriptionService:
         result = []
         prompt = self.DISFLUENCY_PROMPT if preserve_disfluencies else self.PROMPT
         for chunk in chunks:
-            segments = self.ai_service.transcribe_segments(
-                chunk.path,
-                filename=chunk.path.name,
-                language=language,
-                prompt=prompt,
-                **({'allow_empty': True} if allow_empty else {}),
-            )
-            result.extend(
-                TranscriptionSegment(
-                    start_ms=item.start_ms + chunk.offset_ms,
-                    end_ms=item.end_ms + chunk.offset_ms,
-                    text=item.text,
-                    granularity=item.granularity,
+            def transcribe_part(part):
+                return self.ai_service.transcribe_segments(
+                    part.path,
+                    filename=part.path.name,
+                    language=language,
+                    prompt=prompt,
+                    **({'allow_empty': True} if allow_empty else {}),
                 )
-                for item in segments
-            )
+
+            def append_segments(part, segments):
+                result.extend(
+                    TranscriptionSegment(
+                        start_ms=item.start_ms + part.offset_ms,
+                        end_ms=item.end_ms + part.offset_ms,
+                        text=item.text,
+                        granularity=item.granularity,
+                    )
+                    for item in segments
+                )
+
+            try:
+                append_segments(chunk, transcribe_part(chunk))
+            except AIServiceError as exc:
+                if not isinstance(exc.__cause__, APITimeoutError):
+                    raise
+                logger.warning('Timeout na transcrição do bloco em %d ms; dividindo para nova tentativa.', chunk.offset_ms)
+                with TemporaryDirectory(prefix='transcription-retry-') as directory:
+                    parts = AudioExtractor().extract(
+                        chunk.path, Path(directory), chunk_seconds=self.TIMEOUT_RETRY_CHUNK_SECONDS,
+                    )
+                    if len(parts) <= 1:
+                        raise
+                    for part in parts:
+                        adjusted = AudioChunk(path=part.path, offset_ms=chunk.offset_ms + part.offset_ms)
+                        append_segments(adjusted, transcribe_part(adjusted))
         clean = self._remove_chunk_overlap(result)
         return clean
 
@@ -1591,29 +1612,31 @@ class ProjectService:
     }
 
     @staticmethod
-    def validate_uploads(project):
+    def validate_uploads(project, *, file_exists=None, overlays=None):
         from .overlays import OverlayTimelineService
 
+        file_exists = file_exists or ProjectService.file_exists
         counts = {}
+        direct_count = 0
         errors = []
-        for item in project.block_media.filter(editor_only=False):
-            if ProjectService.file_exists(item.file):
+        for item in project.block_media.all():
+            if item.editor_only:
+                continue
+            if file_exists(item.file):
                 counts[item.block_id] = counts.get(item.block_id, 0) + 1
+                if not item.block_id and not item.custom_block_id:
+                    direct_count += 1
             else:
                 owner = item.block or item.custom_block
                 errors.append(
                     f'{owner.name if owner else "Vídeo principal"}: o vídeo enviado não está mais disponível. Envie-o novamente.'
                 )
         if not project_editor_settings(project).blocks.exists():
-            direct_count = sum(
-                1 for item in project.block_media.filter(editor_only=False, block__isnull=True, custom_block__isnull=True)
-                if ProjectService.file_exists(item.file)
-            )
             if not direct_count:
                 errors.append('Envie o vídeo principal do projeto.')
         for block in project_editor_settings(project).blocks.all():
             count = counts.get(block.pk, 0)
-            has_default = ProjectService.file_exists(block.default_video)
+            has_default = file_exists(block.default_video)
             if block.default_video and not has_default and not count:
                 errors.append(
                     f'{block.name}: o vídeo padrão do template não está disponível. '
@@ -1625,7 +1648,7 @@ class ProjectService:
                 errors.append(f'{block.name}: envie pelo menos {minimum} vídeo(s).')
             if block.max_occurrences > 0 and count > block.max_occurrences:
                 errors.append(f'{block.name}: máximo de {block.max_occurrences} vídeo(s).')
-        for overlay in OverlayTimelineService.ensure_project_overlays(project):
+        for overlay in overlays if overlays is not None else OverlayTimelineService.ensure_project_overlays(project):
             if not overlay.is_required and not OverlayTimelineService.has_renderable_content(
                 overlay.overlay_type, overlay.content, overlay.image_file,
             ):
@@ -1636,13 +1659,15 @@ class ProjectService:
                 )
             except ValueError as exc:
                 errors.append(f'{overlay.block.name if overlay.block else "Overlay"}: {exc}')
-        for asset in project.broll_assets.filter(is_enabled=True):
-            if not ProjectService.file_exists(asset.file):
+        for asset in project.broll_assets.all():
+            if not asset.is_enabled:
+                continue
+            if not file_exists(asset.file):
                 owner = asset.block or asset.custom_block
                 errors.append(f'{owner.name if owner else "B-roll"}: o asset {asset.original_filename} não está disponível.')
         version = project_editor_settings(project)
         track = getattr(version, 'background_music', None)
-        if track and track.audio_file and not ProjectService.file_exists(track.audio_file):
+        if track and track.audio_file and not file_exists(track.audio_file):
             errors.append(
                 'A música de fundo do template não está disponível. '
                 'Restaure ou substitua a música no cadastro do template.'
@@ -1652,7 +1677,7 @@ class ProjectService:
                 'A música de fundo do template está vazia ou inválida. '
                 'Envie novamente um arquivo de áudio válido no template.'
             )
-        elif version.music_file and not ProjectService.file_exists(version.music_file):
+        elif version.music_file and not file_exists(version.music_file):
             errors.append(
                 'O arquivo de música de fundo do template não está disponível. '
                 'Restaure ou substitua a música no cadastro do template.'
@@ -1663,7 +1688,7 @@ class ProjectService:
                 'Envie novamente um arquivo de áudio válido no template.'
             )
         selected_lut = version.color_lut.lut_file if version.color_lut_id else version.lut_file
-        if selected_lut and not ProjectService.file_exists(selected_lut):
+        if selected_lut and not file_exists(selected_lut):
             errors.append(
                 'O arquivo LUT do template não está disponível. Restaure ou substitua o arquivo no template.'
             )
@@ -3073,6 +3098,13 @@ class ExternalMediaProjectPipeline:
                 'A revisão atual difere da revisão aprovada. Aprove novamente antes de renderizar.'
             )
         try:
+            # Automatic pipelines enter rendering directly, while approved or
+            # retried renders already started their clock when queued.
+            if project.current_step not in {
+                'Renderização aprovada e adicionada à fila', 'Renderização adicionada à fila',
+            } or not project.stage_started_at:
+                project.stage_started_at = timezone.now()
+                project.save(update_fields=['stage_started_at', 'update_at'])
             self._update(project, ExternalMediaProject.Status.PROCESSING, 68, 'Preparando a versão final')
             self._step(project, 'render', ProjectPipelineStep.Status.RUNNING)
             # Cues already use edited time. Validate against the approved clip
@@ -4453,6 +4485,10 @@ class ExternalMediaPipeline:
     def render_outputs(self, job_id, revision=None):
         job = self._get_job(job_id)
         try:
+            if not job.processing_project_id:
+                job.started_at = timezone.now()
+                job.finished_at = None
+                job.save(update_fields=['started_at', 'finished_at', 'update_at'])
             self._update(job, ExternalMediaJob.Status.RENDERING, 86, 'Finalizando seu vídeo')
             media_input = media_input_factory(job.original_video)
             with JobWorkspace(

@@ -5,7 +5,7 @@
  * a fast scrub from showing a stale frame or resuming the wrong take.
  */
 window.ConnectPreviewSource = class ConnectPreviewSource {
-    constructor(video, {holdFrame = () => {}, releaseFrame = () => {}, onLoading = () => {}, onVideoChange = () => {}, onTransition = () => {}, onError = () => {}, frameTolerance = 1 / 30, play = () => {}, progressTimeoutMs = 5000, maxLoadMs = 30000, maxTimeoutRetries = 0, fallbackPreloadOnTimeout = false, setTimer = (callback, delay) => setTimeout(callback, delay), clearTimer = timer => clearTimeout(timer), now = () => Date.now()} = {}) {
+    constructor(video, {holdFrame = () => {}, releaseFrame = () => {}, onLoading = () => {}, onVideoChange = () => {}, onTransition = () => {}, onError = () => {}, frameTolerance = 1 / 30, play = () => {}, progressTimeoutMs = 5000, maxLoadMs = 30000, maxTimeoutRetries = 0, fallbackPreloadOnTimeout = false, explicitLoad = false, setTimer = (callback, delay) => setTimeout(callback, delay), clearTimer = timer => clearTimeout(timer), now = () => Date.now()} = {}) {
         this.video = video;
         this.holdFrame = holdFrame;
         this.releaseFrame = releaseFrame;
@@ -19,6 +19,7 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         this.maxLoadMs = maxLoadMs;
         this.maxTimeoutRetries = maxTimeoutRetries;
         this.fallbackPreloadOnTimeout = fallbackPreloadOnTimeout;
+        this.explicitLoad = explicitLoad;
         this.timeoutRetries = 0;
         this.setTimer = setTimer;
         this.clearTimer = clearTimer;
@@ -242,6 +243,7 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         }
         decoder.addEventListener('error', fail, {...options, once:true});
         decoder.src = source;
+        if (this.explicitLoad) decoder.load();
         this.watchLoad(decoder, () => this.handleLoadTimeout(source, freeze));
     }
 

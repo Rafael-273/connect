@@ -8,6 +8,8 @@ import subprocess
 import tempfile
 import wave
 import zipfile
+import httpx
+from openai import APITimeoutError
 from html import unescape
 from decimal import Decimal
 from datetime import timedelta
@@ -2336,6 +2338,21 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertContains(detail, 'Vídeo principal')
         self.assertNotContains(detail, 'Adicionar cena personalizada')
 
+    def test_project_detail_checks_each_uploaded_file_once(self):
+        self.block.delete()
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, original_filename='principal.mp4',
+            file=SimpleUploadedFile('principal.mp4', b'video', content_type='video/mp4'),
+        )
+        original_check = ProjectService.file_exists
+        with patch.object(ProjectService, 'file_exists', wraps=original_check) as check:
+            response = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(sum(call.args[0].name == media.file.name for call in check.call_args_list
+                             if call.args and call.args[0]), 1)
+        self.assertNotContains(response, 'Envie o vídeo principal do projeto.')
+
     def test_template_without_scenes_accepts_multiple_direct_project_videos(self):
         self.block.delete()
         project = self.make_project()
@@ -2509,6 +2526,10 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
             {'start_ms': 31250, 'end_ms': 49500},
         ]
         self.assertEqual(media.trim_ranges, expected_ranges)
+        self.assertEqual(save_response.json(), {
+            'ok': True, 'trim_start_ms': 2000, 'trim_end_ms': 18000,
+            'trim_ranges': expected_ranges,
+        })
 
         detail_response = self.client.get(
             reverse('external_media_project_detail', args=[project.public_id]),
@@ -2518,6 +2539,24 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
 
         self.assertIsNotNone(match)
         self.assertEqual(json.loads(unescape(match.group(1))), expected_ranges)
+
+    def test_media_trim_accepts_exact_duration_and_rejects_end_after_it(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1,
+            original_filename='mensagem.mp4', file='mensagem.mp4', duration_ms=4001,
+            preview_status=ProjectBlockMedia.PreviewStatus.READY,
+        )
+        url = reverse('external_media_project_media_trim', args=[project.public_id, media.pk])
+        data = {'trim_start_seconds': '0', 'trim_end_seconds': '4.001',
+                'trim_ranges': json.dumps([{'start_seconds': 0, 'end_seconds': 4.001}])}
+        response = self.client.post(url, data)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['trim_end_ms'], 4001)
+
+        data['trim_end_seconds'] = '4.010'
+        data['trim_ranges'] = json.dumps([{'start_seconds': 0, 'end_seconds': 4.010}])
+        self.assertEqual(self.client.post(url, data).status_code, 400)
 
     def test_project_duration_minutes_rounds_up(self):
         project = self.make_project()
@@ -2574,6 +2613,22 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertContains(detail_response, 'Tempo decorrido')
         self.assertNotContains(detail_response, 'Status final')
         self.assertNotContains(detail_response, 'Calculando previsão...')
+
+    def test_project_status_and_page_use_current_stage_clock(self):
+        project = self.make_project()
+        now = timezone.now()
+        project.status = ExternalMediaProject.Status.PROCESSING
+        project.started_at = now - timedelta(hours=2)
+        project.stage_started_at = now - timedelta(seconds=12)
+        project.save(update_fields=['status', 'started_at', 'stage_started_at', 'update_at'])
+
+        status = self.client.get(reverse('external_media_project_status', args=[project.public_id])).json()
+        self.assertGreaterEqual(status['elapsed_seconds'], 12)
+        self.assertLess(status['elapsed_seconds'], 30)
+        page = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
+        match = re.search(r'data-elapsed="(\d+)"', page.content.decode())
+        self.assertIsNotNone(match)
+        self.assertLess(int(match.group(1)), 30)
 
     def test_project_can_be_renamed_from_the_edit_screen(self):
         project = self.make_project()
@@ -2705,6 +2760,24 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
 
         self.assertNotContains(response, 'Histórico de processamentos')
         self.assertNotContains(response, 'Edição inteligente de fala')
+
+    def test_finished_project_detail_avoids_edit_validation_and_keeps_output_actions(self):
+        project = self.make_project()
+        job = self.make_job()
+        project.render_job = job
+        project.status = project.Status.FINISHED
+        project.save(update_fields=['render_job', 'status', 'update_at'])
+        video = MediaAsset.objects.create(job=job, kind=MediaAsset.Kind.VIDEO, language='pt', file='final.mp4')
+        thumbnail = MediaAsset.objects.create(job=job, kind=MediaAsset.Kind.THUMBNAIL, language='pt', file='thumbnail.jpg')
+
+        with patch.object(ProjectService, 'file_exists', side_effect=AssertionError('unexpected storage check')):
+            with patch('website.views.external_media.OverlayTimelineService.ensure_project_overlays', side_effect=AssertionError('unexpected overlay setup')):
+                response = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
+
+        self.assertContains(response, 'Seu vídeo está')
+        self.assertContains(response, reverse('external_media_asset', args=[job.public_id, video.pk]))
+        self.assertContains(response, f'poster="{reverse("external_media_asset", args=[job.public_id, thumbnail.pk])}?preview=1"')
+        self.assertContains(response, 'Reprocessar vídeo')
 
     def test_processing_project_can_be_deleted(self):
         project = self.make_project()
@@ -3825,6 +3898,35 @@ class ExternalMediaRetryTests(ExternalMediaFixtureMixin, TestCase):
 
 
 class TranscriptionGroupingTests(SimpleTestCase):
+    @patch('website.external_media.services.AudioExtractor.extract')
+    def test_timeout_retries_only_failed_chunk_in_smaller_parts_with_offsets(self, extract):
+        timeout = AIServiceError('Falha na transcrição')
+        timeout.__cause__ = APITimeoutError(request=httpx.Request('POST', 'https://api.example.test'))
+        ai_service = Mock()
+        ai_service.transcribe_segments.side_effect = [
+            [TranscriptionSegment(100, 200, 'antes', 'word')],
+            timeout,
+            [TranscriptionSegment(1000, 1200, 'primeiro', 'word')],
+            [TranscriptionSegment(300, 500, 'segundo', 'word')],
+        ]
+        extract.return_value = [AudioChunk(Path('/tmp/part1.mp3'), 0), AudioChunk(Path('/tmp/part2.mp3'), 120000)]
+        result = TranscriptionService(ai_service=ai_service).transcribe_detailed(
+            [AudioChunk(Path('/tmp/first.mp3'), 0), AudioChunk(Path('/tmp/second.mp3'), 300000)], 'pt',
+        )
+        self.assertEqual([(item.start_ms, item.text) for item in result], [
+            (100, 'antes'), (301000, 'primeiro'), (420300, 'segundo'),
+        ])
+        self.assertEqual(ai_service.transcribe_segments.call_count, 4)
+        self.assertEqual(extract.call_args.kwargs['chunk_seconds'], 120)
+
+    @patch('website.external_media.services.AudioExtractor.extract')
+    def test_other_transcription_errors_are_not_retried(self, extract):
+        ai_service = Mock()
+        ai_service.transcribe_segments.side_effect = AIServiceError('Falha na transcrição')
+        with self.assertRaises(AIServiceError):
+            TranscriptionService(ai_service=ai_service).transcribe_detailed([AudioChunk(Path('/tmp/audio.mp3'), 0)], 'pt')
+        extract.assert_not_called()
+
     def test_detailed_transcription_uses_literal_prompt_for_filler_removal(self):
         ai_service = Mock()
         ai_service.transcribe_segments.return_value = [

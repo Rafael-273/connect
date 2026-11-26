@@ -20,7 +20,7 @@
 
 {% block media_header_actions %}
 {% if project.status == 'AWAITING_REVIEW' %}<a href="{% url 'external_media_project_preview' project.public_id %}" class="media-btn media-primary"><i class="fas fa-wand-magic-sparkles"></i>Revisar edição</a>{% endif %}
-{% if project.status == 'FINISHED' and project.render_job %}{% for asset in assets %}{% if asset.kind == 'VIDEO' %}<a href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?download=1" download class="media-btn media-primary project-header-download" aria-label="Baixar vídeo" title="Baixar vídeo"><i class="fas fa-download"></i><span>Baixar vídeo</span></a>{% endif %}{% endfor %}{% endif %}
+{% if project.status == 'FINISHED' and project.render_job %}{% for asset in assets %}{% if asset.kind == 'VIDEO' %}<a data-no-loading-overlay href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?download=1" download class="media-btn media-primary project-header-download" aria-label="Baixar vídeo" title="Baixar vídeo"><i class="fas fa-download"></i><span>Baixar vídeo</span></a>{% endif %}{% endfor %}{% endif %}
 {% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}
 <details class="project-actions-menu project-header-actions-menu">
     <summary class="media-btn media-secondary cursor-pointer" aria-label="Mais ações" title="Mais ações"><i class="fas fa-ellipsis"></i></summary>
@@ -135,32 +135,25 @@
     .project-final__export-error:empty { display:none; }
     .project-final__export-retry { display:inline-flex; align-items:center; gap:.45rem; min-height:2.15rem; margin-top:.8rem; border:0; border-radius:.6rem; background:#c90905; padding:0 .75rem; color:#fff; font-size:.76rem; font-weight:900; transition:background .2s ease,transform .2s ease; }
     .project-final__export-retry:hover { background:#a90805; transform:translateY(-1px); }
-    .project-progress { overflow:hidden; border-color:#f1d7d5; background:linear-gradient(135deg, #fff 0%, #fff9f8 100%); }
-    .project-progress__top { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+    .content-wrapper:has(#progress-card) { min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; }
+    .media-shell:has(#progress-card) { flex:1; display:flex; flex-direction:column; }
+    .project-progress { flex:1; display:flex; flex-direction:column; overflow:hidden; border:0; background:transparent; box-shadow:none; }
+    .project-progress__summary { flex:1; display:flex; flex-direction:column; }
+    .project-progress__stage { position:relative; flex:1; display:grid; place-items:center; min-height:24rem; overflow:hidden; border-radius:1.5rem; background:radial-gradient(ellipse at center,#fff 12%,#fff9f8 70%,#f9eeec 100%); }
+    .project-progress__border { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+    .project-progress__border-track,.project-progress__border-fill { fill:none; stroke-width:5; vector-effect:non-scaling-stroke; }
+    .project-progress__border-track { stroke:#f0deda; }
+    .project-progress__border-fill { stroke:#d70d08; stroke-linecap:round; transition:stroke-dasharray .7s cubic-bezier(.2,.8,.2,1); }
+    .project-progress__center { position:relative; z-index:1; width:min(100%, 36rem); padding:3.5rem 2rem; text-align:center; }
+    .project-progress__title { margin:1rem 0 0; color:#182130; font-size:clamp(1.4rem, 2.8vw, 2rem); font-weight:800; line-height:1.2; }
+    .project-progress__hint { margin:.65rem auto 0; max-width:27rem; color:#7b8291; font-size:.9rem; line-height:1.6; }
     .project-progress__eyebrow { display:inline-flex; align-items:center; gap:.45rem; color:#a41310; font-size:.72rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }
     .project-progress__live { width:.5rem; height:.5rem; border-radius:999px; background:#d90905; box-shadow:0 0 0 4px rgba(201,9,5,.12); animation:project-progress-pulse 1.8s ease-in-out infinite; }
-    .project-progress__percent { flex:none; border:1px solid #f7c7c4; border-radius:999px; background:#fff; color:#b80704; padding:.38rem .58rem; font-size:.9rem; font-weight:900; letter-spacing:-.02em; line-height:1; font-variant-numeric:tabular-nums; }
-    .project-progress__track { height:.65rem; overflow:hidden; border-radius:999px; background:#f0e9e8; box-shadow:inset 0 1px 2px rgba(71,14,10,.06); }
-    .project-progress__bar { height:100%; min-width:.5rem; border-radius:inherit; background:linear-gradient(90deg, #b80704 0%, #e31a15 65%, #ff6b62 100%); box-shadow:0 0 18px rgba(201,9,5,.25); transition:width .7s cubic-bezier(.2,.8,.2,1); }
-    .project-progress__elapsed { display:inline-flex; align-items:center; gap:.4rem; margin-top:.9rem; color:#8b8e98; font-size:.78rem; }
+    .project-progress__percent { display:block; margin:1.5rem 0 .15rem; color:#c90905; font-size:clamp(3.5rem, 8vw, 6.5rem); font-weight:800; letter-spacing:-.07em; line-height:1; font-variant-numeric:tabular-nums; }
+    .project-progress__elapsed { display:inline-flex; align-items:center; gap:.4rem; margin-top:1.3rem; color:#8b8e98; font-size:.78rem; }
     .project-progress__elapsed i { color:#c90905; font-size:.72rem; }
-    .project-progress__steps { display:grid; grid-template-columns:minmax(0,1fr); gap:0; margin-top:.7rem; padding:0; }
-    .project-progress__steps-title { margin-bottom:.25rem; color:#98a2b3; font-size:.67rem; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
-    .project-progress__details { margin-top:1.35rem; border-top:1px solid #f0e7e6; }
-    .project-progress__details summary { cursor:pointer; padding-top:1rem; color:#4b5563; font-size:.82rem; font-weight:900; list-style:none; }
-    .project-progress__details summary::-webkit-details-marker { display:none; }
-    .project-progress__details summary::after { content:'+'; float:right; color:#c90905; font-size:1.1rem; }
-    .project-progress__details[open] summary::after { content:'−'; }
-    .project-progress__details .project-progress__steps { margin-top:.8rem; }
-    .project-progress__step { position:relative; display:flex; align-items:center; gap:.55rem; min-height:2.7rem; border-bottom:1px solid #f0e9e8; padding:.48rem 2rem .48rem 1.75rem; background:transparent; color:#667085; font-size:.8rem; line-height:1.3; }
-    .project-progress__step::before { content:attr(data-step-order); position:absolute; right:.1rem; color:#b4b7bf; font-size:.61rem; font-weight:800; letter-spacing:.04em; font-variant-numeric:tabular-nums; }
-    .project-progress__step::after { display:none; }
-    .project-progress__step-icon { position:absolute; z-index:1; top:50%; left:0; width:1.05rem; height:1.05rem; display:grid; place-items:center; border-radius:999px; background:#e7eaee; color:#98a2b3; font-size:.52rem; transform:translateY(-50%); }
-    .project-progress__step.is-running { color:#3f1d1a; font-weight:800; }
-    .project-progress__step.is-running .project-progress__step-icon,.project-progress__step.is-finished .project-progress__step-icon { background:#c90905; color:#fff; }
-    .project-progress__step.is-error { color:#b42318; }
-    .project-progress__step.is-error .project-progress__step-icon { background:#fff1f2; color:#c90905; }
-    .project-progress__step-message { display:block; margin-top:.1rem; color:#98a2b3; font-size:.72rem; font-weight:400; }
+    @media (max-width:640px) { .project-progress__stage { min-height:20rem; border-radius:1.1rem; } .project-progress__center { padding:2.5rem 1.4rem; } }
+    @media (prefers-reduced-motion:reduce) { .project-progress__live { animation:none; } .project-progress__border-fill { transition:none; } }
     .project-reprocess-modal { position:fixed; inset:0; z-index:90; display:none; align-items:center; justify-content:center; padding:1rem; background:rgba(15,23,42,.6); }
     .project-reprocess-modal.is-open { display:flex; }
     .project-reprocess-modal__card { width:min(100%,42rem); border-radius:1.25rem; background:#fff; padding:1.35rem; box-shadow:0 26px 80px rgba(15,23,42,.32); }
@@ -192,13 +185,8 @@
         .project-final__player { opacity:0; animation:project-final-player-reveal .58s cubic-bezier(.2,.8,.2,1) .27s forwards; }
         .project-final__resources > * { animation-delay:.4s; }
     }
-    @media (prefers-reduced-motion:reduce) { .project-submit-overlay__spinner i { animation-duration:1.5s; } .project-progress.is-timeline-open .project-result-video__player video { animation:none; } .project-final__player video { transition:none; } }
+    @media (prefers-reduced-motion:reduce) { .project-submit-overlay__spinner i { animation-duration:1.5s; } .project-final__player video { transition:none; } }
     @media (hover:hover) and (pointer:fine) { .project-final__player video:hover { transform:scale(1.015); box-shadow:0 20px 46px rgba(46,14,12,.28); } }
-    @media (min-width:640px) {
-        .project-progress__steps { grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:1.15rem; row-gap:0; }
-        .project-progress__steps-title { grid-column:1 / -1; }
-        .project-progress__step:nth-of-type(odd)::after { content:''; display:block; position:absolute; top:50%; left:100%; width:1.15rem; height:1px; background:#efd9d7; transform:translateY(-50%); }
-    }
     @media (min-width:1024px) {
         .project-final__body { grid-template-columns:minmax(0,1fr) minmax(15rem,.42fr); gap:2.5rem; padding:0 2.1rem 2rem; }
         .project-final__resources { justify-self:stretch; border-top:0; border-left:1px solid #ead8d5; padding:1rem 0 1rem 2rem; }
@@ -208,9 +196,6 @@
         .project-progress.is-portrait > .project-progress__result + p { grid-column:1; }
         .project-progress.is-portrait .project-result-video__player { margin-top:0; max-height:min(52dvh,38rem); }
         .project-progress.is-portrait .project-result-video__player video { max-height:min(52dvh,38rem); }
-        .project-progress.is-portrait.is-timeline-open > .project-progress__result { display:flex; align-items:center; overflow:hidden; }
-        .project-progress.is-portrait.is-timeline-open .project-result-video__player { height:100%; max-height:none; }
-        .project-progress.is-portrait.is-timeline-open .project-result-video__player video { width:auto; height:100%; max-height:none; animation:project-player-expand .32s ease-out both; }
     }
     @media (min-width:1280px) {
         .project-final__body { grid-template-columns:minmax(0,1fr) minmax(0,min(44rem,40vw)) minmax(0,1fr); gap:0; }
@@ -254,7 +239,7 @@
         {% if project.render_job %}
         {% for asset in assets %}{% if asset.kind == 'VIDEO' %}
         <div class="project-final__player">
-            <video controls preload="metadata" playsinline webkit-playsinline src="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?preview=1"></video>
+            <video controls preload="metadata" playsinline webkit-playsinline{% if project_header_thumbnail %} poster="{% url 'external_media_asset' project.render_job.public_id project_header_thumbnail.pk %}?preview=1"{% endif %} src="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?preview=1"></video>
         </div>
         {% endif %}{% endfor %}
         {% endif %}
@@ -264,7 +249,7 @@
                 <div class="project-final__resources-content">
                     <p class="project-final__resources-description">Legendas e arquivos gerados para a sua pós-produção.</p>
                     <div class="project-final__resources-list">
-                        {% for asset in assets %}{% if asset.kind == 'SRT' %}<a class="media-btn media-muted text-sm" href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}"><i class="fas fa-file-lines"></i>SRT {{ asset.language|upper }}</a>{% endif %}{% endfor %}
+                        {% for asset in assets %}{% if asset.kind == 'SRT' %}<a data-no-loading-overlay class="media-btn media-muted text-sm" href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}"><i class="fas fa-file-lines"></i>SRT {{ asset.language|upper }}</a>{% endif %}{% endfor %}
                     </div>
                 </div>
             </details>
@@ -286,7 +271,7 @@
                         <strong class="project-final__export-progress" data-export-progress>{{ export.progress }}%</strong>
                     </div>
                     <div class="project-final__export-track"><div class="project-final__export-bar" data-export-bar style="width:{{ export.progress }}%"></div></div>
-                    {% if export.status == 'FINISHED' %}<a class="media-btn media-primary text-sm mt-3" href="{% url 'external_media_project_export_download' project.public_id export.public_id %}"><i class="fas fa-download"></i>Baixar pacote</a>{% endif %}
+                    {% if export.status == 'FINISHED' %}<a data-no-loading-overlay class="media-btn media-primary text-sm mt-3" href="{% url 'external_media_project_export_download' project.public_id export.public_id %}"><i class="fas fa-download"></i>Baixar pacote</a>{% endif %}
                     {% if export.error_message %}<p class="project-final__export-error" data-export-error>{{ export.error_message }}</p>{% else %}<p class="project-final__export-error" data-export-error></p>{% endif %}
                     {% if export.status == 'ERROR' %}<form method="post" action="{% url 'external_media_project_export_premiere' project.public_id %}">{% csrf_token %}<button type="submit" class="project-final__export-retry"><i class="fas fa-rotate-right"></i>Tentar novamente</button></form>{% endif %}
                 </article>
@@ -298,19 +283,21 @@
     </div>
 </section>
 {% else %}
-<section class="media-card project-progress p-5 sm:p-7 mb-7" id="progress-card" data-status-url="{% url 'external_media_project_status' project.public_id %}" data-terminal="{% if project.status == 'AWAITING_REVIEW' or project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}1{% else %}0{% endif %}" data-elapsed="{{ project.duration_seconds|default:0 }}">
+<section class="project-progress" id="progress-card" data-status-url="{% url 'external_media_project_status' project.public_id %}" data-terminal="{% if project.status == 'AWAITING_REVIEW' or project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}1{% else %}0{% endif %}" data-elapsed="{{ project.stage_duration_seconds|default:0 }}">
     <div class="project-progress__summary">
-        <div class="project-progress__top">
-            <div class="min-w-0">
+        <div class="project-progress__stage" id="progress-indicator" role="progressbar" aria-label="Progresso do processamento" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ project.progress }}">
+            <svg class="project-progress__border" viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true">
+                <path class="project-progress__border-track" d="M500 3 H970 Q997 3 997 30 V570 Q997 597 970 597 H30 Q3 597 3 570 V30 Q3 3 30 3 Z" />
+                <path id="progress-bar" class="project-progress__border-fill" pathLength="100" stroke-dasharray="{{ project.progress }} 100" d="M500 3 H970 Q997 3 997 30 V570 Q997 597 970 597 H30 Q3 597 3 570 V30 Q3 3 30 3 Z" />
+            </svg>
+            <div class="project-progress__center">
                 <p class="project-progress__eyebrow"><i class="project-progress__live"></i><span id="status-label">{{ project.get_status_display }}</span></p>
-                <h2 class="mt-3 text-xl sm:text-2xl font-black text-gray-900" id="current-step">{{ project.current_step|default:"Preparando seu processamento" }}</h2>
-                <p class="mt-1 text-sm text-gray-500">{% if project.status == 'FINISHED' %}Seu vídeo já está pronto para visualizar e baixar.{% elif project.status == 'ERROR' or project.status == 'CANCELLED' %}Confira os detalhes abaixo para continuar.{% else %}Você pode continuar navegando. Atualizaremos este status automaticamente.{% endif %}</p>
+                <strong class="project-progress__percent" id="progress-value">{{ project.progress }}%</strong>
+                <h2 class="project-progress__title" id="current-step">{{ project.current_step|default:"Preparando seu processamento" }}</h2>
+                <p class="project-progress__hint">{% if project.status == 'FINISHED' %}Seu vídeo já está pronto para visualizar e baixar.{% elif project.status == 'ERROR' or project.status == 'CANCELLED' %}Confira os detalhes abaixo para continuar.{% else %}Você pode continuar navegando. Atualizaremos este status automaticamente.{% endif %}</p>
+                <p class="project-progress__elapsed"><i class="far fa-clock"></i>Tempo decorrido: <span id="duration-label">{{ project.stage_duration_label|default:"Agora" }}</span></p>
             </div>
-            <strong class="project-progress__percent" id="progress-value">{{ project.progress }}%</strong>
         </div>
-        <div class="project-progress__track mt-5" aria-label="Progresso do processamento"><div id="progress-bar" class="project-progress__bar" style="width:{{ project.progress }}%"></div></div>
-        <p class="project-progress__elapsed"><i class="far fa-clock"></i>Tempo decorrido: <span id="duration-label">{{ project.duration_label|default:"Agora" }}</span></p>
-        <details class="project-progress__details"><summary>Ver linha do tempo</summary><div class="project-progress__steps" id="progress-steps"><p class="project-progress__steps-title">Linha do tempo do processamento</p>{% for step in steps %}<div class="project-progress__step {% if step.status == 'FINISHED' %}is-finished{% elif step.status == 'RUNNING' %}is-running{% elif step.status == 'ERROR' %}is-error{% endif %}" data-step-order="{{ forloop.counter|stringformat:'02d' }}"><span class="project-progress__step-icon"><i class="fas {% if step.status == 'FINISHED' %}fa-check{% elif step.status == 'ERROR' %}fa-xmark{% elif step.status == 'RUNNING' %}fa-spinner fa-spin{% elif step.status == 'SKIPPED' %}fa-minus{% else %}fa-circle{% endif %}"></i></span><span>{{ step.label }}{% if step.message %}<small class="project-progress__step-message">{{ step.message }}</small>{% endif %}</span></div>{% endfor %}</div></details>
     </div>
     {% if project.error_message %}<p class="mt-4 p-3 rounded-xl bg-red-50 text-red-700 text-sm">{{ project.error_message }}</p>{% endif %}
 </section>
@@ -354,7 +341,7 @@
     <div class="project-media-block__header"><div class="project-media-block__identity"><span class="project-media-block__number"><i class="fas fa-video"></i></span><div><h3 class="project-media-block__title">Vídeo do projeto</h3><p class="text-sm text-gray-500 mt-0.5">Envio direto, sem cenas predefinidas</p></div></div><div class="flex items-center gap-2"><span class="project-media-block__state {% if direct_media %}is-ready{% else %}is-empty{% endif %}">{% if direct_media %}<i class="fas fa-check"></i>Vídeo adicionado{% else %}<i class="fas fa-arrow-up"></i>Enviar vídeo{% endif %}</span>{% if direct_media %}<details class="project-actions-menu"><summary class="project-media-action cursor-pointer" aria-label="Mais opções"><i class="fas fa-ellipsis"></i></summary><div class="project-actions-menu__list"><button type="button" class="project-actions-menu__item" onclick="const card=document.querySelector('[data-broll-assets-list]');card.classList.remove('hidden');document.getElementById('direct-elements-panel').open=true;this.closest('details').removeAttribute('open')"><i class="fas fa-photo-film text-violet-600"></i>Adicionar elemento</button><button type="button" class="project-actions-menu__item" onclick="const panel=document.getElementById('direct-camera-panel');panel.classList.remove('hidden');panel.open=true;this.closest('details').removeAttribute('open')"><i class="fas fa-camera text-sky-600"></i>Adicionar câmera extra</button></div></details>{% endif %}</div></div>
     <div class="project-media-block__body">
         {% if direct_media %}<div class="space-y-2 mb-4">{% for media in direct_media %}
-        <div class="project-uploaded-media flex items-center justify-between gap-3 rounded-lg border border-white bg-white p-3 shadow-sm"><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.file_size|filesizeformat }}{% if media.trim_ranges %} · {{ media.trim_ranges|length }} trechos aplicados{% elif media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div><div class="flex items-center gap-1 shrink-0">{% if media.preview_status == 'READY' %}<button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-preview-start="{{ media.trim_start_ms|default:0 }}" data-media-preview-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button><button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges_json }}" data-take-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}" data-trim-reviewed="{{ media.trim_reviewed|yesno:'true,false' }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">Cortar</span></button>{% elif media.preview_status == 'ERROR' %}<span class="text-xs text-amber-700" title="{{ media.preview_error }}">Preview indisponível</span>{% else %}<span class="text-xs text-gray-500" data-preview-pending data-preview-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}"><i class="fas fa-spinner fa-spin mr-1"></i>Preparando preview</span>{% endif %}<form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover"><i class="fas fa-trash"></i></button></form></div></div>
+        <div class="project-uploaded-media flex items-center justify-between gap-3 rounded-lg border border-white bg-white p-3 shadow-sm"><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.file_size|filesizeformat }}<span data-trim-summary>{% if media.trim_ranges %} · {{ media.trim_ranges|length }} trechos aplicados{% elif media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></span></div><div class="flex items-center gap-1 shrink-0">{% if media.preview_status == 'READY' %}<button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-preview-start="{{ media.trim_start_ms|default:0 }}" data-media-preview-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button><button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-duration-ms="{{ media.duration_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges_json }}" data-take-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}" data-trim-reviewed="{{ media.trim_reviewed|yesno:'true,false' }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">Cortar</span></button>{% elif media.preview_status == 'ERROR' %}<span class="text-xs text-amber-700" title="{{ media.preview_error }}">Preview indisponível</span>{% else %}<span class="text-xs text-gray-500" data-preview-pending data-preview-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}"><i class="fas fa-spinner fa-spin mr-1"></i>Preparando preview</span>{% endif %}<form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover"><i class="fas fa-trash"></i></button></form></div></div>
         {% endfor %}</div>{% endif %}
         {% if direct_media %}
         <section class="order-3 mt-4 overflow-hidden rounded-xl border border-violet-100 bg-violet-50/30{% if not direct_brolls %} hidden{% endif %}" data-broll-assets-list>
@@ -386,12 +373,12 @@
         <div class="project-uploaded-media flex items-center justify-between gap-3 rounded-lg border border-white bg-white p-3 shadow-sm media-sort-item" draggable="{% if media.preview_status == 'READY' %}true{% else %}false{% endif %}" data-media-id="{{ media.pk }}">
             <div class="flex items-center min-w-0 gap-3">
                 <button type="button" class="text-gray-400 cursor-grab active:cursor-grabbing p-1 {% if media.preview_status != 'READY' %}invisible{% endif %}" title="Arraste para mudar a ordem"><i class="fas fa-grip-vertical"></i></button>
-                <div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">Câmera principal · {{ media.file_size|filesizeformat }}{% if media.trim_ranges %} · {{ media.trim_ranges|length }} trechos aplicados{% elif media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div>
+                <div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">Câmera principal · {{ media.file_size|filesizeformat }}<span data-trim-summary>{% if media.trim_ranges %} · {{ media.trim_ranges|length }} trechos aplicados{% elif media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></span></div>
             </div>
             <div class="flex items-center gap-1 shrink-0">
                 {% if media.preview_status == 'READY' %}
                 <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-preview-start="{{ media.trim_start_ms|default:0 }}" data-media-preview-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button>
-                <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges_json }}" data-take-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}" data-trim-reviewed="{{ media.trim_reviewed|yesno:'true,false' }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">{% if media.trim_ranges or media.trim_start_ms or media.trim_end_ms %}Editar corte{% else %}Cortar{% endif %}</span></button>
+                <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-duration-ms="{{ media.duration_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges_json }}" data-take-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}" data-trim-reviewed="{{ media.trim_reviewed|yesno:'true,false' }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">{% if media.trim_ranges or media.trim_start_ms or media.trim_end_ms %}Editar corte{% else %}Cortar{% endif %}</span></button>
                 {% elif media.preview_status == 'ERROR' %}
                 <span class="text-xs text-amber-700" title="{{ media.preview_error }}">Preview indisponível</span>
                 {% else %}
@@ -416,9 +403,9 @@
             <div class="space-y-2 p-2">
             {% for media in item.extra_media %}
             <div class="flex items-center justify-between gap-3 rounded-lg border border-white bg-white p-3 shadow-sm" data-media-id="{{ media.pk }}">
-                <div class="flex items-center min-w-0 gap-3"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><i class="fas fa-camera"></i></span><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.camera_label|default:"Câmera extra" }} · {{ media.file_size|filesizeformat }}{% if media.trim_ranges %} · {{ media.trim_ranges|length }} trechos aplicados{% elif media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div></div>
+                <div class="flex items-center min-w-0 gap-3"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700"><i class="fas fa-camera"></i></span><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.camera_label|default:"Câmera extra" }} · {{ media.file_size|filesizeformat }}<span data-trim-summary>{% if media.trim_ranges %} · {{ media.trim_ranges|length }} trechos aplicados{% elif media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></span></div></div>
                 <div class="flex items-center gap-1 shrink-0">
-                    {% if media.preview_status == 'READY' %}<button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-preview-start="{{ media.trim_start_ms|default:0 }}" data-media-preview-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button><button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges_json }}" data-take-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}" data-trim-reviewed="{{ media.trim_reviewed|yesno:'true,false' }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">Cortar</span></button>{% elif media.preview_status == 'ERROR' %}<span class="text-xs text-amber-700" title="{{ media.preview_error }}">Preview indisponível</span>{% else %}<span class="text-xs text-gray-500" data-preview-pending data-preview-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}"><i class="fas fa-spinner fa-spin mr-1"></i>Preparando preview</span>{% endif %}
+                    {% if media.preview_status == 'READY' %}<button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-preview-start="{{ media.trim_start_ms|default:0 }}" data-media-preview-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button><button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-duration-ms="{{ media.duration_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges_json }}" data-take-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}" data-trim-reviewed="{{ media.trim_reviewed|yesno:'true,false' }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">Cortar</span></button>{% elif media.preview_status == 'ERROR' %}<span class="text-xs text-amber-700" title="{{ media.preview_error }}">Preview indisponível</span>{% else %}<span class="text-xs text-gray-500" data-preview-pending data-preview-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}"><i class="fas fa-spinner fa-spin mr-1"></i>Preparando preview</span>{% endif %}
                     <form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover câmera extra"><i class="fas fa-trash"></i></button></form>
                 </div>
             </div>
@@ -461,7 +448,7 @@
                 {% endif %}
                 {% for broll in item.brolls %}
                 <div class="flex items-center justify-between gap-3 rounded-lg bg-white border border-violet-100 p-3">
-                    <div class="min-w-0"><strong class="block truncate"><i class="fas {% if broll.media_type == 'VIDEO' %}fa-video{% else %}fa-image{% endif %} mr-1 text-violet-600"></i>{{ broll.original_filename }}</strong><span class="text-xs text-gray-500">{{ broll.get_media_type_display }}{% if broll.trim_start_ms or broll.trim_end_ms %} · corte aplicado{% endif %}</span></div>
+                    <div class="min-w-0"><strong class="block truncate"><i class="fas {% if broll.media_type == 'VIDEO' %}fa-video{% else %}fa-image{% endif %} mr-1 text-violet-600"></i>{{ broll.original_filename }}</strong><span class="text-xs text-gray-500">{{ broll.get_media_type_display }}<span data-trim-summary>{% if broll.trim_start_ms or broll.trim_end_ms %} · corte aplicado{% endif %}</span></span></div>
                     <div class="flex items-center gap-1 shrink-0">
                         {% if broll.media_type == 'VIDEO' and broll.preview_status == 'READY' %}
                         <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ broll.original_filename }}" data-media-url="{% url 'external_media_project_broll_preview' project.public_id broll.public_id %}" data-media-preview-start="{{ broll.trim_start_ms|default:0 }}" data-media-preview-end="{{ broll.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button>
@@ -718,6 +705,7 @@
                     trimButton.dataset.mediaTrimUrl = media.trim_url;
                     trimButton.dataset.takeStatusUrl = status.dataset.previewStatusUrl;
                     trimButton.dataset.mediaTrimRanges = JSON.stringify(media.trim_ranges || []);
+                    trimButton.dataset.mediaTrimDurationMs = media.duration_ms || '';
                     trimButton.dataset.trimReviewed = String(media.take_analysis?.trim_reviewed || false);
                     trimButton.dataset.mediaTrimStart = media.trim_start_ms || 0;
                     trimButton.dataset.mediaTrimEnd = media.trim_end_ms || '';
@@ -1230,41 +1218,6 @@
         const elapsed=document.getElementById('duration-label');
         if(elapsed)elapsed.textContent=formatDuration(elapsedSeconds);
     };
-    const stepPresentation=(status)=>({
-        FINISHED:{className:'is-finished',icon:'fa-check'},
-        RUNNING:{className:'is-running',icon:'fa-spinner fa-spin'},
-        ERROR:{className:'is-error',icon:'fa-xmark'},
-        SKIPPED:{className:'',icon:'fa-minus'},
-        PENDING:{className:'',icon:'fa-circle'},
-    })[status]||{className:'',icon:'fa-circle'};
-    const renderSteps=(steps)=>{
-        const container=document.getElementById('progress-steps');
-        if(!container||!Array.isArray(steps))return;
-        container.replaceChildren();
-        const title=document.createElement('p');
-        title.className='project-progress__steps-title';
-        title.textContent='Linha do tempo do processamento';
-        container.append(title);
-        steps.forEach((step,index)=>{
-            const presentation=stepPresentation(step.status);
-            const item=document.createElement('div');
-            item.className=`project-progress__step ${presentation.className}`;
-            item.dataset.stepOrder=String(index+1).padStart(2,'0');
-            const icon=document.createElement('span');
-            icon.className='project-progress__step-icon';
-            icon.innerHTML=`<i class="fas ${presentation.icon}"></i>`;
-            const content=document.createElement('span');
-            content.textContent=step.label;
-            if(step.message){
-                const message=document.createElement('small');
-                message.className='project-progress__step-message';
-                message.textContent=step.message;
-                content.append(message);
-            }
-            item.append(icon,content);
-            container.append(item);
-        });
-    };
     window.setInterval(()=>{
         elapsedSeconds+=1;
         refreshClocks();
@@ -1279,10 +1232,11 @@
             document.getElementById('status-label').textContent=data.status_label;
             document.getElementById('current-step').textContent=userFacingStep(data.current_step);
             document.getElementById('progress-value').textContent=data.progress+'%';
-            document.getElementById('progress-bar').style.width=data.progress+'%';
+            const progress=Math.max(0,Math.min(100,Number(data.progress)||0));
+            document.getElementById('progress-bar').setAttribute('stroke-dasharray',`${progress} 100`);
+            document.getElementById('progress-indicator').setAttribute('aria-valuenow',progress);
             if(data.elapsed_seconds!==null&&data.elapsed_seconds!==undefined)elapsedSeconds=data.elapsed_seconds;
             refreshClocks();
-            renderSteps(data.steps);
             if(data.is_terminal){window.location.reload();return;}
             setTimeout(poll,2500);
         }catch(error){setTimeout(poll,5000);}
@@ -1400,6 +1354,7 @@
     };
     keepVideoInline(trimPlayer);
     let trimUrl = '';
+    let trimButton = null;
     let takeState = new window.TakeSuggestionState(true);
     let takeEpoch = 0;
     let takeTimer;
@@ -1423,6 +1378,7 @@
             if (!response.ok) throw new Error('status');
             const media = await response.json();
             if (epoch !== takeEpoch) return;
+            if (media.duration_ms && trimButton) trimButton.dataset.mediaTrimDurationMs = media.duration_ms;
             const analysis = media.take_analysis;
             if (!analysis) return;
             takePanel.classList.remove('hidden');
@@ -1446,7 +1402,12 @@
     let activeTrimHandle = null;
     let trimRanges = [];
     let activeTrimRange = 0;
-    const trimDuration = () => Number.isFinite(trimPlayer?.duration) && trimPlayer.duration > 0 ? trimPlayer.duration : 0;
+    const trimDuration = () => {
+        const previewDuration = trimPlayer?.duration;
+        if (!Number.isFinite(previewDuration) || previewDuration <= 0) return 0;
+        const sourceDuration = Number(trimButton?.dataset.mediaTrimDurationMs) / 1000;
+        return sourceDuration > 0 ? Math.min(previewDuration, sourceDuration) : previewDuration;
+    };
     const clampTrim = (value, minimum, maximum) => Math.min(Math.max(Number.isFinite(value) ? value : minimum, minimum), maximum);
     const formatTrimTime = (value) => {
         const seconds = Math.max(0, Math.floor(value || 0));
@@ -1538,6 +1499,7 @@
         takeEpoch++; clearTimeout(takeTimer);
         takePanel.classList.add('hidden'); takeLoad.classList.add('hidden');
         takeState = new window.TakeSuggestionState(button.dataset.trimReviewed === 'true' || Boolean(Number(button.dataset.mediaTrimStart)) || Boolean(button.dataset.mediaTrimEnd) || (button.dataset.mediaTrimRanges && button.dataset.mediaTrimRanges !== '[]'));
+        trimButton = button;
         trimUrl = button.dataset.mediaTrimUrl || '';
         trimIsSingle = button.dataset.mediaTrimSingle === 'true';
         trimAddRange?.classList.toggle('hidden', trimIsSingle);
@@ -1582,17 +1544,47 @@
     trimAddRange?.addEventListener('click', () => { if (trimIsSingle) return; const start = selectedTrimEnd() + .1; if (start >= trimDuration()) { trimError.textContent = 'Reduza o fim do trecho atual para abrir espaço para outro trecho.'; trimError.classList.remove('hidden'); return; } trimError?.classList.add('hidden'); trimRanges.push({start_seconds: start, end_seconds: trimDuration()}); activeTrimRange = trimRanges.length - 1; trimStart.value = start.toFixed(3); trimEnd.value = trimDuration().toFixed(3); trimPlayer.currentTime = start; renderTrimRanges(); syncTrimTimeline(); });
     trimSave?.addEventListener('click', async () => {
         if (!trimUrl || !trimStart || !trimEnd) return;
+        const duration = trimDuration();
+        const ranges = trimRanges.map(range => ({
+            start_seconds: Math.round(range.start_seconds * 1000) / 1000,
+            end_seconds: Math.min(Math.round(range.end_seconds * 1000), Math.floor(duration * 1000)) / 1000,
+        }));
+        if (!duration || ranges.some(range => range.end_seconds <= range.start_seconds)) {
+            trimError.textContent = 'Ajuste os trechos para que estejam dentro da duração do vídeo.';
+            trimError.classList.remove('hidden');
+            return;
+        }
         const data = new FormData();
-        data.append('trim_start_seconds', trimStart.value || '0');
-        data.append('trim_end_seconds', trimEnd.value);
-        data.append('trim_ranges', JSON.stringify(trimRanges));
+        data.append('trim_start_seconds', ranges[activeTrimRange].start_seconds);
+        data.append('trim_end_seconds', ranges[activeTrimRange].end_seconds);
+        data.append('trim_ranges', JSON.stringify(ranges));
+        const savedButton = trimButton;
+        const savedEpoch = takeEpoch;
         trimSave.disabled = true;
         window.projectSubmitOverlay?.show('Salvando corte…');
         try {
             const response = await fetch(trimUrl, {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '', 'X-Requested-With': 'XMLHttpRequest'}});
             const result = await response.json();
             if (!response.ok) throw new Error(result.detail || 'Não foi possível salvar o corte.');
-            window.location.reload();
+            if (savedButton) {
+                savedButton.dataset.mediaTrimStart = result.trim_start_ms;
+                savedButton.dataset.mediaTrimEnd = result.trim_end_ms ?? '';
+                savedButton.dataset.mediaTrimRanges = JSON.stringify(result.trim_ranges);
+                savedButton.dataset.trimReviewed = 'true';
+                const label = savedButton.querySelector('span');
+                if (label) label.textContent = 'Editar corte';
+                const row = savedButton.parentElement?.parentElement;
+                const preview = row?.querySelector('[data-media-preview]');
+                if (preview) {
+                    preview.dataset.mediaPreviewStart = result.trim_start_ms;
+                    preview.dataset.mediaPreviewEnd = result.trim_end_ms ?? '';
+                }
+                const summary = row?.querySelector('[data-trim-summary]');
+                if (summary) summary.textContent = result.trim_ranges.length ? ` · ${result.trim_ranges.length} trechos aplicados` : (result.trim_start_ms || result.trim_end_ms !== null ? ' · corte aplicado' : '');
+            }
+            if (savedEpoch === takeEpoch) closeTrim();
+            window.projectSubmitOverlay?.hide();
+            trimSave.disabled = false;
         } catch (error) {
             window.projectSubmitOverlay?.hide();
             trimError.textContent = error.message;
@@ -1957,12 +1949,6 @@
 </script>
 <script>
 (() => {
-    const progressCard = document.getElementById('progress-card');
-    const timelineDetails = progressCard?.querySelector('.project-progress__details');
-    const syncTimelineLayout = () => progressCard?.classList.toggle('is-timeline-open', Boolean(timelineDetails?.open));
-    timelineDetails?.addEventListener('toggle', syncTimelineLayout);
-    syncTimelineLayout();
-
     const updateResultVideoLayout = (video) => {
         if (!video.videoWidth || !video.videoHeight) return;
         const card = video.closest('.project-progress');

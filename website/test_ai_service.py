@@ -2,6 +2,8 @@ from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import httpx
+from openai import APITimeoutError
 from django.test import SimpleTestCase, override_settings
 
 from website.ai import AIConfigurationError, AIService, AIServiceError
@@ -93,6 +95,14 @@ class AIServiceTests(SimpleTestCase):
 
         request = self.client.audio.transcriptions.create.call_args.kwargs
         self.assertNotIn('language', request)
+
+    def test_timestamp_timeout_preserves_cause_for_chunk_retry(self):
+        timeout = APITimeoutError(request=httpx.Request('POST', 'https://api.example.test'))
+        self.client.audio.transcriptions.create.side_effect = timeout
+        with self.assertRaises(AIServiceError) as raised:
+            self.service.transcribe_segments(b'audio', filename='culto.mp3')
+        self.assertIs(raised.exception.__cause__, timeout)
+        self.assertIn('demorou mais que o esperado', str(raised.exception))
 
     def test_transcribe_segments_falls_back_to_whisper_when_model_rejects_verbose_json(self):
         self.client.audio.transcriptions.create.side_effect = [

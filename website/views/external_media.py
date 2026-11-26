@@ -16,7 +16,7 @@ from django.conf import settings
 from django.core.handlers.asgi import ASGIRequest
 from django.contrib import messages
 from django.db import IntegrityError, close_old_connections, connections, transaction
-from django.db.models import F, Max, Prefetch, Q, Sum
+from django.db.models import F, Max, Prefetch, Q, Sum, prefetch_related_objects
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -101,14 +101,15 @@ _RANGE_RE = re.compile(r'bytes=(\d*)-(\d*)')
 
 def project_processing_estimate(project):
     """Returns a conservative ETA based on this project's completed renders."""
-    if not project.started_at or project.status in {
+    start = project.stage_started_at or project.started_at
+    if not start or project.status in {
         ExternalMediaProject.Status.FINISHED,
         ExternalMediaProject.Status.ERROR,
         ExternalMediaProject.Status.CANCELLED,
         ExternalMediaProject.Status.DRAFT,
     }:
         return None, None, None
-    elapsed_seconds = max(0, int((timezone.now() - project.started_at).total_seconds()))
+    elapsed_seconds = max(0, int((timezone.now() - start).total_seconds()))
     completed = list(
         project.processing_history.filter(
             status=ExternalMediaJob.Status.FINISHED,
@@ -519,22 +520,47 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
         return set(job.output_languages).issubset(available_languages)
 
     def get_project(self, public_id):
-        return get_object_or_404(
+        project = get_object_or_404(
             ExternalMediaProject.objects.select_related(
                 'created_by', 'template_version__template', 'template_version__preset',
-                'template_version__subtitle_style', 'render_job',
-            ).prefetch_related(
-                'template_version__blocks', 'template_version__plugins',
-                'block_media', 'broll_assets', 'custom_blocks', 'pipeline_steps', 'render_job__assets',
-                'processing_history__assets', 'subtitle_review_sessions',
+                'template_version__subtitle_style', 'free_preset', 'render_job',
+                'current_timeline_revision',
             ),
             public_id=public_id,
         )
+        if project.status != project.Status.FINISHED:
+            prefetch_related_objects(
+                [project],
+                'template_version__blocks', 'template_version__plugins',
+                'block_media', 'broll_assets', 'custom_blocks', 'pipeline_steps', 'render_job__assets',
+                'processing_history__assets', 'subtitle_review_sessions',
+            )
+        return project
 
     def get(self, request, public_id):
         project = self.get_project(public_id)
+        if project.status == project.Status.FINISHED:
+            assets = list(project.render_job.assets.all()) if project.render_job_id else []
+            return render(request, 'member/external_media/project_detail.html', self.media_context(
+                project=project,
+                assets=assets,
+                project_header_thumbnail=next((asset for asset in assets if asset.kind == MediaAsset.Kind.THUMBNAIL), None),
+                project_exports=project.exports.order_by('-created_at')[:1],
+            ))
         if project.is_free and project.status == project.Status.AWAITING_REVIEW:
             return redirect('external_media_project_preview', public_id=public_id)
+        # Storage checks can require network requests; reuse their result only
+        # within this page load, including upload validation below.
+        file_existence = {}
+
+        def file_exists(field_file):
+            if not field_file or not getattr(field_file, 'name', ''):
+                return False
+            key = (id(field_file.storage), field_file.name)
+            if key not in file_existence:
+                file_existence[key] = ProjectService.file_exists(field_file)
+            return file_existence[key]
+
         project_overlays = OverlayTimelineService.ensure_project_overlays(project)
         overlays_by_block = {}
         for overlay in project_overlays:
@@ -569,7 +595,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
         for item in project.block_media.all():
             if item.editor_only:
                 continue
-            if ProjectService.file_exists(item.file):
+            if file_exists(item.file):
                 if not item.block_id and not item.custom_block_id:
                     direct_media.append(item)
                     continue
@@ -578,7 +604,9 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
                 if not item.block_id and not item.custom_block_id:
                     continue
                 missing_media_by_block.setdefault(('custom', item.custom_block_id) if item.custom_block_id else ('template', item.block_id), []).append(item)
-        for asset in project.broll_assets.filter(is_enabled=True):
+        for asset in project.broll_assets.all():
+            if not asset.is_enabled:
+                continue
             if not asset.block_id and not asset.custom_block_id:
                 direct_brolls.append(asset)
                 continue
@@ -589,7 +617,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
                 'definition': block,
                 'media': media_by_block.get(('template', block.pk), []),
                 'missing_media': missing_media_by_block.get(('template', block.pk), []),
-                'has_default_video': ProjectService.file_exists(block.default_video),
+                'has_default_video': file_exists(block.default_video),
                 'has_missing_default_video': bool(block.default_video and block.default_video.name),
                 'is_custom': False,
                 'overlays': overlays_by_block.get(block.pk, []),
@@ -646,7 +674,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
                 project.render_job.assets.filter(kind=MediaAsset.Kind.THUMBNAIL).first()
                 if project.render_job_id else None
             ),
-            validation_errors=ProjectService.validate_uploads(project),
+            validation_errors=ProjectService.validate_uploads(project, file_exists=file_exists, overlays=project_overlays),
             can_retry_render=self._can_retry_project_render(project),
             restore_processed_result=restore_job,
             use_s3=settings.USE_S3,
@@ -801,11 +829,12 @@ class ExternalMediaProjectRestoreProcessedResultView(ExternalMediaRequiredMixin,
             project.error_message = ''
             project.started_at = job.started_at
             project.finished_at = job.finished_at
+            project.stage_started_at = job.started_at
             project.render_job = job
             project.configuration = configuration
             project.save(update_fields=[
                 'status', 'progress', 'current_step', 'error_message', 'started_at',
-                'finished_at', 'render_job', 'configuration', 'update_at',
+                'finished_at', 'stage_started_at', 'render_job', 'configuration', 'update_at',
             ])
             for step in previous_steps:
                 ProjectPipelineStep.objects.filter(project=project, code=step['code']).update(
@@ -1914,7 +1943,7 @@ class ExternalMediaProjectBrollTrimView(ExternalMediaRequiredMixin, View):
         asset.trim_start_ms = ProjectBlockMediaForm.seconds_to_ms(start) or 0
         asset.trim_end_ms = ProjectBlockMediaForm.seconds_to_ms(end)
         asset.save(update_fields=['trim_start_ms', 'trim_end_ms', 'update_at'])
-        return JsonResponse({'ok': True})
+        return JsonResponse({'ok': True, 'trim_start_ms': asset.trim_start_ms, 'trim_end_ms': asset.trim_end_ms, 'trim_ranges': []})
 
 
 class ExternalMediaProjectMediaPreviewView(ExternalMediaRequiredMixin, View):
@@ -1944,6 +1973,7 @@ class ExternalMediaProjectMediaStatusView(ExternalMediaRequiredMixin, View):
             'name': item.original_filename,
             'preview_url': reverse('external_media_project_media_preview', args=[public_id, item.pk]),
             'trim_url': reverse('external_media_project_media_trim', args=[public_id, item.pk]),
+            'duration_ms': item.duration_ms,
             'trim_start_ms': item.trim_start_ms,
             'trim_end_ms': item.trim_end_ms,
             'trim_ranges': item.trim_ranges or [],
@@ -1982,13 +2012,13 @@ class ExternalMediaProjectMediaTrimView(ExternalMediaRequiredMixin, View):
                     range_start, range_end = float(value.get('start_seconds', -1)), float(value.get('end_seconds', -1))
                 except (TypeError, ValueError, OverflowError):
                     return JsonResponse({'detail': 'Os tempos dos trechos não são válidos.'}, status=400)
-                if not math.isfinite(range_start) or not math.isfinite(range_end) or (item.duration_ms and range_end * 1000 > item.duration_ms):
+                if not math.isfinite(range_start) or not math.isfinite(range_end) or (item.duration_ms and ProjectBlockMediaForm.seconds_to_ms(range_end) > item.duration_ms):
                     return JsonResponse({'detail': 'Os tempos precisam respeitar a duração do vídeo.'}, status=400)
                 if range_start < 0 or range_end <= range_start or range_start < previous_end:
                     return JsonResponse({'detail': 'Os trechos precisam estar em ordem e não podem se sobrepor.'}, status=400)
                 ranges.append({'start_ms': ProjectBlockMediaForm.seconds_to_ms(range_start), 'end_ms': ProjectBlockMediaForm.seconds_to_ms(range_end)})
                 previous_end = range_end
-        if not math.isfinite(start) or (end is not None and not math.isfinite(end)) or (item.duration_ms and (start * 1000 >= item.duration_ms or end is not None and end * 1000 > item.duration_ms)):
+        if not math.isfinite(start) or (end is not None and not math.isfinite(end)) or (item.duration_ms and (ProjectBlockMediaForm.seconds_to_ms(start) >= item.duration_ms or end is not None and ProjectBlockMediaForm.seconds_to_ms(end) > item.duration_ms)):
             return JsonResponse({'detail': 'Os tempos precisam respeitar a duração do vídeo.'}, status=400)
         if start < 0 or (end is not None and (end < 0 or end <= start)):
             return JsonResponse({'detail': 'O fim do corte precisa ser maior que o início.'}, status=400)
@@ -1998,7 +2028,7 @@ class ExternalMediaProjectMediaTrimView(ExternalMediaRequiredMixin, View):
         item.trim_start_ms = ranges[0]['start_ms'] if ranges else (ProjectBlockMediaForm.seconds_to_ms(start) or 0)
         item.trim_end_ms = ranges[0]['end_ms'] if ranges else ProjectBlockMediaForm.seconds_to_ms(end)
         item.save(update_fields=['trim_start_ms', 'trim_end_ms', 'trim_ranges', 'trim_reviewed', 'update_at'])
-        return JsonResponse({'ok': True})
+        return JsonResponse({'ok': True, 'trim_start_ms': item.trim_start_ms, 'trim_end_ms': item.trim_end_ms, 'trim_ranges': item.trim_ranges})
 
 
 class ExternalMediaProjectMediaReorderView(ExternalMediaRequiredMixin, View):
@@ -2146,6 +2176,7 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
             # processing_history, but restart the timer shown for this project.
             project.started_at = None
             project.finished_at = None
+            project.stage_started_at = timezone.now()
             project.current_timeline_revision = None
             project.editorial_version = F('editorial_version') + 1
             project.approved_timeline_revision = None
@@ -2156,7 +2187,7 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
             configuration.pop('broll_decisions', None)
             project.configuration = configuration
             project.save(update_fields=[
-                'status', 'progress', 'current_step', 'error_message', 'started_at', 'finished_at',
+                'status', 'progress', 'current_step', 'error_message', 'started_at', 'finished_at', 'stage_started_at',
                 'current_timeline_revision', 'approved_timeline_revision',
                 'preview_dirty', 'final_render_outdated', 'configuration', 'editorial_version', 'update_at',
             ])
@@ -2219,8 +2250,9 @@ class ExternalMediaProjectRenderView(ExternalMediaRequiredMixin, View):
             # Retrying only the final render is also a distinct execution.
             project.started_at = None
             project.finished_at = None
+            project.stage_started_at = timezone.now()
             project.save(update_fields=[
-                'status', 'progress', 'current_step', 'error_message', 'started_at', 'finished_at', 'update_at',
+                'status', 'progress', 'current_step', 'error_message', 'started_at', 'finished_at', 'stage_started_at', 'update_at',
             ])
             transaction.on_commit(lambda: self._enqueue(project.pk))
         return redirect('external_media_project_detail', public_id=public_id)
@@ -2576,7 +2608,9 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, PreviewMu
             return cached_preview_response(request, project, 'waveform', music, version=version)
         request.GET = request.GET.copy()
         request.GET['preview'] = '1'
-        return protected_file_response(request, music)
+        # Web Audio requires same-origin bytes; signed S3 redirects would make
+        # the MediaElementSource silent without bucket CORS configuration.
+        return protected_file_response(request, music, force_stream=request.GET.get('audio_graph') == '1')
 
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
@@ -3280,7 +3314,9 @@ class ExternalMediaProjectPreviewApproveView(ExternalMediaRequiredMixin, Preview
             project.status = ExternalMediaProject.Status.PENDING
             project.progress = 68
             project.current_step = 'Renderização aprovada e adicionada à fila'
-            project.save(update_fields=['status', 'progress', 'current_step', 'update_at'])
+            project.stage_started_at = timezone.now()
+            project.finished_at = None
+            project.save(update_fields=['status', 'progress', 'current_step', 'stage_started_at', 'finished_at', 'update_at'])
             transaction.on_commit(lambda: ExternalMediaProjectRenderView._enqueue(project.pk))
         return JsonResponse({
             'approved_revision': revision.revision,
@@ -3300,7 +3336,7 @@ class ExternalMediaProjectStatusView(ExternalMediaRequiredMixin, View):
             'status_label': project.get_status_display(),
             'progress': project.progress,
             'current_step': project.current_step,
-            'duration_label': project.duration_label,
+            'duration_label': project.stage_duration_label,
             'elapsed_seconds': elapsed_seconds,
             'estimated_remaining_seconds': estimated_remaining_seconds,
             'estimate_source': estimate_source,
@@ -3549,7 +3585,9 @@ class ExternalMediaRenderView(ExternalMediaRequiredMixin, View):
             job.progress = 84
             job.current_step = 'Renderização adicionada à fila'
             job.error_message = ''
-            job.save(update_fields=['status', 'progress', 'current_step', 'error_message', 'update_at'])
+            job.started_at = timezone.now()
+            job.finished_at = None
+            job.save(update_fields=['status', 'progress', 'current_step', 'error_message', 'started_at', 'finished_at', 'update_at'])
             transaction.on_commit(lambda: self._enqueue(job.pk))
         messages.success(request, 'Renderização iniciada em segundo plano.')
         return redirect('external_media_detail', public_id=public_id)

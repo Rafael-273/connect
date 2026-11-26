@@ -272,8 +272,10 @@ class ProjectSubtitleReviewRenderView(ExternalMediaRequiredMixin, View):
             project.progress = 84
             project.current_step = 'Atualização adicionada à fila'
             project.celery_task_id = task_id
+            project.stage_started_at = timezone.now()
+            project.finished_at = None
             project.save(update_fields=[
-                'status', 'progress', 'current_step', 'celery_task_id', 'update_at',
+                'status', 'progress', 'current_step', 'celery_task_id', 'stage_started_at', 'finished_at', 'update_at',
             ])
             if review:
                 SubtitleReviewService.log(review, 'RENDER_REQUESTED', self.member)

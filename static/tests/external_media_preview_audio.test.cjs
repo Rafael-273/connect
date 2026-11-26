@@ -40,3 +40,25 @@ test('all music channels follow playback speed without seeking or pausing them',
  assert.deepEqual(audio.channels.map(channel=>channel.currentTime),[3,1]);
  audio.setPlaybackRate(.5);assert.ok(audio.channels.every(channel=>channel.playbackRate===.5));
 });
+
+test('iOS audio graph applies the same music gain without relying on media volume',()=>{
+ const channel={volume:1};
+ const created=[];
+ window.AudioContext=class {
+  constructor(){this.destination={}}
+  createMediaElementSource(element){return {element,connect(node){this.output=node}}}
+  createGain(){const node={gain:{value:1},connect(){}};created.push(node);return node}
+  resume(){return Promise.resolve()}
+ };
+ const audio=new window.ConnectPreviewAudio(channel,{useAudioGraph:true});
+ audio.position={index:0,local:0,overlap:0};
+ audio.unlock();
+ audio.applyVolumes({volume:.2},0,.5);
+ assert.equal(created.length,1);
+ assert.equal(created[0].gain.value,.1);
+ assert.equal(channel.volume,1);
+ audio.applyVolumes({volume:.2},0,.25);
+ assert.equal(created.length,1);
+ assert.equal(created[0].gain.value,.05);
+ delete window.AudioContext;
+});

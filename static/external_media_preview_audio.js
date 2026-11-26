@@ -5,8 +5,11 @@
  * seeks and music replacements deterministic and independently testable.
  */
 window.ConnectPreviewAudio = class ConnectPreviewAudio {
-    constructor(audio) {
+    constructor(audio, {useAudioGraph = false} = {}) {
         this.audio = audio;
+        this.useAudioGraph = useAudioGraph;
+        this.audioContext = null;
+        this.audioNodes = new WeakMap();
         this.channels = [audio];
         this.tracks = [];
         this.signature = '';
@@ -22,6 +25,30 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
     }
 
     invalidateTiming() { this.bedCache=null; this.automationCache=new WeakMap(); }
+
+    unlock() {
+        if (!this.useAudioGraph) return;
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        try {
+            this.audioContext ||= new AudioContext();
+            this.channels.forEach(channel => this.connectChannel(channel));
+            this.audioContext.resume().catch(() => {});
+        } catch (_) { /* Keep native playback if Web Audio is unavailable. */ }
+    }
+
+    connectChannel(channel) {
+        if (!this.audioContext || this.audioNodes.has(channel)) return this.audioNodes.get(channel);
+        const source = this.audioContext.createMediaElementSource(channel);
+        const gain = this.audioContext.createGain();
+        gain.gain.value = Number.isFinite(channel.volume) ? channel.volume : 1;
+        source.connect(gain);
+        gain.connect(this.audioContext.destination);
+        const nodes = {source, gain};
+        this.audioNodes.set(channel, nodes);
+        channel.volume = 1;
+        return nodes;
+    }
 
     configure(config) {
         this.invalidateTiming();
@@ -76,7 +103,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
             if(needed.has(index)){
                 const current=this.position.index>=0?this.position.index:0;
                 channel.preload=scheduled||index===current||index===current+1?'auto':'metadata';
-                if(channel.dataset.loadedSource!==source){channel.dataset.loadedSource=source;channel.src=source;channel.load()}
+                if(channel.dataset.loadedSource!==source){channel.dataset.loadedSource=source;if(this.useAudioGraph){const url=new URL(source,window.location.href);url.searchParams.set('audio_graph','1');channel.src=url.href}else channel.src=source;channel.load()}
             }else if(channel.dataset.loadedSource){
                 const duration=Number(channel.duration);
                 if(duration>0&&Number.isFinite(duration))this.sourceDurations.set(source,duration);
@@ -216,7 +243,10 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
             const volume = Number.isFinite(gain) ? Math.max(0, Math.min(1, gain)) : 0;
             // Repeated HTMLMediaElement.volume writes reach the browser audio
             // mixer. Write only the final value, and only when it changes.
-            if (channel.volume !== volume) channel.volume = volume;
+            const nodes = this.audioContext ? this.connectChannel(channel) : null;
+            if (nodes) {
+                if (nodes.gain.gain.value !== volume) nodes.gain.gain.value = volume;
+            } else if (channel.volume !== volume) channel.volume = volume;
         });
     }
 

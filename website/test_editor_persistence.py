@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from unittest.mock import patch
@@ -8,6 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import close_old_connections, connection
 from django.test import RequestFactory, TestCase, TransactionTestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from website.external_media.canonical import SourceManifestBuilder
 from website.external_media.preview import TimelineRevisionService
@@ -62,7 +64,9 @@ class EditorPersistenceTests(EditorFixture, TestCase):
         self.project.refresh_from_db()
         self.project.status = self.project.Status.FINISHED
         self.project.final_render_outdated = False
-        self.project.save(update_fields=['status', 'final_render_outdated'])
+        self.project.stage_started_at = timezone.now() - timedelta(hours=1)
+        self.project.finished_at = timezone.now() - timedelta(minutes=30)
+        self.project.save(update_fields=['status', 'final_render_outdated', 'stage_started_at', 'finished_at'])
         with patch('website.views.external_media.ExternalMediaProjectRenderView._enqueue') as enqueue:
             with self.captureOnCommitCallbacks(execute=True):
                 response = self.client.post(
@@ -76,6 +80,8 @@ class EditorPersistenceTests(EditorFixture, TestCase):
         self.project.refresh_from_db()
         self.assertEqual(self.project.status, self.project.Status.PENDING)
         self.assertEqual(self.project.approved_timeline_revision_id, revision.pk)
+        self.assertIsNone(self.project.finished_at)
+        self.assertLess(self.project.stage_duration_seconds, 10)
 
     def test_rejected_cut_returns_the_last_saved_timeline(self):
         revision = self.project.current_timeline_revision
